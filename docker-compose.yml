@@ -6,6 +6,7 @@ services:
     container_name: ndb-server
     networks:
       - internal
+#     - nginx-proxy_default
     depends_on:
       - couchdb
     volumes:
@@ -30,3 +31,6 @@ services:
 
 networks:
   internal:
+#  nginx-proxy_default:
+#    external: true
+

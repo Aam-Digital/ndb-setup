@@ -6,13 +6,17 @@ Docker Image of [Aam Digital / ndb-core](https://github.com/NGO-DB/ndb-core) and
 # Using the Docker Image
 You can simply copy the [docker-compose.yaml](https://github.com/NGO-DB/docker/blob/master/docker-compose.yaml) file and deploy it (`docker-compose up`).
 
-The system works well with the [nginx-proxy](https://github.com/jwilder/nginx-proxy) docker (see our [nginxproxy.docker-compose.yaml](https://github.com/NGO-DB/docker/blob/master/nginxproxy.docker-compose.yaml). Simply have the nginx-proxy service running and adapt the VIRTUAL_HOST environment variable of the ndb-server as needed.
-
 
 ## Initial setup
 On the first run some configuration has to be created manually.
 
 see [initial-setup.sh](https://github.com/NGO-DB/docker/blob/master/initial-setup.sh)
+
+
+## Deploying under a domain name using nginx-proxy
+The system works well with the [nginx-proxy](https://github.com/jwilder/nginx-proxy) docker. This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).
+
+see our [nginxproxy.docker-compose.yaml](https://github.com/NGO-DB/docker/blob/master/nginxproxy.docker-compose.yaml) for a sample service that can be copied. Then simply adapt the VIRTUAL_HOST environment variable of the ndb-server docker-compose.yaml as needed and uncomment the lines relating to the `nginx-proxy_default` network.
 
 
 -----

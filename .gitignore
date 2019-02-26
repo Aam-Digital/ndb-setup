@@ -1,0 +1,3 @@
+couchdb/*
+assets/*
+docker-image/dist/*

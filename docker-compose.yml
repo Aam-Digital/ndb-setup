@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  webserver:
+    image: aamdigital/ndb-server
+    container_name: ndb-server
+    networks:
+      - internal
+    depends_on:
+      - couchdb
+    volumes:
+      - ./assets:/usr/share/nginx/html/assets
+    environment:
+      VIRTUAL_HOST: example.com
+      LETSENCRYPT_HOST: example.com
+      LETSENCRYPT_EMAIL: webmaster@example.com
+    ports:
+      - 80:80
+
+  couchdb:
+    image: couchdb
+    networks:
+      - internal
+    volumes:
+      - ./couchdb/data:/opt/couchdb/data
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: PASSWORD
+
+
+networks:
+  internal:

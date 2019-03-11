@@ -1,9 +1,9 @@
 # Copy asset folder if empty
-ASSETS_DIR="./assets"
-if ! [ "$(ls -A $ASSETS_DIR)" ]; then
-    docker cp ndb-server:/usr/share/nginx/html/assets.original $ASSETS_DIR
+if ! [ "$(ls -A assets)" ]; then
+    docker cp ndb-demo_webserver_1:/usr/share/nginx/html/assets.original ./
+    mv assets.original/* assets/
+    rmdir assets.original
 fi
-/usr/share/nginx/html/assets.original
 
 # Create system databases for couchdb
 #curl -X PUT http://127.0.0.1:5984/_users

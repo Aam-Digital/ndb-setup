@@ -2,7 +2,7 @@ version: '3'
 
 services:
   webserver:
-    image: aamdigital/ndb-server
+    image: aamdigital/ndb-server:2.5.3
     container_name: ndb-server
     networks:
       - internal

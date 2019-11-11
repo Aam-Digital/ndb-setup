@@ -1,23 +1,21 @@
 version: '3'
 
 services:
-  webserver:
-    image: aamdigital/ndb-server:2.5.3
-    container_name: ndb-server
+  app:
+    image: aamdigital/ndb-server:2.7.1
     networks:
       - internal
-#     - nginx-proxy_default
+      - nginx-proxy_default
     depends_on:
       - couchdb
     volumes:
-      - ./assets:/usr/share/nginx/html/assets
+      - ./config.json:/usr/share/nginx/html/assets/config.json
+      - ./child-photos:/usr/share/nginx/html/assets/child-photos
     environment:
       VIRTUAL_HOST: example.com
       LETSENCRYPT_HOST: example.com
       LETSENCRYPT_EMAIL: webmaster@example.com
     restart: unless-stopped
-    ports:
-      - 80:80
 
   couchdb:
     image: couchdb
@@ -28,11 +26,12 @@ services:
     environment:
       COUCHDB_USER: admin
       COUCHDB_PASSWORD: PASSWORD
+    ports:
+      - 5986:5986
     restart: unless-stopped
 
 
 networks:
   internal:
-#  nginx-proxy_default:
-#    external: true
-
+  nginx-proxy_default:
+    external: true

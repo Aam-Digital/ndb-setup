@@ -3,23 +3,24 @@
  *    Run from commandline using npm: `js add-user.js`
  */
 
+https = require('https');
+querystring = require('querystring');
+path = require('path');
+CryptoJS = require(path.resolve( __dirname, "lib/crypto-js"));
+
+
 /* display usage */
 if (['--help', '-help', '-h'].indexOf(process.argv[2]) > -1 || process.argv.length < 6 || process.argv.length > 8) {
-    console.log("Usage: " + process.argv[0] + " " + process.argv[1] + " admin:password database username password rev_db-user rev_aam-user");
-    console.log("If a user_rev is given, only the existing user in the helgo_db database is updated instead of creating a new user.");
+    console.log("Usage to create an account: " + process.argv[0] + " " + process.argv[1] + " domain admin:password username password");
+    console.log("Usage to edit an account: " + process.argv[0] + " " + process.argv[1] + " domain admin:password username password rev_db-user rev_aam-user");
+    console.log("    where 'rev_db-user' and 'rev_aam-user' are the couchdb '_rev' values of the user document in the '_users' and 'app' database respectively");
     process.exit();
 }
-// curl localhost:5984/dev/user:demo
 
 
-http = require('http');
-querystring = require('querystring');
-
-path = require('path');
-CryptoJS = require(path.resolve( __dirname, "crypto-js"));
-
-var adminAuth = process.argv[2];
-var database = process.argv[3];
+var domain = process.argv[2];
+var database = 'app';
+var adminAuth = process.argv[3];
 var username = process.argv[4];
 var password = process.argv[5];
 var rev_user_db;
@@ -47,9 +48,8 @@ function encrypt(password) {
 function couchPut(dataPath, data) {
     var postData = JSON.stringify(data);
     var options = {
-        hostname: 'localhost',
-        port: 5984,
-        path: "/" + dataPath,
+        hostname: domain,
+        path: "/db/" + dataPath,
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json'
@@ -57,7 +57,7 @@ function couchPut(dataPath, data) {
         auth: adminAuth
     };
 
-    var req = http.request(options, function (res) {
+    var req = https.request(options, function (res) {
         console.log('STATUS: ' + res.statusCode);
         res.setEncoding('utf8');
         res.on('data', function (chunk) {

@@ -2,7 +2,7 @@ version: '3'
 
 services:
   app:
-    image: aamdigital/ndb-server:2.7.1
+    image: aamdigital/ndb-server:dev
     networks:
       - internal
       - nginx-proxy_default
@@ -15,10 +15,11 @@ services:
       VIRTUAL_HOST: example.com
       LETSENCRYPT_HOST: example.com
       LETSENCRYPT_EMAIL: webmaster@example.com
+      WEBDAV_URL: http://localhost
     restart: unless-stopped
 
   couchdb:
-    image: couchdb
+    image: couchdb:3
     networks:
       - internal
     volumes:

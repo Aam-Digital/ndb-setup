@@ -16,6 +16,7 @@ services:
       LETSENCRYPT_HOST: example.com
       LETSENCRYPT_EMAIL: webmaster@example.com
       WEBDAV_URL: http://localhost
+      COUCHDB_URL: http://couchdb:5984
     restart: unless-stopped
 
   couchdb:
@@ -27,8 +28,6 @@ services:
     environment:
       COUCHDB_USER: admin
       COUCHDB_PASSWORD: PASSWORD
-    ports:
-      - 5986:5986
     restart: unless-stopped
 
 

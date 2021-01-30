@@ -14,6 +14,8 @@ if (['--help', '-help', '-h'].indexOf(process.argv[2]) > -1 || process.argv.leng
     console.log("Usage to create an account: " + process.argv[0] + " " + process.argv[1] + " domain admin:password username password");
     console.log("Usage to edit an account: " + process.argv[0] + " " + process.argv[1] + " domain admin:password username password rev_db-user rev_aam-user");
     console.log("    where 'rev_db-user' and 'rev_aam-user' are the couchdb '_rev' values of the user document in the '_users' and 'app' database respectively");
+    console.log("---");
+    console.log("Example: " + process.argv[0] + " " + process.argv[1] + " demo.aam-digital.com admin:password123 User1 password0");
     process.exit();
 }
 

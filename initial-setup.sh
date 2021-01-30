@@ -3,6 +3,7 @@
 #       couchdb_password
 if ! [ $# -eq 2 ]; then
         echo "Usage: $0 aam_url couchdb_admin_password"
+        echo "Example: $0 https://demo.aam-digital.com password12345"
         exit
 fi
 

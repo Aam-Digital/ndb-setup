@@ -6,7 +6,7 @@ following these simple steps:
 (or adapt it to expose the app at a port)
 3. Create a `config.json` file by copying the [default config](https://github.com/Aam-Digital/ndb-core/blob/master/src/assets/config.default.json)
 and adapt it. You should set `"remote_url": "https://example.com/db/"` if your app is available at *example.com*
-4. Start the docker containers: `docker-comose up -d`
+4. Start the docker containers: `docker-compose up -d`
 5. Run `./initial-setup.sh` to create the required databases
 6. Run `js add-user.js` to create user accounts
 

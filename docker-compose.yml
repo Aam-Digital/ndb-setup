@@ -25,6 +25,7 @@ services:
       - internal
     volumes:
       - ./couchdb/data:/opt/couchdb/data
+      - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini
     environment:
       COUCHDB_USER: admin
       COUCHDB_PASSWORD: PASSWORD

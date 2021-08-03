@@ -16,6 +16,8 @@ curl -X PUT -u admin:$2 $1/db/_global_changes
 curl -X PUT -u admin:$2 $1/db/app
 curl -X PUT -u admin:$2 $1/db/app/_security -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
 
+# Give users permission to access _users db
+curl -X PUT -u admin:$2 $1/db/_users/_security -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
 
 # add users
 #js ./ndb-admin/add-user.js admin:ADMIN_PASSWORD app USER USER_PASSWORD

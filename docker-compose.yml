@@ -25,6 +25,8 @@ services:
       - internal
     depends_on:
       - couchdb
+    volumes:
+      - ./rules.json:/app/dist/assets/rules.json
     environment:
       DATABASE_URL: http://couchdb:5984
       DATABASE_USER: admin

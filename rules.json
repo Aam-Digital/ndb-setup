@@ -1,0 +1,9 @@
+{
+  "user_app": [
+    { "action":  "manage", "subject":  "Child" },
+    { "action":  "manage", "subject": "ProgressDashboardConfig" }
+  ],
+  "admin_app": [
+    { "action": "write", "subject": "Child" }
+  ]
+}

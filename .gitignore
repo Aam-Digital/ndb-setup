@@ -1,3 +1,4 @@
 couchdb/*
 assets/*
 docker-image/dist/*
+.idea/

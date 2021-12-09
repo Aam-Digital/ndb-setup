@@ -2,12 +2,12 @@ version: '3'
 
 services:
   app:
-    image: aamdigital/ndb-server:dev
+    image: registry.heroku.com/test-deployment-pr-1036/web
     networks:
       - internal
       - nginx-proxy_default
     depends_on:
-      - couchdb
+      - backend
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./child-photos:/usr/share/nginx/html/assets/child-photos
@@ -20,15 +20,14 @@ services:
     restart: unless-stopped
 
   backend:
-    image: backend:latest
+    image: aamdigital/replication-ms:latest
     networks:
       - internal
     depends_on:
       - couchdb
-    volumes:
-      - ./rules.json:/app/dist/assets/rules.json
     environment:
       DATABASE_URL: http://couchdb:5984
+      DATABASE_NAME: app
       DATABASE_USER: admin
       DATABASE_PASSWORD: PASSWORD
 
@@ -42,7 +41,6 @@ services:
       COUCHDB_USER: admin
       COUCHDB_PASSWORD: PASSWORD
     restart: unless-stopped
-
 
 networks:
   internal:

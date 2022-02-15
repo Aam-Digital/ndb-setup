@@ -32,6 +32,7 @@ services:
       DATABASE_NAME: app
       DATABASE_USER: admin
       DATABASE_PASSWORD: PASSWORD
+      SENTRY_DSN:
 
   couchdb:
     image: couchdb:3

@@ -30,8 +30,8 @@ services:
     environment:
       DATABASE_URL: http://couchdb:5984
       DATABASE_NAME: app
-      DATABASE_USER: admin
-      DATABASE_PASSWORD: PASSWORD
+      DATABASE_USER: replicator
+      DATABASE_PASSWORD: securePassword
       SENTRY_DSN:
 
   couchdb:

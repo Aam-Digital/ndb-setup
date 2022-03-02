@@ -17,14 +17,17 @@ curl -X PUT -u admin:$2 $1/db/_global_changes
 curl -X PUT -u admin:$2 $1/db/app
 
 if  [ $# -eq 2 ]; then
-        curl -X PUT -u admin:$2 $1/db/app/_security -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
-        echo "No password provided for permission backend. No replicator user is set up"
-        exit
+  # no backend defined, allowing 'user_app' to access 'app' database and modify their own user object
+  curl -X PUT -u admin:$2 $1/db/_users/_security -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
+  curl -X PUT -u admin:$2 $1/db/app/_security -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
+  echo "No password provided for permission backend. No replicator user is set up"
+  exit
 fi
-# setup replicator user
+
+# setup replicator user and give it access to 'app' and '_users' database
 curl -X PUT -u admin:$2 $1/db/_users/org.couchdb.user:replicator -d '{"name": "replicator", "password": "'$3'", "roles": [], "type": "user"}'
-curl -X PUT -u admin:$2 $1/db/_users/_security -d '{"admins": { "names": ["replicator"], "roles": ["_admin"] }, "members": { "names": [], "roles": ["_admin"] } }'
-curl -X PUT -u admin:$2 $1/db/app/_security -d '{"admins": { "names": [], "roles": ["_admin"] }, "members": { "names": ["replicator"], "roles": ["_admin"] } }'
+curl -X PUT -u admin:$2 $1/db/_users/_security -d '{"admins": { "names": ["replicator"], "roles": [] }, "members": { "names": [], "roles": ["_admin"] } }'
+curl -X PUT -u admin:$2 $1/db/app/_security -d '{"admins": { "names": [], "roles": [] }, "members": { "names": ["replicator"], "roles": ["_admin"] } }'
 
 # add users
 #js ./ndb-admin/add-user.js admin:ADMIN_PASSWORD app USER USER_PASSWORD

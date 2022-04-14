@@ -33,6 +33,7 @@ services:
       DATABASE_USER: replicator
       DATABASE_PASSWORD: securePassword
       SENTRY_DSN:
+    restart: unless-stopped
 
   couchdb:
     image: couchdb:3

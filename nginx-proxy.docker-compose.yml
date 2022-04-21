@@ -7,6 +7,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    networks:
+      - nginx-proxy_default
     volumes:
       - vhost:/etc/nginx/vhost.d
       - conf:/etc/nginx/conf.d
@@ -47,3 +49,6 @@ volumes:
   certs:
   acme:
 
+networks:
+  nginx-proxy_default:
+    external: true

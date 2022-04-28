@@ -30,7 +30,6 @@ services:
       COUCHDB_PASSWORD: PASSWORD
     restart: unless-stopped
 
-
 networks:
   internal:
   nginx-proxy_default:

@@ -10,10 +10,9 @@ CryptoJS = require(path.resolve( __dirname, "lib/crypto-js"));
 
 
 /* display usage */
-if (['--help', '-help', '-h'].indexOf(process.argv[2]) > -1 || process.argv.length < 6 || process.argv.length > 8) {
+if (['--help', '-help', '-h'].indexOf(process.argv[2]) > -1 || process.argv.length < 6 || process.argv.length > 6) {
     console.log("Usage to create an account: " + process.argv[0] + " " + process.argv[1] + " domain admin:password username password");
-    console.log("Usage to edit an account: " + process.argv[0] + " " + process.argv[1] + " domain admin:password username password rev_db-user rev_aam-user");
-    console.log("    where 'rev_db-user' and 'rev_aam-user' are the couchdb '_rev' values of the user document in the '_users' and 'app' database respectively");
+    console.log("to reset password for an existing user, use the CouchDB GUI (Fauxton) and set the 'password' property directly on the document in the _users db");
     console.log("---");
     console.log("Example: " + process.argv[0] + " " + process.argv[1] + " demo.aam-digital.com admin:password123 User1 password0");
     process.exit();
@@ -25,12 +24,6 @@ var database = 'app';
 var adminAuth = process.argv[3];
 var username = process.argv[4];
 var password = process.argv[5];
-var rev_user_db;
-var rev_user_aam;
-if (process.argv.length == 8) {
-    rev_user_db = process.argv[6];
-    rev_user_aam = process.argv[7];
-}
 
 /**
  * Encrypts the password to be saved into the helgo_db user database.
@@ -83,16 +76,10 @@ function couchPut(dataPath, data) {
 // Add CouchDB User
 var couchData = {'name': username, 'password': password, 'roles': ['user_' + database], 'type': 'user'};
     // database is configured to be accessible for user role "user_$DB"
-if (rev_user_db) {
-    couchData._rev = rev_user_db;
-}
 couchPut("_users/org.couchdb.user:" + username, couchData);
 console.log("Updating user '" + username + "' to CouchDB");
 
 // Add helgo_db User in application database
-var hdbData = {'_id': 'User:' + username, 'name': username, 'password': encrypt(password)};
-if (rev_user_aam) {
-    hdbData._rev = rev_user_aam;
-}
+var hdbData = {'_id': 'User:' + username, 'name': username};
 couchPut(database + "/User:" + username, hdbData);
 console.log("Updating helgo_db database '" + database + "' for user '" + username + "'");

@@ -2,7 +2,7 @@ version: '3'
 
 services:
   app:
-    image: registry.heroku.com/test-deployment-pr-1036/web
+    image: aamdigital/ndb-server:dev
     networks:
       - internal
       - nginx-proxy_default

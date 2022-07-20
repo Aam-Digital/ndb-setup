@@ -7,6 +7,7 @@ services:
       - internal
       - nginx-proxy_default
     depends_on:
+#      - backend
       - couchdb
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
@@ -14,9 +15,23 @@ services:
     environment:
       VIRTUAL_HOST: example.com
       LETSENCRYPT_HOST: example.com
-      WEBDAV_URL: http://localhost
+#      COUCHDB_URL: http://backend:3000
       COUCHDB_URL: http://couchdb:5984
     restart: unless-stopped
+
+#  backend:
+#    image: aamdigital/replication-ms:latest
+#    networks:
+#      - internal
+#    depends_on:
+#      - couchdb
+#    environment:
+#      DATABASE_URL: http://couchdb:5984
+#      DATABASE_NAME: app
+#      DATABASE_USER: replicator
+#      DATABASE_PASSWORD: securePassword
+#      SENTRY_DSN:
+#    restart: unless-stopped
 
   couchdb:
     image: couchdb:3

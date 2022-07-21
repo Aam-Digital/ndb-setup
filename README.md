@@ -33,11 +33,22 @@ Use this deployment if you want to enable permission checks in your application
 # Deploying under a domain name using nginx-proxy
 The system works well with the [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) docker. This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).
 
-This setup repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/nginx-proxy.docker-compose.yml) for setting up the nginx-proxy.
+This setup repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/nginx-proxy/docker-compose.yml) for setting up the nginx-proxy.
 
-1. Create the required network `docker network create nginx-proxy_default`
-2. Start the required containers `docker-compose -f nginx-proxy.docker-compose.yml up -d` (this is only needed once on a server)
-3. Set the `VIRTUAL_HOST`and`LETSENCRYPT_HOST` as environment variables on new docker containers to define under which URL they should be reachable
+1. Create the required network
+> docker network create nginx-proxy_default
+2. In `nginx-proxy/docker-compose.yml` set `DEFAULT_EMAIL` to a valid email address
+3. Start the required containers (this is only needed once on a server)
+> cd nginx-proxy && docker-compose up -d  
+4. Set the `VIRTUAL_HOST`and`LETSENCRYPT_HOST` as environment variables on new docker containers to define under which URL they should be reachable
+
+# User management in Keycloak
+The system uses the [Keycloak](https://www.keycloak.org/) identity management system.
+
+To start the required docker containers execute the following:
+1. In `keykloak/docker-compose.yml` set `KC_DB_PASSWORD` and `POSTGRES_PASSWORD` to the same **secure** password
+2. Start the required containers (this is only needed once on a server)
+> cd keycloak && docker-compose up -d
 
 # Building the Docker Image
 *If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server).*

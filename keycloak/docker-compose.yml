@@ -1,0 +1,41 @@
+version: '3'
+
+services:
+  keycloak:
+    build:
+        context: .
+    environment:
+      # For all available options see https://www.keycloak.org/server/all-config
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB_URL_HOST: postgres
+      KC_DB_USERNAME: keycloak
+      # Please change to something secure
+      KC_DB_PASSWORD: PASSWORD
+      KC_HTTP_ENABLED: true
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_STRICT_HTTPS: false
+    command: start
+    ports:
+      - "8080:8080"
+    networks:
+      - internal
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:13.2
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      # Set same as KC_DB_PASSWORD
+      POSTGRES_PASSWORD: PASSWORD
+    volumes:
+      - ./keycloak:/var/lib/postgresql/data
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:
+  internal:

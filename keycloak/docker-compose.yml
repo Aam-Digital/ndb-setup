@@ -2,24 +2,26 @@ version: '3'
 
 services:
   keycloak:
-    build:
-        context: .
+    # Building from local Dockerfile
+    build: .
     environment:
       # For all available options see https://www.keycloak.org/server/all-config
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: keycloak
-      # Please change to something secure
+      KC_PROXY: edge
+      # Adjust the following values
+      # TODO introduce variables
       KC_DB_PASSWORD: PASSWORD
-      KC_HTTP_ENABLED: true
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HOSTNAME: example.aam-digital.com
+      LETSENCRYPT_HOST: example.aam-digital.com
+      VIRTUAL_HOST: example.aam-digiatl.com
+      VIRTUAL_PORT: 8080
     command: start
-    ports:
-      - "8080:8080"
     networks:
       - internal
+      - nginx-proxy_default
     depends_on:
       - postgres
     restart: unless-stopped
@@ -39,3 +41,5 @@ services:
 
 networks:
   internal:
+  nginx-proxy_default:
+    external: true

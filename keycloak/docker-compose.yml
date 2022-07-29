@@ -18,7 +18,7 @@ services:
       LETSENCRYPT_HOST: example.aam-digital.com
       VIRTUAL_HOST: example.aam-digital.com
       VIRTUAL_PORT: 8080
-    command: start --optimzed
+    command: start --optimized
     networks:
       - internal
       - nginx-proxy_default

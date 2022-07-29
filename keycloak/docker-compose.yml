@@ -11,6 +11,7 @@ services:
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: keycloak
       KC_PROXY: edge
+      KC_HOSTNAME_STRICT: "false"
       # Adjust the following values
       # TODO introduce variables
       KC_DB_PASSWORD: PASSWORD

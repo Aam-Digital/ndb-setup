@@ -17,6 +17,7 @@ services:
       LETSENCRYPT_HOST: example.com
 #      COUCHDB_URL: http://backend:3000
       COUCHDB_URL: http://couchdb:5984
+      KEYCLOAK_URL: keycloak.example.com
     restart: unless-stopped
 
 #  backend:

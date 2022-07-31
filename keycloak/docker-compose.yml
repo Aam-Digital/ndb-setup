@@ -21,7 +21,9 @@ services:
       LETSENCRYPT_HOST: example.aam-digital.com
       VIRTUAL_HOST: example.aam-digital.com
       VIRTUAL_PORT: 8080
-    command: start --optimized
+    volumes:
+      - ./aam-theme:/opt/keycloak/themes/aam-theme
+    command: start --optimized --spi-theme-login-theme=aam-theme
     networks:
       - internal
       - nginx-proxy_default

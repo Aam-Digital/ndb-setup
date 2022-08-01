@@ -7,17 +7,14 @@ services:
     environment:
       # For all available options see https://www.keycloak.org/server/all-config
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: keycloak
       KC_PROXY: edge
-      KC_HOSTNAME_STRICT: "false"
-      KC_HTTP_ENABLED: "true"
-      # Disable this in production mode
-      KC_HOSTNAME_STRICT_HTTPS: "false"
       # Adjust the following values
       # TODO introduce variables
+      KEYCLOAK_ADMIN_PASSWORD: admin
       KC_DB_PASSWORD: PASSWORD
+      KC_HOSTNAME: example.aam-digital.com
       LETSENCRYPT_HOST: example.aam-digital.com
       VIRTUAL_HOST: example.aam-digital.com
       VIRTUAL_PORT: 8080

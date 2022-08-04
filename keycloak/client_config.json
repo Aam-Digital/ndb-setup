@@ -1,6 +1,7 @@
 {
   "clientId": "app",
   "rootUrl": "",
+  "adminUrl": "",
   "baseUrl": "",
   "surrogateAuthRequired": false,
   "enabled": true,
@@ -56,19 +57,17 @@
   "nodeReRegistrationTimeout": -1,
   "protocolMappers": [
     {
-      "name": "client roles",
+      "name": "realm roles",
       "protocol": "openid-connect",
-      "protocolMapper": "oidc-usermodel-client-role-mapper",
+      "protocolMapper": "oidc-usermodel-realm-role-mapper",
       "consentRequired": false,
       "config": {
         "multivalued": "true",
         "userinfo.token.claim": "true",
-        "user.attribute": "foo",
         "id.token.claim": "true",
         "access.token.claim": "true",
         "claim.name": "_couchdb\\.roles",
-        "jsonType.label": "String",
-        "usermodel.clientRoleMapping.clientId": "app"
+        "jsonType.label": "String"
       }
     },
     {

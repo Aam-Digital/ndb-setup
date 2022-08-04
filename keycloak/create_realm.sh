@@ -17,7 +17,5 @@ export PATH=\$PATH:/opt/keycloak/bin
 # Set aam theme
 /opt/keycloak/bin/kcadm.sh update realms/"$3" -s loginTheme=aam-theme
 # Create client from config file and store ID
-CID=\$(/opt/keycloak/bin/kcadm.sh create clients -r "$3" -f /client_config.json -i)
-# Create default user_app role
-/opt/keycloak/bin/kcadm.sh create clients/"\$CID"/roles -r "$3" -s name=user_app -s 'description=Regular user with DB access'
+/opt/keycloak/bin/kcadm.sh create clients -r "$3" -f /client_config.json -i
 EOF

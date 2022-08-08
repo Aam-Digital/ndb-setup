@@ -43,6 +43,7 @@ function request(host, url, operation, password, body = "", contentType = "appli
 
 request(domain, "/db/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPassword)
     .then(async data => {
+        // get admin access token
         const params = new URLSearchParams();
         params.set('grant_type', 'password');
         params.set('client_id', 'admin-cli');
@@ -57,30 +58,48 @@ request(domain, "/db/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPas
             "application/x-www-form-urlencoded"
         ).then(token => token.access_token);
 
-        data.rows
+        // parse users and get unique roles
+        const users = data.rows
             .map(row => row.doc)
-            .filter(doc => doc.type === "user")
-            .forEach((user) => {
-                const derivedKey = Buffer.from(user.derived_key, "hex").toString("base64")
-                const salt = Buffer.from(user.salt, "utf8").toString("base64")
-                const keycloakUser = {
-                    username: user.name,
-                    email: "",
-                    enabled: true,
-                    attributes: {},
-                    emailVerified: "",
-                    credentials: [
-                        {
-                            credentialData: `{"hashIterations": "10","algorithm": "${user.password_scheme}"}`,
-                            secretData: `{"salt": "${salt}","value": "${derivedKey}"}`,
-                            type: "password"
-                        }
-                    ]
-                }
-                request(keycloakUrl, `/admin/realms/${realm}/users`, "POST", token, JSON.stringify(keycloakUser))
-                    .then(res => console.log("res", JSON.stringify(res)))
+            .filter(doc => doc.type === "user");
+        const uniqueRoles = new Set();
+        users.forEach(user => user.roles.forEach(role => uniqueRoles.add(role)));
+        const roleNames = Array.from(uniqueRoles);
+
+        // create all roles
+        let requests = roleNames.map((role) => request(keycloakUrl, `/admin/realms/${realm}/roles`, "POST", token, JSON.stringify({name: role})));
+        await Promise.all(requests)
+        requests = roleNames.map((role) => request(keycloakUrl, `/admin/realms/${realm}/roles/${role}`, "GET", token));
+        const roles = await Promise.all(requests);
+
+        requests = users.map((user) => {
+            // create user
+            const derivedKey = Buffer.from(user.derived_key, "hex").toString("base64")
+            const salt = Buffer.from(user.salt, "utf8").toString("base64")
+            const keycloakUser = {
+                username: user.name,
+                email: "",
+                enabled: true,
+                attributes: {},
+                emailVerified: "",
+                credentials: [
+                    {
+                        credentialData: `{"hashIterations": "10","algorithm": "${user.password_scheme}"}`,
+                        secretData: `{"salt": "${salt}","value": "${derivedKey}"}`,
+                        type: "password"
+                    }
+                ]
+            }
+            return request(keycloakUrl, `/admin/realms/${realm}/users`, "POST", token, JSON.stringify(keycloakUser))
+                .then(() => request(keycloakUrl, `/admin/realms/${realm}/users?username=${user.name}`, "GET", token))
+                .then(([keycloakUser]) => {
+                    // add roles to user
+                    const userRoles = roles.filter(role => user.roles.includes(role.name));
+                    return request(keycloakUrl, `/admin/realms/${realm}/users/${keycloakUser.id}/role-mappings/realm`, "POST", token, JSON.stringify(userRoles))
+                })
+                .catch((err) => console.log("error migrating user: " + user.name, err))
         })
-        // TODO in keycloak the existing user roles need to also be mapped to `_couchdb.roles`
+        await Promise.all(requests).then(() => console.log("done"));
     })
 
 

@@ -1,5 +1,5 @@
 # Aam Digital Setup
-This repository describes how to setup everything that is needed to run Aam Digital in production.
+This repository describes how to set up everything that is needed to run Aam Digital in production.
 This includes deploying the app, deploying and connecting the database and optionally deploying and connecting the permission backend.
 
 ## Deploying without permission backend (simple)
@@ -36,19 +36,41 @@ The system works well with the [nginx-proxy](https://github.com/nginx-proxy/ngin
 This setup repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/nginx-proxy/docker-compose.yml) for setting up the nginx-proxy.
 
 1. Create the required network
-> docker network create nginx-proxy_default
+   > docker network create nginx-proxy_default
 2. In `nginx-proxy/docker-compose.yml` set `DEFAULT_EMAIL` to a valid email address
 3. Start the required containers (this is only needed once on a server)
-> cd nginx-proxy && docker-compose up -d  
+   > cd nginx-proxy && docker-compose up -d  
 4. Set the `VIRTUAL_HOST`and`LETSENCRYPT_HOST` as environment variables on new docker containers to define under which URL they should be reachable
 
 # User management in Keycloak
 The system uses the [Keycloak](https://www.keycloak.org/) identity management system.
 
-To start the required docker containers execute the following:
+## Setup
+
+To start the required docker containers execute the following (this is only needed once on a server):
 1. In `keykloak/docker-compose.yml` set `KC_DB_PASSWORD` and `POSTGRES_PASSWORD` to the same **secure** password
-2. Start the required containers (this is only needed once on a server)
-> cd keycloak && docker-compose up -d
+2. Start the required containers
+   > cd keycloak && docker-compose up -d
+
+## Add an instance
+
+To add an application to the Keycloak execute the following:
+
+1. User `docker ps` to get the ID of the Keycloak container
+2. Run the script `create_realm.sh` with the container ID, the keycloak admin password and the name of the application
+3. Go the admin UI of your keycloak
+4. Navigate to the realm with the name of the application
+5. Click on _Clients_
+6. Select _app_
+7. Select _Export_ from _Action_ in the right top corner
+8. Place this file in the assets folder of the application with the name `keycloak.json`
+9. Go to _Realm Settings_
+10. Click on _Keys_
+11. From the `RSA256` entry use `Kid` as `<KID>` in the `couchdb.ini` file, place the public key where it says `<PUBLIC_KEY>` and uncomment this line
+12. Run `docker-compose stop && docker-compose up -d`
+13. The application is now connected with Keycloak
+14. (optional) Migrate existing users from CouchDB to keycloak by running
+   > node migrate-users.js <COUCHDB_URL> <COUCHDB_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <APPLICATION_NAME>
 
 # Building the Docker Image
 *If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server).*

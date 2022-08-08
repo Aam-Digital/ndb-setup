@@ -1,6 +1,6 @@
 if (['--help', '-help', '-h'].indexOf(process.argv[2]) > -1 || process.argv.length < 7 || process.argv.length > 7) {
-    console.log("Usage to migrate users: " + process.argv[0] + " " + process.argv[1] + " domain db-password keycloak-url keycloak-realm keycloak-password");
-    console.log("Example: " + process.argv[0] + " " + process.argv[1] + " demo.aam-digital.com password123 keycloak.aam-digital.com myrealm password123");
+    console.log("Usage to migrate users: " + process.argv[0] + " " + process.argv[1] + " domain db-password keycloak-url keycloak-realm keycloak-password realm-name");
+    console.log("Example: " + process.argv[0] + " " + process.argv[1] + " demo.aam-digital.com password123 keycloak.aam-digital.com password123 myrealm");
     process.exit();
 }
 

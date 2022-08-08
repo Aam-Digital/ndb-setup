@@ -23,9 +23,10 @@ services:
     command: start --optimized --spi-theme-login-theme=aam-theme
     networks:
       - internal
-      - nginx-proxy_default
     depends_on:
       - postgres
+    ports:
+      - "8080:8080"
     restart: unless-stopped
 
   postgres:
@@ -43,5 +44,3 @@ services:
 
 networks:
   internal:
-  nginx-proxy_default:
-    external: true

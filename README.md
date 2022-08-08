@@ -9,10 +9,9 @@ To set up the application with a direct connection to the database, without a pe
 2. Edit the `docker-compose.yml`
    1. in `app` set `VIRTUAL_HOST` and `LETSENCRYPT_HOST` to the desired URL.
    2. in `couchdb` set `COUCHDB_PASSWORD` to secure password. This is used for admin tasks on the database.
-3. Create a `config.json` file by copying the [default config](https://github.com/Aam-Digital/ndb-core/blob/master/src/assets/config.default.json)
-4. Run `docker-compose up -d`
-5. Run `./initial-setup.sh https://<VIRTUAL_HOST> <COUCHDB_PASSWORD>`
-6. To add users run `js add-user.js <VIRTUAL_HOST> admin:<COUCHDB_PASSWORD> <USERNAME> <PASSWORD>` where `USERNAME` and `PASSWORD` are the desired user credentials.
+3. Run `docker-compose up -d`
+4. Run `./initial-setup.sh https://<VIRTUAL_HOST> <COUCHDB_PASSWORD>`
+5. To add users run `js add-user.js <VIRTUAL_HOST> admin:<COUCHDB_PASSWORD> <USERNAME> <PASSWORD>` where `USERNAME` and `PASSWORD` are the desired user credentials.
 
 
 ## Deploying with permission backend (advanced)
@@ -23,12 +22,11 @@ Use this deployment if you want to enable permission checks in your application
    1. in `app` set `VIRTUAL_HOST` and `LETSENCRYPT_HOST` to the desired URL. Set `depends_on` to `backend` and replace `COUCHDB_URL: http://couchdb:5984` with `COUCHDB_URL: http://backend:3000` (change commented out parts)
    2. Remove comments of `backend` section and set `DATABASE_PASSWORD` to a secure password. This is used for the replication process. (optional) set `SENTRY_DSN` to your [Sentry DSN](https://docs.sentry.io/product/sentry-basics/dsn-explainer/) to enable error logging. 
    3. in `couchdb` set `COUCHDB_PASSWORD` to **another** secure password. This is used for admin tasks on the database. 
-3. Create a `config.json` file by copying the [default config](https://github.com/Aam-Digital/ndb-core/blob/master/src/assets/config.default.json)
-4. Run `docker-compose up -d`
-5. Run `./initial-setup.sh https://<VIRTUAL_HOST> <COUCHDB_PASSWORD> <DATABASE_PASSWORD>`
-6. To add users run `js add-user.js <VIRTUAL_HOST> admin:<COUCHDB_PASSWORD> <USERNAME> <PASSWORD>` where `USERNAME` and `PASSWORD` are the desired user credentials.
-7. Visit `<VIRTUAL_HOST>/db/db/_utils/` and add a `Config:Permission` document (TODO add link once documentation is deployed) to the database and define the user roles
-8. Visit `<VIRTUAL_HOST>/db/api/` and execute the `POST /_session` and `POST /rules/{db}/reload` to activate the changes in the backend
+3. Run `docker-compose up -d`
+4. Run `./initial-setup.sh https://<VIRTUAL_HOST> <COUCHDB_PASSWORD> <DATABASE_PASSWORD>`
+5. To add users run `js add-user.js <VIRTUAL_HOST> admin:<COUCHDB_PASSWORD> <USERNAME> <PASSWORD>` where `USERNAME` and `PASSWORD` are the desired user credentials.
+6. Visit `<VIRTUAL_HOST>/db/db/_utils/` and add a `Config:Permission` document (TODO add link once documentation is deployed) to the database and define the user roles
+7. Visit `<VIRTUAL_HOST>/db/api/` and execute the `POST /_session` and `POST /rules/{db}/reload` to activate the changes in the backend
 
 # Deploying under a domain name using nginx-proxy
 The system works well with the [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) docker. This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).

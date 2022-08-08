@@ -9,8 +9,8 @@ https = require('https');
 const domain = process.argv[2];
 const dbPassword = process.argv[3];
 const keycloakUrl = process.argv[4];
-const realm = process.argv[5];
-const keycloakPassword = process.argv[6];
+const keycloakPassword = process.argv[5];
+const realm = process.argv[6];
 
 function request(host, url, operation, password, body = "", contentType = "application/json") {
     return new Promise((resolve, reject) => {
@@ -99,7 +99,7 @@ request(domain, "/db/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPas
                 })
                 .catch((err) => console.log("error migrating user: " + user.name, err))
         })
-        await Promise.all(requests).then(() => console.log("done"));
-    })
+        return Promise.all(requests);
+    }).then(() => console.log("done"));
 
 

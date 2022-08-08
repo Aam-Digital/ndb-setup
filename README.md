@@ -49,7 +49,8 @@ The system uses the [Keycloak](https://www.keycloak.org/) identity management sy
 
 To start the required docker containers execute the following (this is only needed once on a server):
 1. In `keykloak/docker-compose.yml` set `KC_DB_PASSWORD` and `POSTGRES_PASSWORD` to the same **secure** password
-2. Start the required containers
+2. Change `example.aam-digital.com` to the **same** valid url where the keycloak can later be reached publicly, see the [nginx section](#deploying-under-a-domain-name-using-nginx-proxy) for more details
+3. Start the required containers
    > cd keycloak && docker-compose up -d
 
 ## Add an instance
@@ -70,7 +71,7 @@ To add an application to the Keycloak execute the following:
 12. Run `docker-compose stop && docker-compose up -d`
 13. The application is now connected with Keycloak
 14. (optional) Migrate existing users from CouchDB to keycloak by running
-   > node migrate-users.js <COUCHDB_URL> <COUCHDB_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <APPLICATION_NAME>
+   > node migrate-users.js <APPLICATION_URL> <COUCHDB_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <APPLICATION_NAME>
 
 # Building the Docker Image
 *If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server).*

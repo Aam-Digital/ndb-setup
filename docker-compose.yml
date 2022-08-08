@@ -12,6 +12,7 @@ services:
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./child-photos:/usr/share/nginx/html/assets/child-photos
+      - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
     environment:
       VIRTUAL_HOST: example.com
       LETSENCRYPT_HOST: example.com

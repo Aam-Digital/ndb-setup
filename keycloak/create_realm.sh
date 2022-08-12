@@ -4,18 +4,17 @@ if ! [ $# -ge 3 ]; then
         exit
 fi
 
-# Copy client config file to docker
+# Copy config files to docker
+docker cp ./realm_config.json "$1":realm_config.json
 docker cp ./client_config.json "$1":client_config.json
 
 cat <<EOF | docker exec -i "$1" /bin/sh
 # Commands inside docker image
 # Login
 /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$2"
-# Create realm
-/opt/keycloak/bin/kcadm.sh create realms -s realm="$3" -s enabled=true -i
-# Set aam theme
-/opt/keycloak/bin/kcadm.sh update realms/"$3" -s loginTheme=aam-theme
-# Create client from config file and store ID
+# Create realm from config file
+/opt/keycloak/bin/kcadm.sh create realms -s realm="$3" -f /realm_config.json -i
+# Create client from config file
 /opt/keycloak/bin/kcadm.sh create clients -r "$3" -f /client_config.json -i
 EOF
 

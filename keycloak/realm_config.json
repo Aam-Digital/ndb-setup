@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "loginTheme": "aam-theme",
+  "smtpServer": {
+    "starttls": "true",
+    "auth": "true",
+    "envelopeFrom": "",
+    "ssl": "false",
+    "replyTo": "",
+    "replyToDisplayName": "",
+    "from": "<FROM_EMAIL_ADDRESS>",
+    "fromDisplayName": "<FROM_NAME>",
+    "host": "<EMAIL_SERVER_HOST>",
+    "port": "<EMAIL_SERVER_PORT>",
+    "user": "<EMAIL_SERVER_USER>",
+    "password": "<EMAIL_SERVER_PASSWORD>"
+  }
+}

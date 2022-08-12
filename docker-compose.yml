@@ -10,13 +10,13 @@ services:
 #      - backend
       - couchdb
     volumes:
+      - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./child-photos:/usr/share/nginx/html/assets/child-photos
     environment:
       VIRTUAL_HOST: example.com
       LETSENCRYPT_HOST: example.com
 #      COUCHDB_URL: http://backend:3000
       COUCHDB_URL: http://couchdb:5984
-      DEMO: "false"
     restart: unless-stopped
 
 #  backend:

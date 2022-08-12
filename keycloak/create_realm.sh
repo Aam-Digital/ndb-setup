@@ -1,3 +1,4 @@
+#!/bin/bash
 if ! [ $# -ge 3 ]; then
         echo "Usage: $0 <KEYCLOAK_CONTAINER_ID> <KEYCLOAK_ADMIN_PASSWORD> <REALM_NAME>"
         echo "Example: $0 DOCKER_ID MY_PASSWORD my_realm"

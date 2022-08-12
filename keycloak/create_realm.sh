@@ -15,7 +15,7 @@ cat <<EOF | docker exec -i "$1" /bin/sh
 # Create realm from config file
 /opt/keycloak/bin/kcadm.sh create realms -s realm="$3" -f /realm_config.json -i
 # Create client from config file
-/opt/keycloak/bin/kcadm.sh create clients -r "$3" -f /client_config.json -i
+/opt/keycloak/bin/kcadm.sh create clients -r "$3" -s baseUrl="https://$3.<DOMAIN>.com" -f /client_config.json -i
 EOF
 
 echo "Realm $3 created"

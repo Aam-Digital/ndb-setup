@@ -49,7 +49,7 @@ The system uses the [Keycloak](https://www.keycloak.org/) identity management sy
 
 To start the required docker containers execute the following (this is only needed once on a server):
 1. In `keykloak/docker-compose.yml` set `KC_DB_PASSWORD` and `POSTGRES_PASSWORD` to the same **secure** password
-2. Change `example.aam-digital.com` to the **same** valid url where the keycloak can later be reached publicly, see the [nginx section](#deploying-under-a-domain-name-using-nginx-proxy) for more details
+2. Change `example.aam-digital.com` to the **same** valid url where the Keycloak can later be reached publicly, see the [nginx section](#deploying-under-a-domain-name-using-nginx-proxy) for more details
 3. Start the required containers
    > cd keycloak && docker-compose up -d
 
@@ -57,21 +57,20 @@ To start the required docker containers execute the following (this is only need
 
 To add an application to the Keycloak execute the following:
 
-1. User `docker ps` to get the ID of the Keycloak container
-2. Run the script `create_realm.sh` with the container ID, the keycloak admin password and the name of the application
-3. Go the admin UI of your keycloak
-4. Navigate to the realm with the name of the application (`/admin`)
-5. Click on _Clients_
-6. Select _app_
-7. Select _Export_ from _Action_ in the right top corner
+1. Open `realm_config.json` and add the required settings for you email server to enable Keycloak to send emails in your name
+2. Open `create_realm.sh` and set the `<DOMAIN>` to the general domain name of you applications (e.g. `aam-digital`)
+3. User `docker ps` to get the ID of the Keycloak container
+4. Run the script `create_realm.sh` with the container ID, the Keycloak admin password and the name of the application
+5. Go the admin UI of your Keycloak
+6. Navigate to the realm with the name of the application (`/admin`)
+7. Click on _Clients_ > _app_ > _Action_ > _Export_
 8. Place this file in the assets folder of the application with the name `keycloak.json`. It might be necessary to mount the file as a volume into the docker container.
 9. (optional) Checkout the latest `couchdb.ini`: `git checkout origin/master -- couchdb.ini`
-10. Go to _Realm Settings_
-11. Click on _Keys_
-12. From the `RSA256` entry use `Kid` as `<KID>` in the `couchdb.ini` file, place the public key where it says `<PUBLIC_KEY>` and uncomment this line
-13. Run `docker-compose stop && docker-compose up -d`
-14. The application is now connected with Keycloak
-15. (optional) Migrate existing users from CouchDB to keycloak by running
+10. Go to _Realm Settings_ > _Keys_
+11. From the `RSA256` entry use `Kid` as `<KID>` in the `couchdb.ini` file, place the public key where it says `<PUBLIC_KEY>` and uncomment this line
+12. Run `docker-compose stop && docker-compose up -d`
+13. The application is now connected with Keycloak
+14. (optional) Migrate existing users from CouchDB to Keycloak by running
    > node migrate-users.js <APPLICATION_URL> <COUCHDB_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <APPLICATION_NAME>
 
 # Building the Docker Image

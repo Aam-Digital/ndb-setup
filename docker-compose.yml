@@ -32,6 +32,8 @@ services:
 #      DATABASE_NAME: app
 #      DATABASE_USER: replicator
 #      DATABASE_PASSWORD: securePassword
+#      JWT_SECRET: MY_JWT_SECRET
+#      JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n<PUBLIC_KEY>\n-----END PUBLIC KEY-----"
 #      SENTRY_DSN:
 #    restart: unless-stopped
 

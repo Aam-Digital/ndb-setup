@@ -77,13 +77,34 @@ To add an application to the Keycloak execute the following:
 6. Navigate to the realm with the name of the application (`/admin`)
 7. Click on _Clients_ > _app_ > _Action_ > _Export_
 8. Place this file in the assets folder of the application with the name `keycloak.json`. It might be necessary to mount the file as a volume into the docker container.
-9. (optional) Checkout the latest `couchdb.ini`: `git checkout origin/master -- couchdb.ini`
-10. Go to _Realm Settings_ > _Keys_
-11. From the `RSA256` entry use `Kid` as `<KID>` in the `couchdb.ini` file, place the public key where it says `<PUBLIC_KEY>` and uncomment this line
-12. Run `docker-compose stop && docker-compose up -d`
-13. The application is now connected with Keycloak
-14. (optional) Migrate existing users from CouchDB to Keycloak by running
+9. (optional) Migrate existing users from CouchDB to Keycloak by running
    > node migrate-users.js <APPLICATION_URL> <COUCHDB_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <APPLICATION_NAME>
+
+[//]: # (TODO: check this works with replication backend)
+
+
+### Further steps
+
+To enable authentication with the CouchDB/backend follow the one that fits your setup.
+
+#### When using CouchDB directly (no permission backend)
+
+1. (optional) Checkout the latest `couchdb.ini`: `git checkout origin/master -- couchdb.ini`
+2. Go to _Realm Settings_ > _Keys_
+3. From the `RSA256` entry use `Kid` as `<KID>` in the `couchdb.ini` file, place the public key where it says `<PUBLIC_KEY>` and uncomment this line
+4. Run `docker-compose stop && docker-compose up -d`
+5. The application is now connected with Keycloak
+
+#### When using the replication backend
+
+1. Go to _Realm Settings_ > _Keys_
+2. From the `RSA256` entry click on *Public key* and copy the shown key
+3. Go to the `docker-compose.yml` file
+4. In the section *backend* > *environment* add the following line
+   ```yaml
+   JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n<KEY_FROM_STEP_2>\n-----END PUBLIC KEY-----"
+   ```
+5. Save the file and run `docker-compose up -d`
 
 # Building the Docker Image
 *If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server).*

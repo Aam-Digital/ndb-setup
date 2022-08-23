@@ -78,10 +78,7 @@ To add an application to the Keycloak execute the following:
 7. Click on _Clients_ > _app_ > _Action_ > _Export_
 8. Place this file in the assets folder of the application with the name `keycloak.json`. It might be necessary to mount the file as a volume into the docker container.
 9. (optional) Migrate existing users from CouchDB to Keycloak by running
-   > node migrate-users.js <APPLICATION_URL> <COUCHDB_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <APPLICATION_NAME>
-
-[//]: # (TODO: check this works with replication backend)
-
+   > node migrate-users.js <COUCHDB_URL> <COUCHDB_ADMIN_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <REALM_NAME>
 
 ### Further steps
 

@@ -1,23 +1,28 @@
 if (['--help', '-help', '-h'].indexOf(process.argv[2]) > -1 || process.argv.length < 7 || process.argv.length > 7) {
-    console.log("Usage to migrate users: " + process.argv[0] + " " + process.argv[1] + " domain db-password keycloak-url keycloak-realm keycloak-password realm-name");
-    console.log("Example: " + process.argv[0] + " " + process.argv[1] + " demo.aam-digital.com password123 keycloak.aam-digital.com password123 myrealm");
+    console.log("Usage to migrate users: " + process.argv[0] + " " + process.argv[1] + " <COUCHDB_URL> <COUCHDB_ADMIN_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <REALM_NAME>");
+    console.log("Example: " + process.argv[0] + " " + process.argv[1] + " demo.aam-digital.com/db password123 keycloak.aam-digital.com password123 myrealm");
     process.exit();
 }
 
 https = require('https');
 
-const domain = process.argv[2];
+// remove trailing slash
+const dbUrl = process.argv[2].replace(/\/$/, "");
 const dbPassword = process.argv[3];
-const keycloakUrl = process.argv[4];
+const keycloakUrl = process.argv[4].replace(/\/$/, "");
 const keycloakPassword = process.argv[5];
 const realm = process.argv[6];
 
-function request(host, url, operation, password, body = "", contentType = "application/json") {
+const hostRegex = /^([a-z][a-z0-9+\-.]*:\/\/)?([a-z0-9\-._~%!$&'()*+,;=]+@)?([a-z0-9\-._~%]+|\[[a-z0-9\-._~%!$&'()*+,;=:]+])/
+
+function request(baseUrl, relPath, method, password, body = "", contentType = "application/json") {
     return new Promise((resolve, reject) => {
+        const hostname = baseUrl.match(hostRegex)[0];
+        const path = baseUrl.replace(hostRegex, "") + relPath;
         const options = {
-            hostname: host,
-            path: url,
-            method: operation,
+            hostname,
+            path,
+            method,
             headers: {
                 'Content-Type': contentType
             },
@@ -41,7 +46,7 @@ function request(host, url, operation, password, body = "", contentType = "appli
         req.end(body);
 })}
 
-request(domain, "/db/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPassword)
+request(dbUrl, "/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPassword)
     .then(async data => {
         // get admin access token
         const params = new URLSearchParams();

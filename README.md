@@ -92,7 +92,7 @@ To enable authentication with the CouchDB/backend follow the one that fits your 
 4. Run `docker-compose stop && docker-compose up -d`
 5. The application is now connected with Keycloak
 
-#### When using the replication backend
+#### When using the permission backend
 
 1. Go to _Realm Settings_ > _Keys_
 2. From the `RSA256` entry click on *Public key* and copy the shown key

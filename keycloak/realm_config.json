@@ -1,6 +1,9 @@
 {
   "enabled": true,
   "loginTheme": "aam-theme",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 7200,
+  "ssoSessionMaxLifespan": 36000,
   "smtpServer": {
     "starttls": "true",
     "auth": "true",

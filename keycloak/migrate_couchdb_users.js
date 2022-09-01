@@ -17,7 +17,7 @@ const hostRegex = /^([a-z][a-z0-9+\-.]*:\/\/)?([a-z0-9\-._~%!$&'()*+,;=]+@)?([a-
 
 function request(baseUrl, relPath, method, password, body = "", contentType = "application/json") {
     return new Promise((resolve, reject) => {
-        const hostname = baseUrl.match(hostRegex)[0];
+        const hostname = baseUrl.match(hostRegex)[3];
         const path = baseUrl.replace(hostRegex, "") + relPath;
         const options = {
             hostname,
@@ -83,17 +83,17 @@ request(dbUrl, "/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPasswor
             const salt = Buffer.from(user.salt, "utf8").toString("base64")
             const keycloakUser = {
                 username: user.name,
-                email: "",
                 enabled: true,
-                attributes: {},
-                emailVerified: "",
+                attributes: {
+                    exact_username: user.name
+                },
                 credentials: [
                     {
                         credentialData: `{"hashIterations": "10","algorithm": "${user.password_scheme}"}`,
                         secretData: `{"salt": "${salt}","value": "${derivedKey}"}`,
                         type: "password"
                     }
-                ]
+                ],
             }
             return request(keycloakUrl, `/admin/realms/${realm}/users`, "POST", token, JSON.stringify(keycloakUser))
                 .then(() => request(keycloakUrl, `/admin/realms/${realm}/users?username=${user.name}`, "GET", token))

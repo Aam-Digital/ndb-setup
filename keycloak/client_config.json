@@ -2,7 +2,6 @@
   "clientId": "app",
   "rootUrl": "",
   "adminUrl": "",
-  "baseUrl": "",
   "surrogateAuthRequired": false,
   "enabled": true,
   "alwaysDisplayInConsole": false,
@@ -35,12 +34,14 @@
     "oidc.ciba.grant.enabled": "false",
     "backchannel.logout.session.required": "true",
     "client_credentials.use_refresh_token": "false",
+    "saml$server$signature$keyinfo$ext": "false",
     "require.pushed.authorization.requests": "false",
     "saml.client.signature": "false",
     "saml.allow.ecp.flow": "false",
     "id.token.as.detached.signature": "false",
     "saml.assertion.signature": "false",
     "saml.encrypt": "false",
+    "saml$server$signature": "false",
     "saml.server.signature": "false",
     "exclude.session.state.from.auth.response": "false",
     "saml.artifact.binding": "false",
@@ -73,31 +74,23 @@
     {
       "name": "username",
       "protocol": "openid-connect",
-      "protocolMapper": "oidc-usermodel-property-mapper",
+      "protocolMapper": "oidc-usermodel-attribute-mapper",
       "consentRequired": false,
       "config": {
+        "aggregate.attrs": "false",
         "userinfo.token.claim": "true",
-        "user.attribute": "username",
+        "multivalued": "false",
+        "user.attribute": "exact_username",
         "id.token.claim": "true",
         "access.token.claim": "true",
-        "claim.name": "username",
-        "jsonType.label": "String"
+        "claim.name": "username"
       }
     }
   ],
   "defaultClientScopes": [
-    "web-origins",
-    "acr",
-    "profile",
-    "roles",
     "email"
   ],
-  "optionalClientScopes": [
-    "address",
-    "phone",
-    "offline_access",
-    "microprofile-jwt"
-  ],
+  "optionalClientScopes": [],
   "access": {
     "view": true,
     "configure": true,

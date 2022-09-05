@@ -12,11 +12,13 @@ services:
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./child-photos:/usr/share/nginx/html/assets/child-photos
+      - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
     environment:
       VIRTUAL_HOST: example.com
       LETSENCRYPT_HOST: example.com
 #      COUCHDB_URL: http://backend:3000
       COUCHDB_URL: http://couchdb:5984
+      KEYCLOAK_URL: keycloak.example.com
     restart: unless-stopped
 
 #  backend:
@@ -30,6 +32,8 @@ services:
 #      DATABASE_NAME: app
 #      DATABASE_USER: replicator
 #      DATABASE_PASSWORD: securePassword
+#      JWT_SECRET: MY_JWT_SECRET
+#      JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n<PUBLIC_KEY>\n-----END PUBLIC KEY-----"
 #      SENTRY_DSN:
 #    restart: unless-stopped
 

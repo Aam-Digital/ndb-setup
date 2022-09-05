@@ -1,0 +1,16 @@
+.login-pf body {
+    background: #fff3e0;
+}
+
+.card-pf {
+    border-color: #ff9800;
+    border-radius: 4px;
+}
+
+.pf-c-button.pf-m-primary {
+    background-color: #ff9800;
+}
+
+#kc-header {
+    color: inherit;
+}

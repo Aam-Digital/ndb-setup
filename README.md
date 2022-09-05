@@ -39,7 +39,7 @@ Use this deployment if you want to enable permission checks in your application
 4. Run `docker-compose up -d`
 5. Run `./initial-setup.sh https://<VIRTUAL_HOST> <COUCHDB_PASSWORD> <DATABASE_PASSWORD>`
 6. To add users run `js add-user.js <VIRTUAL_HOST> admin:<COUCHDB_PASSWORD> <USERNAME> <PASSWORD>` where `USERNAME` and `PASSWORD` are the desired user credentials.
-7. Visit `<VIRTUAL_HOST>/db/db/_utils/` and add a `Config:Permission` document (TODO add link once documentation is deployed) to the database and define the user roles
+7. Visit `<VIRTUAL_HOST>/db/db/_utils/` and add a `Config:Permission` document to the database and define the user roles ([read more](https://aam-digital.github.io/ndb-core/documentation/additional-documentation/concepts/user-roles-and-permissions.html))
 8. Visit `<VIRTUAL_HOST>/db/api/` and execute the `POST /_session` and `POST /rules/{db}/reload` to activate the changes in the backend
 
 # Deploying under a domain name using nginx-proxy

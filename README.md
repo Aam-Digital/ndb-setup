@@ -54,8 +54,10 @@ This setup repository comes with a [docker compose](https://github.com/Aam-Digit
    > cd nginx-proxy && docker-compose up -d  
 4. Set the `VIRTUAL_HOST`and`LETSENCRYPT_HOST` as environment variables on new docker containers to define under which URL they should be reachable
 
-# User management in Keycloak
-The system uses the [Keycloak](https://www.keycloak.org/) identity management system.
+# (optional) User management in Keycloak
+The system supports the [Keycloak](https://www.keycloak.org/) identity management system.
+This is optional but allows to enable further features like password reset in the application.
+To enable this follow the following steps.
 
 ## Setup
 
@@ -77,7 +79,15 @@ To add an application to the Keycloak execute the following:
 6. Navigate to the realm with the name of the application (`/admin`)
 7. Click on _Clients_ > _app_ > _Action_ > _Export_
 8. Place this file in the assets folder of the application with the name `keycloak.json`. It might be necessary to mount the file as a volume into the docker container.
-9. (optional) Migrate existing users from CouchDB to Keycloak by running
+9. Update the `config.json` of the application to enable Keycloak as the authenticator:
+   ```json
+   {
+      "session_type": "synced",
+      "demo_mode": false,
+      "authenticator": "keycloak"
+    }
+   ```
+10. (optional) Migrate existing users from CouchDB to Keycloak by running
    > node migrate-users.js <COUCHDB_URL> <COUCHDB_ADMIN_PASSWORD> <KEYCLOAK_URL> <KEYCLOAK_ADMIN_PASSWORD> <REALM_NAME>
 
 ### Further steps

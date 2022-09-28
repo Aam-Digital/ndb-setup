@@ -52,11 +52,11 @@ services:
       LETSENCRYPT_HOST: example.com
       VIRTUAL_HOST: example.com
       VIRTUAL_PORT: 3000
-      CORS: *
+      CORS: "*"
       SENTRY_DSN:
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_PASSWORD: adminPassword
+      KEYCLOAK_PASSWORD: admin
     restart: unless-stopped
 
 networks:

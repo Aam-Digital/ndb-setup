@@ -4,9 +4,9 @@
 
 
 <#if requiredActionsValues == "VERIFY_EMAIL">
-${msg("emailVerificationBody",link, linkExpiration, realmName, linkExpirationFormatter(linkExpiration))}
+${msg("emailVerificationBody",link, user.username, linkExpirationFormatter(linkExpiration))}
 <#elseif requiredActionsValues == "UPDATE_PASSWORD">
-${msg("passwordResetBody",link, linkExpiration, realmName, linkExpirationFormatter(linkExpiration))}
+${msg("passwordResetBody",link, user.username, linkExpirationFormatter(linkExpiration))}
 <#else>
 ${msg("executeActionsBody",link, linkExpiration, realmName, requiredActionsText, linkExpirationFormatter(linkExpiration))}
 </#if>

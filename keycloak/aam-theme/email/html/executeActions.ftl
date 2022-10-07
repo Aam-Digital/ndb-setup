@@ -6,7 +6,7 @@
 
 <html>
 <body>
-<h1>Aam Digital - ${realmName}</h1>
+<h1 class="title">Aam Digital - ${realmName}</h1>
 <#if requiredActionsValues == "VERIFY_EMAIL">
 ${kcSanitize(msg("emailVerificationBodyHtml", link, user.username, realmName, linkExpirationFormatter(linkExpiration)))?no_esc}
 <#elseif requiredActionsValues == "UPDATE_PASSWORD">

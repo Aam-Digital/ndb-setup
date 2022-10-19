@@ -22,12 +22,10 @@
   "roles": {
     "realm": [
       {
-        "id": "0f1158d0-acb5-4d7c-9be7-ed5ade3bb558",
         "name": "account_manager",
         "description": "User with this role can create and update accounts",
         "composite": false,
         "clientRole": false,
-        "containerId": "c86f2103-9214-4f11-bdb6-c3f0f4694167",
         "attributes": {}
       }
     ]

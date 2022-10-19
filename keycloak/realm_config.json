@@ -27,7 +27,28 @@
         "composite": false,
         "clientRole": false,
         "attributes": {}
+      },
+      {
+        "name": "default-roles",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "client": {
+            "account": [
+              "view-profile",
+              "manage-account"
+            ]
+          }
+        },
+        "clientRole": false,
+        "attributes": {}
       }
     ]
+  },
+  "defaultRole": {
+    "name": "default-roles",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
   }
 }

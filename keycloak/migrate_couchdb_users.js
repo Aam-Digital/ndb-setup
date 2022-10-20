@@ -106,5 +106,3 @@ request(dbUrl, "/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPasswor
         })
         return Promise.all(requests);
     }).then(() => console.log("done"));
-
-

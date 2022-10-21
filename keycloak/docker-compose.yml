@@ -54,7 +54,7 @@ services:
       VIRTUAL_PORT: 3000
       CORS: "*"
       SENTRY_DSN:
-      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_URL: https://example.com
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_PASSWORD: admin
     restart: unless-stopped

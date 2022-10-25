@@ -1,9 +1,11 @@
 {
   "enabled": true,
   "loginTheme": "aam-theme",
+  "emailTheme": "aam-theme",
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 7200,
   "ssoSessionMaxLifespan": 36000,
+  "passwordPolicy": "hashIterations(27500) and length(8) and digits(1) and upperCase(1)",
   "smtpServer": {
     "starttls": "true",
     "auth": "true",
@@ -17,5 +19,51 @@
     "port": "<EMAIL_SERVER_PORT>",
     "user": "<EMAIL_SERVER_USER>",
     "password": "<EMAIL_SERVER_PASSWORD>"
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "account_manager",
+        "description": "User with this role can create and update accounts",
+        "composite": false,
+        "clientRole": false,
+        "attributes": {}
+      },
+      {
+        "name": "admin_app",
+        "description": "Users with this role can access everything.",
+        "composite": false,
+        "clientRole": false,
+        "attributes": {}
+      },
+      {
+        "name": "user_app",
+        "description": "Default rule which every user should have.",
+        "composite": false,
+        "clientRole": false,
+        "attributes": {}
+      },
+      {
+        "name": "default-roles",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "client": {
+            "account": [
+              "view-profile",
+              "manage-account"
+            ]
+          }
+        },
+        "clientRole": false,
+        "attributes": {}
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
   }
 }

@@ -14,9 +14,9 @@ services:
       # TODO introduce variables
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_DB_PASSWORD: PASSWORD
-      KC_HOSTNAME: example.aam-digital.com
-      LETSENCRYPT_HOST: example.aam-digital.com
-      VIRTUAL_HOST: example.aam-digital.com
+      KC_HOSTNAME: example.com
+      LETSENCRYPT_HOST: example.com
+      VIRTUAL_HOST: example.com
       VIRTUAL_PORT: 8080
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme
@@ -39,6 +39,24 @@ services:
       - ./postgres:/var/lib/postgresql/data
     networks:
       - internal
+    restart: unless-stopped
+
+  account-ms:
+    image: aamdigital/account-ms:latest
+    depends_on:
+      - keycloak
+    networks:
+      - internal
+      - nginx-proxy_default
+    environment:
+      LETSENCRYPT_HOST: example.com
+      VIRTUAL_HOST: example.com
+      VIRTUAL_PORT: 3000
+      CORS: "*"
+      SENTRY_DSN:
+      KEYCLOAK_URL: https://example.com
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_PASSWORD: admin
     restart: unless-stopped
 
 networks:

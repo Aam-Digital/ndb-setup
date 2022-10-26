@@ -77,7 +77,7 @@ To add an application to the Keycloak execute the following:
 4. Run the script `create_realm.sh` with the container ID, the Keycloak admin password and the name of the application
 5. Go the admin UI of your Keycloak
 6. Navigate to the realm with the name of the application (`/admin`)
-7. Click on _Clients_ > _app_ > _Action_ > _Export_
+7. Click on _Clients_ > _app_ > _Action_ > _Download adapter config_
 8. Place this file in the assets folder of the application with the name `keycloak.json`. It might be necessary to mount the file as a volume into the docker container.
 9. Update the `config.json` of the application to enable Keycloak as the authenticator:
    ```json

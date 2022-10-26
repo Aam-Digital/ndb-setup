@@ -31,14 +31,14 @@
       },
       {
         "name": "admin_app",
-        "description": "Users with this role can access everything.",
+        "description": "Users with this role can access everything",
         "composite": false,
         "clientRole": false,
         "attributes": {}
       },
       {
         "name": "user_app",
-        "description": "Default rule which every user should have.",
+        "description": "Default rule which every user should have",
         "composite": false,
         "clientRole": false,
         "attributes": {}

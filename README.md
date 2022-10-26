@@ -79,12 +79,13 @@ To add an application to the Keycloak execute the following:
 6. Navigate to the realm with the name of the application (`/admin`)
 7. Click on _Clients_ > _app_ > _Action_ > _Download adapter config_
 8. Place this file in the assets folder of the application with the name `keycloak.json`. It might be necessary to mount the file as a volume into the docker container.
-9. Update the `config.json` of the application to enable Keycloak as the authenticator:
+9. Update the `config.json` of the application to enable Keycloak as the authenticator. `account_url` should point to the url where the [account-backend](https://github.com/Aam-Digital/account-backend) is deployed:
    ```json
    {
       "session_type": "synced",
       "demo_mode": false,
-      "authenticator": "keycloak"
+      "authenticator": "keycloak",
+      "account_url": "https://accounts.example.com"
     }
    ```
 10. (optional) Migrate existing users from CouchDB to Keycloak by running

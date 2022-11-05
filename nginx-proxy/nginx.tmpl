@@ -1,3 +1,8 @@
+# Custom nginx configs can be added here
+
+# Remove limit for size of request body
+client_max_body_size 0;
+
 {{ $CurrentContainer := where $ "ID" .Docker.CurrentContainerID | first }}
 
 {{ $nginx_proxy_version := coalesce $.Env.NGINX_PROXY_VERSION "" }}

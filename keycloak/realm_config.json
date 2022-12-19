@@ -5,7 +5,7 @@
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 7200,
   "ssoSessionMaxLifespan": 36000,
-  "actionTokenGeneratedByAdminLifespan": 259200,
+  "actionTokenGeneratedByAdminLifespan": 864000,
   "passwordPolicy": "hashIterations(27500) and length(8) and digits(1) and upperCase(1)",
   "smtpServer": {
     "starttls": "true",

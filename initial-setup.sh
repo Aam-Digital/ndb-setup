@@ -82,6 +82,7 @@ then
   docker compose stop
   sed -i "s/\"account_url\": \".*\"/\"account_url\": \"https:\/\/$ACCOUNTS_URL\"/g" config-keycloak.json
   cp config-keycloak.json config.json
+  sed -i "s/\#\- .\/keycloak/\- .\/keycloak/g" docker-compose.yml
   docker compose up -d
   if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]
   then

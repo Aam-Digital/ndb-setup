@@ -7,14 +7,30 @@ services:
       - internal
       - nginx-proxy_default
     depends_on:
-      - couchdb
+      - backend
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./child-photos:/usr/share/nginx/html/assets/child-photos
     environment:
       VIRTUAL_HOST: ${APP_URL:?App URL not set}
       LETSENCRYPT_HOST: ${APP_URL:?App URL not set}
-      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_URL: http://backend:3000
+    restart: unless-stopped
+
+  backend:
+    image: aamdigital/replication-ms:latest
+    networks:
+      - internal
+    depends_on:
+      - couchdb
+    environment:
+      DATABASE_URL: http://couchdb:5984
+      DATABASE_NAME: app
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: ${COUCHDB_PASSWORD:?Admin password not set}
+      JWT_SECRET: ${JWT_SECRET:?JWT secret not set}
+      JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n<PUBLIC_KEY>\n-----END PUBLIC KEY-----"
+      SENTRY_DSN:
     restart: unless-stopped
 
   couchdb:

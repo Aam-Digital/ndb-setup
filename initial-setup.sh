@@ -68,7 +68,6 @@ if [ ! -f "keycloak.json" ]
 then
   echo "Do you want to add authentication via Keycloak?[y/n]"
   read -r keycloak
-  if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]
   container=$(docker ps -aqf "name=keycloak-keycloak")
   # This might need to be adjusted, depending where the keycloak is running
   source "/var/docker/nginx-proxy/keycloak/.env"
@@ -80,6 +79,11 @@ then
   token=${token#*\"access_token\":\"}
   token=${token%\",\"expires_in\"*}
   curl --silent --location "https://$KEYCLOAK_URL/admin/realms/dev/clients/$client/installation/providers/keycloak-oidc-keycloak-json" --header "Authorization: Bearer $token" > keycloak.json
+  docker compose stop
+  sed -i "s/\"account_url\": \".*\"/\"account_url\": \"https:\/\/$ACCOUNTS_URL\"/g" config-keycloak.json
+  cp config-keycloak.json config.json
+  docker compose up -d
+  if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]
   then
     if [ "$backend" == 0 ]
     then

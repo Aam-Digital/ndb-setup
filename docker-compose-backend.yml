@@ -2,19 +2,19 @@ version: '3'
 
 services:
   app:
-    image: aamdigital/ndb-server:3.18.0
+    image: aamdigital/ndb-server:${VERSION:?No release specified}
     networks:
       - internal
       - nginx-proxy_default
     depends_on:
-      - backend
+      - couchdb
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./child-photos:/usr/share/nginx/html/assets/child-photos
     environment:
       VIRTUAL_HOST: ${APP_URL:?App URL not set}
       LETSENCRYPT_HOST: ${APP_URL:?App URL not set}
-      COUCHDB_URL: http://backend:3000
+      COUCHDB_URL: http://couchdb:5984
     restart: unless-stopped
 
   backend:

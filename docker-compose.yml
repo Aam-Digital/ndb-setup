@@ -2,7 +2,7 @@ version: '3'
 
 services:
   app:
-    image: aamdigital/ndb-server:3.18.0
+    image: aamdigital/ndb-server:${VERSION:?No release specified}
     networks:
       - internal
       - nginx-proxy_default

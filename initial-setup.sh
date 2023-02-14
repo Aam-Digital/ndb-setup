@@ -16,9 +16,14 @@ then
 
   if [ ! -f ".env" ]
   then
+    echo "Which version should be used (e.g. 3.18.0 or pr-1234)?"
+    read -r version
+    echo "VERSION=$version" >> .env
+
     generate_password
     echo "COUCHDB_PASSWORD=$password" >> .env
     echo "Admin password: $password"
+
     url=$org.aam-digital.net
     echo "APP_URL=$url" >> .env
     echo "App URL: $url"

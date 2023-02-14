@@ -16,6 +16,7 @@ then
 
   if [ ! -f ".env" ]
   then
+    # TODO maybe fetch latest from server
     echo "Which version should be used (e.g. 3.18.0 or pr-1234)?"
     read -r version
     echo "VERSION=$version" >> .env
@@ -54,12 +55,38 @@ then
   if [ "$withBackend" == "y" ] || [ "$withBackend" == "Y" ]
   then
     echo "Adding backend"
-    mv docker-compose.yml docker-compose-old.yml
+    # mv docker-compose.yml docker-compose-old.yml
     cp docker-compose-backend.yml docker-compose.yml
     generate_password
     echo "JWT_SECRET=$password" >> .env
     docker compose up -d
     backend=1
+  fi
+fi
+
+if [ ! -f "keycloak.json" ]
+then
+  echo "Do you want to add authentication via Keycloak?[y/n]"
+  read -r keycloak
+  if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]
+  container=$(docker ps -aqf "name=keycloak-keycloak")
+  # This might need to be adjusted, depending where the keycloak is running
+  source "/var/docker/nginx-proxy/keycloak/.env"
+  source ".env"
+  docker exec -i "$container" /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$ADMIN_PASSWORD"
+  docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -f /realm_config.json -i
+  client=$(docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create clients -r "$org" -s baseUrl="https://$APP_URL" -f /client_config.json -i)
+  token=$(curl --silent --location "https://$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode username=admin --data-urlencode password="$ADMIN_PASSWORD" --data-urlencode grant_type=password --data-urlencode client_id=admin-cli)
+  token=${token#*\"access_token\":\"}
+  token=${token%\",\"expires_in\"*}
+  curl --silent --location "https://$KEYCLOAK_URL/admin/realms/dev/clients/$client/installation/providers/keycloak-oidc-keycloak-json" --header "Authorization: Bearer $token" > keycloak.json
+  then
+    if [ "$backend" == 0 ]
+    then
+      echo ""
+    else
+      echo ""
+    fi
   elif [ "$app" == 0 ]
   then
     source '.env'

@@ -10,13 +10,11 @@ services:
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: keycloak
       KC_PROXY: edge
-      # Adjust the following values
-      # TODO introduce variables
-      KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_DB_PASSWORD: PASSWORD
-      KC_HOSTNAME: example.com
-      LETSENCRYPT_HOST: example.com
-      VIRTUAL_HOST: example.com
+      KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?No admin password set}
+      KC_DB_PASSWORD: ${DB_PASSWORD:?No DB password set}
+      KC_HOSTNAME: ${KEYCLOAK_URL:?No Keycloak URL set}
+      LETSENCRYPT_HOST: $KEYCLOAK_URL
+      VIRTUAL_HOST: $KEYCLOAK_URL
       VIRTUAL_PORT: 8080
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme
@@ -33,8 +31,7 @@ services:
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      # Set same as KC_DB_PASSWORD
-      POSTGRES_PASSWORD: PASSWORD
+      POSTGRES_PASSWORD: $DB_PASSWORD
     volumes:
       - ./postgres:/var/lib/postgresql/data
     networks:
@@ -49,14 +46,14 @@ services:
       - internal
       - nginx-proxy_default
     environment:
-      LETSENCRYPT_HOST: example.com
-      VIRTUAL_HOST: example.com
+      LETSENCRYPT_HOST: ${ACCOUNTS_URL:?No Accounts backend URL set}
+      VIRTUAL_HOST: $ACCOUNTS_URL
       VIRTUAL_PORT: 3000
       CORS: "*"
       SENTRY_DSN:
-      KEYCLOAK_URL: https://example.com
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_PASSWORD: admin
+      KEYCLOAK_URL: https://$KEYCLOAK_URL
+      KEYCLOAK_ADMIN: $ADMIN_PASSWORD
+      KEYCLOAK_PASSWORD:
     restart: unless-stopped
 
 networks:

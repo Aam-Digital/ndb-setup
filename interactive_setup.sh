@@ -103,6 +103,17 @@ then
     fi
     docker compose stop
     docker compose up -d
+
+    echo "Do you want to migrate existing users from CouchDB to Keycloak?[y/n]"
+    read -r migrate
+    source '.env'
+    if [ "$migrate" == "y" ] || [ "$migrate" == "Y" ]
+    then
+      couchUrl=https://$APP_URL/db
+      if [ "$backend" == 1 ]; then couchUrl=$couchUrl/couchdb; fi
+      node keycloak/migrate_couchdb_users.js $couchUrl $COUCHDB_PASSWORD https://$KEYCLOAK_URL $ADMIN_PASSWORD $org
+    fi
+
     echo "App is connected with Keycloak"
   elif [ "$app" == 0 ]
   then

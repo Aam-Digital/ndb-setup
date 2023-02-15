@@ -1,6 +1,6 @@
 {
-  "session": "synced",
-  "demo": false,
+  "session_type": "synced",
+  "demo_mode": false,
   "authenticator": "keycloak",
   "account_url": "https://accounts.aam-digital.com"
 }

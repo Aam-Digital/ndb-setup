@@ -7,17 +7,19 @@ services:
     environment:
       # For all available options see https://www.keycloak.org/server/all-config
       KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?No admin password set}
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: keycloak
-      KC_PROXY: edge
-      KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?No admin password set}
       KC_DB_PASSWORD: ${DB_PASSWORD:?No DB password set}
+      KC_PROXY: edge
       KC_HOSTNAME: ${KEYCLOAK_URL:?No Keycloak URL set}
       LETSENCRYPT_HOST: $KEYCLOAK_URL
       VIRTUAL_HOST: $KEYCLOAK_URL
       VIRTUAL_PORT: 8080
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme
+      - ./client_config.json:/client_config.json
+      - ./realm_config.json:/realm_config.json
     command: start --optimized --spi-theme-login-theme=aam-theme
     networks:
       - internal
@@ -50,10 +52,10 @@ services:
       VIRTUAL_HOST: $ACCOUNTS_URL
       VIRTUAL_PORT: 3000
       CORS: "*"
-      SENTRY_DSN:
+      SENTRY_DSN: $SENTRY_DSN
       KEYCLOAK_URL: https://$KEYCLOAK_URL
-      KEYCLOAK_ADMIN: $ADMIN_PASSWORD
-      KEYCLOAK_PASSWORD:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_PASSWORD: $ADMIN_PASSWORD
     restart: unless-stopped
 
 networks:

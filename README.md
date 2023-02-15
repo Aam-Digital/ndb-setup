@@ -4,14 +4,16 @@ This includes deploying the app, deploying and connecting the database and optio
 
 ## Deploying the application
 The interactive script `interactive_setup.sh` walks you through the process of setting up the application.
-Just run it and look for the console output.
+Just run it and look for the console output and questions.
 
-This setup includes
+The following things can be automatically done
 
-1. Deploying the application
+1. Deploy the application
 2. (optional) add the permission backend
 3. (optional) connect with a running Keycloak
 4. (optional) migrate users from CouchDB to Keycloak
+
+To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `.env` file to you sentry DSN and restart the container (`docker compose down && docker compose up -d`).
 
 ## Adjusting the scrip
 Some things might need to be adjusted based on how you environment looks.
@@ -19,7 +21,7 @@ Have a look at the following things
 
 1. How does the folder translate into the application name (variable `org`)
 2. Domain name for the final applications (variable `url`)
-3. Location of the `.env` file of the keycloak deployment
+3. Location of the `.env` file of the keycloak deployment (see section [User management in Keycloak](#user-management-in-keycloak))
 
 # Deploying under a domain name using nginx-proxy
 The system works well with the [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) docker. This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).
@@ -33,14 +35,14 @@ This setup repository comes with a [docker compose](https://github.com/Aam-Digit
    > cd nginx-proxy && docker-compose up -d  
 4. Set the `VIRTUAL_HOST`and`LETSENCRYPT_HOST` as environment variables on new docker containers to define under which URL they should be reachable
 
-# (optional) User management in Keycloak
+# User management in Keycloak
 The system supports the [Keycloak](https://www.keycloak.org/) identity management system.
 This is optional but allows to enable further features like password reset in the application.
 To enable this follow the following steps.
 
 To start the required docker containers execute the following (this is only needed once on a server):
-1. In `keykloak/docker-compose.yml` set `KC_DB_PASSWORD` and `POSTGRES_PASSWORD` to the same **secure** password
-2. Change `example.aam-digital.com` to the **same** valid url where the Keycloak can later be reached publicly, see the [nginx section](#deploying-under-a-domain-name-using-nginx-proxy) for more details
+1. Open the file `keycloak/.env`
+2. Set the password variables to secure passwords and assign valid urls for the Keycloak and [account backend](https://github.com/Aam-Digital/account-backend) (without `https://`)
 3. Open `keykloak/realm_config.json` and add the required settings for you email server to enable Keycloak to send emails in your name
 4. Open `keykloak/create_realm.sh` and set the `<DOMAIN>` to the general domain name of you applications (e.g. `aam-digital`)
 5. Start the required containers

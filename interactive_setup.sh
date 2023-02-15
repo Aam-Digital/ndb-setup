@@ -25,6 +25,9 @@ then
     echo "COUCHDB_PASSWORD=$password" >> .env
     echo "Admin password: $password"
 
+    # This needs to be set manually after running the script
+    echo "SENTRY_DSN=" >> .env
+
     # might need to be adjusted base on the domain
     url=$org.aam-digital.com
     echo "APP_URL=$url" >> .env

@@ -7,7 +7,7 @@ services:
       - internal
       - nginx-proxy_default
     depends_on:
-      - couchdb
+      - backend
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./child-photos:/usr/share/nginx/html/assets/child-photos

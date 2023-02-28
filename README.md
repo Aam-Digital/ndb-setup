@@ -4,7 +4,11 @@ This includes deploying the app, deploying and connecting the database and optio
 
 ## Deploying the application
 The interactive script `interactive_setup.sh` walks you through the process of setting up the application.
-Just run it and look for the console output and questions.
+
+1. Just clone this repository into the folder where you want to start the new instance
+   > git clone https://github.com/Aam-Digital/ndb-setup.git <FOLDER_NAME>
+2. Then run the script and follow the questions in the console
+   > cd <FOLDER_NAME> && ./interactive_setup.sh
 
 The following things can be automatically done
 
@@ -13,7 +17,7 @@ The following things can be automatically done
 3. (optional) connect with a running Keycloak
 4. (optional) migrate users from CouchDB to Keycloak
 
-To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `.env` file to you sentry DSN and restart the container (`docker compose down && docker compose up -d`).
+To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `.env` file (which is automatically created after running the `interactive_setup.sh`) to you sentry DSN and restart the container (`docker compose down && docker compose up -d`).
 
 ## Adjusting the scrip
 Some things might need to be adjusted based on how you environment looks.

@@ -40,7 +40,7 @@ The system supports the [Keycloak](https://www.keycloak.org/) identity managemen
 This is optional but allows to enable further features like password reset in the application.
 To enable this follow the following steps.
 
-To start the required docker containers execute the following (this is only needed once on a server):
+To start the required docker containers execute the following (this is only needed once on a server, you can skip these steps if you just want to add another Aam Digital instance to an existing keycloak server):
 1. Open the file `keycloak/.env`
 2. Set the password variables to secure passwords and assign valid urls for the Keycloak and [account backend](https://github.com/Aam-Digital/account-backend) (without `https://`)
 3. Open `keykloak/realm_config.json` and add the required settings for you email server to enable Keycloak to send emails in your name

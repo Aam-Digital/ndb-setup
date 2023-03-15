@@ -105,4 +105,4 @@ request(dbUrl, "/_users/_all_docs?include_docs=true", "GET", "admin:" +dbPasswor
                 .catch((err) => console.log("error migrating user: " + user.name, err))
         })
         return Promise.all(requests);
-    }).then(() => console.log("done"));
+    }).then(() => console.log("migration done"));

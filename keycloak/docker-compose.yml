@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
 
   account-ms:
-    image: aamdigital/account-ms:latest
+    image: aamdigitaltravis/account-ms:latest
     depends_on:
       - keycloak
     networks:

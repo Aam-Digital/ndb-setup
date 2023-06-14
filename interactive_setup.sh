@@ -24,7 +24,7 @@ getKeycloakKey() {
 }
 
 # This might need to be adjusted, depending where the keycloak is running
-source "/var/docker/nginx-proxy/keycloak/.env"
+source "/var/docker/setup/keycloak/.env"
 
 echo "What is the name of the organisation?"
 read -r org

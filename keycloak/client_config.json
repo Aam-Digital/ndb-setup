@@ -58,19 +58,6 @@
   "nodeReRegistrationTimeout": -1,
   "protocolMappers": [
     {
-      "name": "username",
-      "protocol": "openid-connect",
-      "protocolMapper": "oidc-usermodel-property-mapper",
-      "consentRequired": false,
-      "config": {
-        "user.attribute": "username",
-        "id.token.claim": "true",
-        "access.token.claim": "true",
-        "claim.name": "username",
-        "userinfo.token.claim": "true"
-      }
-    },
-    {
       "name": "realm roles",
       "protocol": "openid-connect",
       "protocolMapper": "oidc-usermodel-realm-role-mapper",

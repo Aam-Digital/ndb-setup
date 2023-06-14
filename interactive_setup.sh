@@ -29,8 +29,8 @@ source "/var/docker/nginx-proxy/keycloak/.env"
 echo "What is the name of the organisation?"
 read -r org
 path="../ndb-$org"
-[[ -d "$path" ]] && app=1
-if [ "$app" != 1 ]; then
+app=$(docker ps | grep -c "\-$org-app")
+if [ "$app" == 0 ]; then
   echo "Setting up new instance '$org'"
   mkdir "$path"
   cp .env "$path/.env"
@@ -87,7 +87,7 @@ if [ "$backend" == 0 ]; then
     (cd "$path" && docker compose up -d)
     backend=1
     echo "Backend added"
- elif [ "$app" != 1 ]; then
+ elif [ "$app" == 0 ]; then
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
   fi
@@ -132,9 +132,9 @@ if [ ! -f "$path/keycloak.json" ]; then
     fi
 
     echo "App is connected with Keycloak"
-  elif [ "$app" != 1  ]; then
+  elif [ "$app" == 0  ]; then
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users"
-    if [ "$backend" != 1 ]; then
+    if [ "$backend" == 0 ]; then
       curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
     fi
 

@@ -2,6 +2,16 @@
 This repository describes how to set up everything that is needed to run Aam Digital in production.
 This includes deploying the app, deploying and connecting the database and optionally deploying and connecting the permission backend and keycloak.
 
+## Systems requirements
+The deployment works with minimal requirements. 
+All you need is a system that runs [Docker](https://www.docker.com/) and allows to reach endpoints through a public URL.
+For a single instance a server with **2GB RAM**, a **single CPU** and **20GB disc space** is sufficient.
+With more data and/or more deployments more RAM and CPU power might be necessary or the sync could start to become very slow.
+The required disc space scales with the amount of data and especially images and attachments that are saved in the application.
+
+To monitor the hardware usage [this repo](https://github.com/Aam-Digital/monitoring/blob/main/docker-compose.yml) contains a Prometheus setup.
+This can be connected with [Grafana](https://grafana.com/) to create a system dashboard and trigger alerts on critical performance.
+
 ## Deploying the application
 The interactive script `interactive_setup.sh` walks you through the process of setting up new applications.
 

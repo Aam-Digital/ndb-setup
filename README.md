@@ -3,12 +3,11 @@ This repository describes how to set up everything that is needed to run Aam Dig
 This includes deploying the app, deploying and connecting the database and optionally deploying and connecting the permission backend and keycloak.
 
 ## Deploying the application
-The interactive script `interactive_setup.sh` walks you through the process of setting up the application.
+The interactive script `interactive_setup.sh` walks you through the process of setting up new applications.
 
-1. Just clone this repository into the folder where you want to start the new instance
-   > git clone https://github.com/Aam-Digital/ndb-setup.git <FOLDER_NAME>
+1. Just clone this repository
 2. Then run the script and follow the questions in the console
-   > cd <FOLDER_NAME> && ./interactive_setup.sh
+   > ./interactive_setup.sh
 
 The following things can be automatically done
 
@@ -17,9 +16,9 @@ The following things can be automatically done
 3. (optional) connect with a running Keycloak
 4. (optional) migrate users from CouchDB to Keycloak
 
-To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `.env` file (which is automatically created after running the `interactive_setup.sh`) to you sentry DSN and restart the container (`docker compose down && docker compose up -d`).
+To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `.env` file to you sentry DSN.
 
-## Adjusting the scrip
+## Adjusting the script
 Some things might need to be adjusted based on how you environment looks.
 Have a look at the following things
 

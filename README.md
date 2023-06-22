@@ -1,6 +1,8 @@
 # Aam Digital Setup
-This repository describes how to set up everything that is needed to run Aam Digital in production.
+This repository describes how to set up everything that is needed to run the [Aam Digital case management system](https://www.aam-digital.com) in production.
 This includes deploying the app, deploying and connecting the database and optionally deploying and connecting the permission backend and keycloak.
+
+*The source code of the actual application, as well as instructions to run it on your local machine during development, can be found in the [Aam-Digital/ndb-core](https://github.com/Aam-Digital/ndb-core) repository.*
 
 ## Systems requirements
 The deployment works with minimal requirements. 
@@ -37,6 +39,7 @@ Have a look at the comments at the beginning of the file `interactive_setup.sh`
 3. Location of the `.env` file of the keycloak deployment (see section [User management in Keycloak](#user-management-in-keycloak))
 
 # Deploying under a domain name using nginx-proxy
+In order to make the application's docker container accessible under a public URL, you need to expose it using a tool of your choice.
 The system works well with the [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) docker. This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).
 
 This setup repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/nginx-proxy/docker-compose.yml) for setting up the nginx-proxy.

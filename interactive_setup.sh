@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# These might need to be adjusted based on the setup
+
+# Domain name under which subdomains can be reachable
+domain=aam-digital.com
+# Prefix that will be added to created folders
+prefix=ndb-
+# Location where Keycloak is running
+source "./keycloak/.env"
+
 chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 generate_password() {
   password=""
@@ -23,12 +32,9 @@ getKeycloakKey() {
   sed -i "s/\#\- .\/keycloak/\- .\/keycloak/g" "$path/docker-compose.yml"
 }
 
-# This might need to be adjusted, depending where the keycloak is running
-source "/var/docker/setup/keycloak/.env"
-
 echo "What is the name of the organisation?"
 read -r org
-path="../ndb-$org"
+path="../$prefix$org"
 app=$(docker ps | grep -c "\-$org-app")
 if [ "$app" == 0 ]; then
   echo "Setting up new instance '$org'"
@@ -47,8 +53,7 @@ if [ "$app" == 0 ]; then
   echo "COUCHDB_PASSWORD=$password" >> "$path/.env"
   echo "Admin password: $password"
 
-  # might need to be adjusted base on the domain
-  url=$org.aam-digital.com
+  url=$org.$domain
   echo "APP_URL=$url" >> "$path/.env"
   echo "App URL: $url"
   (cd "$path" && docker compose up -d)

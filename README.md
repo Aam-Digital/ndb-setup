@@ -30,10 +30,10 @@ To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY
 
 ## Adjusting the script
 Some things might need to be adjusted based on how you environment looks.
-Have a look at the following things
+Have a look at the comments at the beginning of the file `interactive_setup.sh`
 
-1. How does the folder translate into the application name (variable `org`)
-2. Domain name for the final applications (variable `url`)
+1. Domain name for the final applications (variable `domain`)
+2. Prefix for created folders (variable `prefix`)
 3. Location of the `.env` file of the keycloak deployment (see section [User management in Keycloak](#user-management-in-keycloak))
 
 # Deploying under a domain name using nginx-proxy
@@ -67,6 +67,6 @@ Once done, applications can be connected with Keycloak through the `interactive_
 *If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server).*
 
 The Dockerfile to build the image are part of the [ndb-core repository](https://github.com/Aam-Digital/ndb-core).
-See the `/build` subfolder there.
+See the `/build` sub folder there.
 
 The image builds upon a simple nginx webserver and modifies the configuration to include a reverse proxy for the `domain.com/db` URLs to access the CouchDB database from the same domain, avoiding CORS issues.

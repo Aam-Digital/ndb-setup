@@ -146,3 +146,5 @@ if [ ! -f "$path/keycloak.json" ]; then
     echo "'user_app' has access to database 'app'"
   fi
 fi
+
+echo "app is now available under https://$APP_URL"

@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  account-ms:
+    image: aamdigital/ndb-admin:latest
+    volumes:
+      - ./credentials.json:/app/dist/assets/credentials.json
+    environment:
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_PASSWORD:?No Keycloak password set}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:?No Keycloak URL set}
+      DOMAIN: ${DOMAIN:?No domain set}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # only available on localhost:3000 on server

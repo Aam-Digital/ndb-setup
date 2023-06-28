@@ -16,9 +16,11 @@ This can be connected with [Grafana](https://grafana.com/) to create a system da
 
 ## Deploying the application
 The interactive script `interactive_setup.sh` walks you through the process of setting up new applications.
+Running the setup script will create a new folder in the same parent folder, next to the cloned repo. You can use the script multiple times to create new instances.
 
-1. Just clone this repository
-2. Then run the script and follow the questions in the console
+1. Clone this repository
+2. Edit the `interactive_setup.sh` script and review the variables where necessary (see below "Adjusting the script")
+3. Then run the script and follow the questions in the console
    > ./interactive_setup.sh
 
 The following things can be automatically done

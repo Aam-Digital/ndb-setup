@@ -1,4 +1,5 @@
 initial=$PWD
+
 # Navigate to folder where AamDigital instances are located (default /var/docker)
 cd ${1:-/var/docker} || exit
 res="["

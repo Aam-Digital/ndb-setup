@@ -6,8 +6,8 @@ This service has access to all DBs and should only be accessible through an SSH 
 ## Deploy on server
 
 1. Set the variables in `.env`
-2. Run `./extract_credentials.sh <FOLDER>` where `folder` is the location where the AamDigital instances are located (default `/var/docker`)
-3. Run `docker-compose.up -d`
+2. Run `./collect_credentials.sh <FOLDER>` where `folder` is the location where the AamDigital instances are located (default `/var/docker`)
+3. Run `docker compose up -d`
 
 ## Connect via SSH tunnel
 

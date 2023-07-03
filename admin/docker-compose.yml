@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  account-ms:
+  admin-ms:
     image: aamdigital/ndb-admin:latest
     volumes:
       - ./credentials.json:/app/dist/assets/credentials.json

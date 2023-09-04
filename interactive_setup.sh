@@ -8,6 +8,9 @@ domain=aam-digital.com
 prefix=ndb-
 # Location where Keycloak is running
 source "./keycloak/.env"
+# Data for UptimeRobot
+uptimeRobotAPIKey=
+uptimeRobotAlertID=
 
 chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 generate_password() {
@@ -144,6 +147,20 @@ if [ ! -f "$path/keycloak.json" ]; then
     fi
 
     echo "'user_app' has access to database 'app'"
+  fi
+fi
+
+if [ "$app" == 0 ] && [ "$uptimeRobotAPIKey" != "" ] && [ "$uptimeRobotAlertID" != "" ]; then
+  echo "Do you want create UptimeRobot monitoring?[y/n]"
+  read -r createsMonitors
+  if [ "$createsMonitors" == "y" ] || [ "$createsMonitors" == "Y" ]; then
+    curl -X POST -d "api_key=$uptimeRobotAPIKey&url=https://$url&friendly_name=Aam - $org App&alert_contacts=$uptimeRobotAlertID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
+    if [ "$backend" == 1 ]; then
+      curl -X POST -d "api_key=$uptimeRobotAPIKey&url=https://$url/db/api&friendly_name=Aam - $org Backend&alert_contacts=$uptimeRobotAlertID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
+      curl -X POST -d "api_key=$uptimeRobotAPIKey&url=https://$url/db/couchdb/_utils/&friendly_name=Aam - $org DB&alert_contacts=$uptimeRobotAlertID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
+    else
+      curl -X POST -d "api_key=$uptimeRobotAPIKey&url=https://$url/db/_utils/&friendly_name=Aam - $org DB&alert_contacts=$uptimeRobotAlertID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
+    fi
   fi
 fi
 

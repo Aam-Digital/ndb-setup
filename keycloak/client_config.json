@@ -88,6 +88,9 @@
     }
   ],
   "defaultClientScopes": [
+    "web-origins",
+    "roles",
+    "profile",
     "email"
   ],
   "optionalClientScopes": [],

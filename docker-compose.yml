@@ -5,18 +5,36 @@ services:
     image: aamdigital/ndb-server:${VERSION:?No release specified}
     networks:
       - internal
-      - nginx-proxy_default
     depends_on:
-      - couchdb
+      - ${COMPOSE_PROFILES:-couchdb}
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
-      - ./child-photos:/usr/share/nginx/html/assets/child-photos
-      #- ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
+      - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
     environment:
       VIRTUAL_HOST: ${APP_URL:?App URL not set}
       LETSENCRYPT_HOST: ${APP_URL:?App URL not set}
-      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_URL: http://${COMPOSE_PROFILES:-couchdb}:5984
     restart: unless-stopped
+
+  # (optional) backend. Only deployed if "COMPOSE_PROFILES=backend" is set in the `.env` file
+  backend:
+    image: aamdigital/replication-ms:latest
+    networks:
+      - internal
+    depends_on:
+      - couchdb
+    environment:
+      DATABASE_URL: http://couchdb:5984
+      DATABASE_NAME: app
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: ${COUCHDB_PASSWORD:?Admin password not set}
+      JWT_SECRET: ${JWT_SECRET:?JWT secret not set}
+      JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----"
+      SENTRY_DSN: ${SENTRY_DSN}
+      PORT: 5984
+    restart: unless-stopped
+    profiles:
+      - backend
 
   couchdb:
     image: couchdb:3

@@ -52,51 +52,19 @@ if [ "$app" == 0 ]; then
   url=$org.$DOMAIN
   echo "APP_URL=$url" >> "$path/.env"
   echo "App URL: $url"
-  (cd "$path" && docker compose up -d)
-
-  # wait for DB to be ready
-  source "$path/.env"
-  while [ "$status" != 200 ]; do
-    sleep 4
-    echo "Waiting for DB to be ready"
-    status=$(curl --silent --output /dev/null  "https://$APP_URL/db/_utils/" -I -w "%{http_code}\n")
-  done
-  curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app"
-  curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments"
 else
   echo "Instance '$org' already exists"
 fi
 
 backend=$(docker ps | grep -c "\-$org-backend")
-if [ "$backend" == 0 ]; then
-  echo "Do you want to add the permission backend?[y/n]"
-  read -r withBackend
-  if [ "$withBackend" == "y" ] || [ "$withBackend" == "Y" ]; then
-    cp docker-compose-backend.yml "$path/docker-compose.yml"
-    generate_password
-    echo "JWT_SECRET=$password" >> "$path/.env"
-
-    if [ -f "$path/keycloak.json" ]; then
-      # adjust Keycloak config
-      getKeycloakKey
-      echo "PUBLIC_KEY=$publicKey" >> "$path/.env"
-      sed -i "s/$kid/<KID>/g" "$path/couchdb.ini"
-      sed -i "s|$publicKey|<PUBLIC_KEY>|g" "$path/couchdb.ini"
-      (cd "$path" && docker compose down)
-    fi
-
-    (cd "$path" && docker compose up -d)
-    backend=1
-    echo "Backend added"
- elif [ "$app" == 0 ]; then
-    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
-    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
-  fi
-fi
 
 if [ ! -f "$path/keycloak.json" ]; then
-  echo "Do you want to add authentication via Keycloak?[y/n]"
-  read -r keycloak
+  if [ "$app" == 0 ]; then
+    keycloak="y"
+  else
+    echo "Do you want to add authentication via Keycloak?[y/n]"
+    read -r keycloak
+  fi
   source "$path/.env"
   if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]; then
     container=$(docker ps -aqf "name=keycloak-keycloak")
@@ -108,9 +76,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     # Get Keycloak config from API
     getKeycloakKey
     curl --silent --location "https://$KEYCLOAK_URL/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" --header "Authorization: Bearer $token" > "$path/keycloak.json"
-    cp config-keycloak.json "$path/config.json"
     sed -i "s/\"account_url\": \".*\"/\"account_url\": \"https:\/\/$ACCOUNTS_URL\"/g" "$path/config.json"
-    sed -i "s/\#\- .\/keycloak/\- .\/keycloak/g" "$path/docker-compose.yml"
 
     # Set Keycloak public key for bearer auth
     if [ "$backend" == 1 ]; then
@@ -119,7 +85,16 @@ if [ ! -f "$path/keycloak.json" ]; then
       sed -i "s/<KID>/$kid/g" "$path/couchdb.ini"
       sed -i "s|<PUBLIC_KEY>|$publicKey|g" "$path/couchdb.ini"
     fi
-    (cd "$path" && docker compose down && docker compose up -d)
+
+    # wait for DB to be ready
+    (cd "$path" && docker compose up -d)
+    while [ "$status" != 200 ]; do
+      sleep 4
+      echo "Waiting for DB to be ready"
+      status=$(curl --silent --output /dev/null  "https://$APP_URL/db/_utils/" -I -w "%{http_code}\n")
+    done
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app"
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments"
 
     if [ "$app" == 1 ]; then
       echo "Do you want to migrate existing users from CouchDB to Keycloak?[y/n]"
@@ -142,6 +117,34 @@ if [ ! -f "$path/keycloak.json" ]; then
     echo "'user_app' has access to database 'app'"
   fi
 fi
+
+if [ "$backend" == 0 ]; then
+  echo "Do you want to add the permission backend?[y/n]"
+  read -r withBackend
+  if [ "$withBackend" == "y" ] || [ "$withBackend" == "Y" ]; then
+    echo "COMPOSE_PROFILES=backend" >> "$path/.env"
+    generate_password
+    echo "JWT_SECRET=$password" >> "$path/.env"
+
+    if [ -f "$path/keycloak.json" ]; then
+      # adjust Keycloak config
+      getKeycloakKey
+      echo "PUBLIC_KEY=$publicKey" >> "$path/.env"
+      sed -i "s/$kid/<KID>/g" "$path/couchdb.ini"
+      sed -i "s|$publicKey|<PUBLIC_KEY>|g" "$path/couchdb.ini"
+      (cd "$path" && docker compose down)
+    fi
+
+    (cd "$path" && docker compose up -d)
+    backend=1
+    echo "Backend added"
+  elif [ "$app" == 0 ]; then
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
+  fi
+fi
+
+
 
 if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_ID" != "" ]; then
   echo "Do you want create UptimeRobot monitoring?[y/n]"

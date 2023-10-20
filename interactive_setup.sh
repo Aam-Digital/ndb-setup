@@ -48,6 +48,9 @@ if [ "$app" == 0 ]; then
   generate_password
   echo "COUCHDB_PASSWORD=$password" >> "$path/.env"
   echo "Admin password: $password"
+  
+  generate_password
+  echo "JWT_SECRET=$password" >> "$path/.env"
 
   url=$org.$DOMAIN
   echo "APP_URL=$url" >> "$path/.env"
@@ -123,8 +126,6 @@ if [ "$backend" == 0 ]; then
   read -r withBackend
   if [ "$withBackend" == "y" ] || [ "$withBackend" == "Y" ]; then
     echo "COMPOSE_PROFILES=backend" >> "$path/.env"
-    generate_password
-    echo "JWT_SECRET=$password" >> "$path/.env"
 
     if [ -f "$path/keycloak.json" ]; then
       # adjust Keycloak config

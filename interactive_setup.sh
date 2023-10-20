@@ -40,9 +40,10 @@ if [ "$app" == 0 ]; then
   cp config.json "$path/config.json"
   cp docker-compose.yml "$path/docker-compose.yml"
 
-  # TODO maybe fetch latest from server
-  echo "Which version should be used (e.g. 3.18.0 or pr-1234)?"
-  read -r version
+  # fetching latest version from GitHub
+  version=$(curl --silent --location 'https://github.com/Aam-Digital/ndb-core/releases/latest' --header 'Accept: application/json')
+  version=${version#*\"tag_name\":\"}
+  version=${version%%\"*}
   echo "VERSION=$version" >> "$path/.env"
 
   generate_password

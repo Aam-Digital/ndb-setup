@@ -5,6 +5,7 @@ services:
     image: aamdigital/ndb-server:${VERSION:?No release specified}
     networks:
       - internal
+      - nginx-proxy_default
     depends_on:
       - ${COMPOSE_PROFILES:-couchdb}
     volumes:

@@ -48,7 +48,7 @@ if [ "$app" == 0 ]; then
   generate_password
   echo "COUCHDB_PASSWORD=$password" >> "$path/.env"
   echo "Admin password: $password"
-  
+
   generate_password
   echo "JWT_SECRET=$password" >> "$path/.env"
 

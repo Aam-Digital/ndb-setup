@@ -96,6 +96,7 @@ if [ ! -f "$path/keycloak.json" ]; then
       echo "Waiting for DB to be ready"
       status=$(curl --silent --output /dev/null  "https://$APP_URL/db/_utils/" -I -w "%{http_code}\n")
     done
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments"
 

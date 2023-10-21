@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  deployer-ms:
+    image: aamdigital/deployer-ms:latest
+    volumes:
+      - ./arg-pipe:/app/dist/assets/arg-pipe
+    restart: unless-stopped
+    ports:
+      - "3100:3000"

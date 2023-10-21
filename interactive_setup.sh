@@ -28,8 +28,13 @@ getKeycloakKey() {
   sed -i "s/\#\- .\/keycloak/\- .\/keycloak/g" "$path/docker-compose.yml"
 }
 
-echo "What is the name of the organisation?"
-read -r org
+if [ -n "$1" ]; then
+  org="$1"
+else
+  echo "What is the name of the organisation?"
+  read -r org
+fi
+
 path="../$PREFIX$org"
 app=$(docker ps | grep -c "\-$org-app")
 if [ "$app" == 0 ]; then
@@ -124,8 +129,13 @@ if [ ! -f "$path/keycloak.json" ]; then
 fi
 
 if [ "$backend" == 0 ]; then
-  echo "Do you want to add the permission backend?[y/n]"
-  read -r withBackend
+  if [ -n "$2" ]; then
+    withBackend="$2"
+  else
+    echo "Do you want to add the permission backend?[y/n]"
+    read -r withBackend
+  fi
+
   if [ "$withBackend" == "y" ] || [ "$withBackend" == "Y" ]; then
     echo "COMPOSE_PROFILES=backend" >> "$path/.env"
 
@@ -150,8 +160,13 @@ fi
 
 
 if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_ID" != "" ]; then
-  echo "Do you want create UptimeRobot monitoring?[y/n]"
-  read -r createsMonitors
+  if [ -n "$3" ]; then
+    createsMonitors="$3"
+  else
+    echo "Do you want create UptimeRobot monitoring?[y/n]"
+    read -r createsMonitors
+  fi
+
   if [ "$createsMonitors" == "y" ] || [ "$createsMonitors" == "Y" ]; then
     curl -X POST -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url&friendly_name=Aam - $org App&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
     if [ "$backend" == 1 ]; then

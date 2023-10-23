@@ -14,11 +14,11 @@ generate_password() {
 }
 
 getKeycloakKey() {
-  token=$(curl --silent --location "https://$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode username=admin --data-urlencode password="$ADMIN_PASSWORD" --data-urlencode grant_type=password --data-urlencode client_id=admin-cli)
+  token=$(curl -s -L "https://$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode username=admin --data-urlencode password="$ADMIN_PASSWORD" --data-urlencode grant_type=password --data-urlencode client_id=admin-cli)
   token=${token#*\"access_token\":\"}
   token=${token%%\"*}
 
-  keys=$(curl --silent --location "https://$KEYCLOAK_URL/admin/realms/$org/keys" --header "Authorization: Bearer $token")
+  keys=$(curl -s -L "https://$KEYCLOAK_URL/admin/realms/$org/keys" -H "Authorization: Bearer $token")
   kid=${keys#*\"RS256\":\"}
   kid=${kid%%\"*}
   keys=${keys#*\"algorithm\":\"RS256\",}
@@ -46,7 +46,7 @@ if [ "$app" == 0 ]; then
   cp docker-compose.yml "$path/docker-compose.yml"
 
   # fetching latest version from GitHub
-  version=$(curl --silent --location 'https://github.com/Aam-Digital/ndb-core/releases/latest' --header 'Accept: application/json')
+  version=$(curl -s -L 'https://github.com/Aam-Digital/ndb-core/releases/latest' -H 'Accept: application/json')
   version=${version#*\"tag_name\":\"}
   version=${version%%\"*}
   echo "VERSION=$version" >> "$path/.env"
@@ -84,7 +84,7 @@ if [ ! -f "$path/keycloak.json" ]; then
 
     # Get Keycloak config from API
     getKeycloakKey
-    curl --silent --location "https://$KEYCLOAK_URL/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" --header "Authorization: Bearer $token" > "$path/keycloak.json"
+    curl -s -L "https://$KEYCLOAK_URL/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" -H "Authorization: Bearer $token" > "$path/keycloak.json"
     sed -i "s/\"account_url\": \".*\"/\"account_url\": \"https:\/\/$ACCOUNTS_URL\"/g" "$path/config.json"
 
     # Set Keycloak public key for bearer auth
@@ -100,7 +100,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     while [ "$status" != 200 ]; do
       sleep 4
       echo "Waiting for DB to be ready"
-      status=$(curl --silent --output /dev/null  "https://$APP_URL/db/_utils/" -I -w "%{http_code}\n")
+      status=$(curl -s -o /dev/null  "https://$APP_URL/db/_utils/" -I -w "%{http_code}\n")
     done
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app"
@@ -123,7 +123,6 @@ if [ ! -f "$path/keycloak.json" ]; then
     if [ "$backend" == 0 ]; then
       curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
     fi
-
     echo "'user_app' has access to database 'app'"
   fi
 fi

@@ -115,6 +115,27 @@ if [ ! -f "$path/keycloak.json" ]; then
         if [ "$backend" == 1 ]; then couchUrl="$couchUrl/couchdb"; fi
         node keycloak/migrate_couchdb_users.js "$couchUrl" "$COUCHDB_PASSWORD" "https://$KEYCLOAK_URL" "$ADMIN_PASSWORD" "$org"
       fi
+    else
+      if [ -n "$2" ]; then
+        initialUser="$2"
+      else
+        echo "Email address of initialUser"
+        read -r initialUser
+      fi
+      if [ -n "$initialUser" ]; then
+        generate_password
+        curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "{\"username\": \"$initialUser\",\"enabled\": true,\"email\": \"$initialUser\",\"attributes\": {\"exact_username\": \"$initialUser\"},\"emailVerified\": false,\"credentials\": [{\"type\": \"password\",\"value\": \"$password\",\"temporary\": true}]}" "https://$KEYCLOAK_URL/admin/realms/$org}/users"
+        userId=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_URL/admin/realms/$org}/users?username=$initialUser&exact=true")
+        userId=${userId#*\"id\":\"}
+        userId=${userId%%\"*}
+        echo "User id $userId"
+        # TODO initially assign all roles?
+        role=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_URL/admin/realms/$org}/roles?search=account_manager")
+        echo "Role is $role"
+        curl -s  -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d role "https://$KEYCLOAK_URL/admin/realms/$org/users/$userId/role-mappings/realm"
+        curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_URL/admin/realms/$org}/users/$userId/execute-actions-email?client_id=app&redirect_uri="
+      fi
+
     fi
 
     echo "App is connected with Keycloak"
@@ -128,8 +149,8 @@ if [ ! -f "$path/keycloak.json" ]; then
 fi
 
 if [ "$backend" == 0 ]; then
-  if [ -n "$2" ]; then
-    withBackend="$2"
+  if [ -n "$3" ]; then
+    withBackend="$3"
   else
     echo "Do you want to add the permission backend?[y/n]"
     read -r withBackend

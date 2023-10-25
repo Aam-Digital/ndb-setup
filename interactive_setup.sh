@@ -129,10 +129,9 @@ if [ ! -f "$path/keycloak.json" ]; then
         userId=${userId#*\"id\":\"}
         userId=${userId%%\"*}
         echo "User id $userId"
-        # TODO initially assign all roles?
-        role=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_URL/admin/realms/$org}/roles?search=account_manager")
-        echo "Role is $role"
-        curl -s  -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d role "https://$KEYCLOAK_URL/admin/realms/$org/users/$userId/role-mappings/realm"
+        roles=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_URL/admin/realms/$org}/roles")
+        echo "Role is $roles"
+        curl -s  -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d roles "https://$KEYCLOAK_URL/admin/realms/$org/users/$userId/roles-mappings/realm"
         curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_URL/admin/realms/$org}/users/$userId/execute-actions-email?client_id=app&redirect_uri="
       fi
 

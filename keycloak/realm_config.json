@@ -2,6 +2,8 @@
   "enabled": true,
   "loginTheme": "aam-theme",
   "emailTheme": "aam-theme",
+  "rememberMe": true,
+  "resetPasswordAllowed": true,
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 7200,
   "ssoSessionMaxLifespan": 36000,
@@ -14,12 +16,12 @@
     "ssl": "false",
     "replyTo": "",
     "replyToDisplayName": "",
-    "from": "<FROM_EMAIL_ADDRESS>",
-    "fromDisplayName": "<FROM_NAME>",
-    "host": "<EMAIL_SERVER_HOST>",
-    "port": "<EMAIL_SERVER_PORT>",
-    "user": "<EMAIL_SERVER_USER>",
-    "password": "<EMAIL_SERVER_PASSWORD>"
+    "from": "accounts@aam-digital.com",
+    "fromDisplayName": "Aam Digital",
+    "host": "w01b1893.kasserver.com",
+    "port": "587",
+    "user": "accounts@aam-digital.com",
+    "password": "Bx2*4EdhVe@@"
   },
   "eventsListeners": [
     "metrics-listener",
@@ -72,9 +74,7 @@
     "clientRole": false
   },
   "clientScopes": [
-
     {
-      "id": "43b431ac-1ccf-4101-ab69-ba0b78d4167b",
       "name": "email",
       "description": "OpenID Connect built-in scope: email",
       "protocol": "openid-connect",

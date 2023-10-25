@@ -16,12 +16,12 @@
     "ssl": "false",
     "replyTo": "",
     "replyToDisplayName": "",
-    "from": "accounts@aam-digital.com",
-    "fromDisplayName": "Aam Digital",
-    "host": "w01b1893.kasserver.com",
-    "port": "587",
-    "user": "accounts@aam-digital.com",
-    "password": "Bx2*4EdhVe@@"
+    "from": "<FROM_EMAIL_ADDRESS>",
+    "fromDisplayName": "<FROM_NAME>",
+    "host": "<EMAIL_SERVER_HOST>",
+    "port": "<EMAIL_SERVER_PORT>",
+    "user": "<EMAIL_SERVER_USER>",
+    "password": "<EMAIL_SERVER_PASSWORD>"
   },
   "eventsListeners": [
     "metrics-listener",

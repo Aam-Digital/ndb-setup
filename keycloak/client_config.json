@@ -88,10 +88,8 @@
     }
   ],
   "defaultClientScopes": [
-    "web-origins",
-    "roles",
-    "profile",
-    "email"
+    "email",
+    "openid"
   ],
   "optionalClientScopes": [],
   "access": {

@@ -10,7 +10,4 @@ ${msg("passwordResetBody",link, user.username, linkExpirationFormatter(linkExpir
 <#else>
 ${msg("executeActionsBody",link, linkExpiration, realmName, requiredActionsText, linkExpirationFormatter(linkExpiration))}
 </#if>
-\n\n
-If you have any problems or questions, don’t hesitate to get in touch with us at support@aam-digital.com .\n\n
-   Best regards,\n\n
-Your Aam Digital Team
+${msg("emailFooter")}

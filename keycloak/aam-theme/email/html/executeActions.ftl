@@ -14,10 +14,6 @@ ${kcSanitize(msg("passwordResetBodyHtml", link, user.username, realmName, linkEx
 <#else>
 ${kcSanitize(msg("executeActionsBodyHtml", link, linkExpiration, realmName, requiredActionsText, linkExpirationFormatter(linkExpiration)))?no_esc}
 </#if>
-<br/>
-<p>If you have any problems or questions, don’t hesitate to get in touch with us at <a href="mailto:support@aam-digital.com">support@aam-digital.com</a>.</p>
-<br/>
-<p> Best regards,</p>
-<p>Your Aam Digital Team</p>
+${kcSanitize(msg("emailFooterHtml"))?no_esc}
 </body>
 </html>

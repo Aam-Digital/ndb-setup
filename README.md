@@ -72,6 +72,7 @@ Keycloak supports a second login factor.
 ### Authenticator app OTP
 The only built-in second factor ist OTP using a Authenticator app.
 This can be enabled by editing a specific user in the Keycloak "Administration Console" and adding the `Configure OTP` in the "Required user actions".
+It can also be activated for everyone by changing the `Browser - Conditional OTP` in the used Browser flow from `Conditional` to `Required`.
 
 ### Email OTP
 Through 3rd party libraries OTP via Email is supported.
@@ -80,7 +81,7 @@ This also comes with the option to trust the device for a configured time period
 To enable this feature visit `<KEYCLOAK_URL>/admin/master/console/#/<REALM>/authentication/`.
 If you created this realm using a recent version of the `realm_config.json` then you should find a flow with the name `Email 2FA`.
 Click on the 3 dot menu on the right of this flow and select `Bind flow` and select `Browser flow`.
-After saving, you should be asked to enter the OTP which has been sent to the email that is associated with the username.
+After saving, when trying to log in to the app you should be asked to enter the OTP which has been sent to the email that is associated with the username.
 
 If you don't see the `Email 2FA` flow you have to configure it manually.
 
@@ -101,6 +102,11 @@ If you don't see the `Email 2FA` flow you have to configure it manually.
 Now the flow is configured correctly, and you can start using it the same way it has been described above.
 
 In the step `Email OTP` you can configure the amount of seconds for which an OTP is valid and in the `Register Trusted Device` step you can configure how long a device will be trusted (e.g. `P30d` for 30 days or `PT24h` for 24 hours).
+
+### Further options
+There are many ways in which the authentication flow can be configured.
+For example, you could also add the trust device step to the OTP with authenticator app, or you could make the user decide which OTP (email or app) should be used.
+Consult the [Keycloak docs](https://www.keycloak.org/docs/latest/server_admin/index.html#_authentication-flows) for ways to edit flows or configure new ones.
 
 # Building the Docker Image
 *If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server).*

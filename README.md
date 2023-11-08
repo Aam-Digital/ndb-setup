@@ -71,7 +71,7 @@ Keycloak supports a second login factor.
 
 ### Authenticator app OTP
 The only built-in second factor ist OTP using a Authenticator app.
-This can be enabled by adding the action `Configure OTP` to a user.
+This can be enabled by editing a specific user in the Keycloak "Administration Console" and adding the `Configure OTP` in the "Required user actions".
 
 ### Email OTP
 Through 3rd party libraries OTP via Email is supported.

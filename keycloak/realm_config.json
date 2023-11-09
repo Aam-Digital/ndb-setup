@@ -125,7 +125,7 @@
       ]
     },
     {
-      "alias": "browser 2FA",
+      "alias": "Email 2FA",
       "description": "browser based authentication",
       "providerId": "basic-flow",
       "topLevel": true,

@@ -9,6 +9,14 @@
   "ssoSessionMaxLifespan": 36000,
   "actionTokenGeneratedByAdminLifespan": 864000,
   "passwordPolicy": "hashIterations(27500) and length(8) and digits(1) and upperCase(1)",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+  ],
+  "defaultLocale": "de",
   "smtpServer": {
     "starttls": "true",
     "auth": "true",

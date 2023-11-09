@@ -6,11 +6,11 @@
 
 <html>
 <body>
-<h1 style="color: #ff9800">Aam Digital - ${realmName}</h1>
+<h1 style="color: #ff9800">${realmName}</h1>
 <#if requiredActionsValues == "VERIFY_EMAIL">
-${kcSanitize(msg("emailVerificationBodyHtml", link, user.username, realmName, linkExpirationFormatter(linkExpiration)))?no_esc}
+${kcSanitize(msg("emailVerificationBodyHtml", link, user.getAttributes().exact_username, link?keep_after("realms/")?keep_before("/"), linkExpirationFormatter(linkExpiration)))?no_esc}
 <#elseif requiredActionsValues == "UPDATE_PASSWORD">
-${kcSanitize(msg("passwordResetBodyHtml", link, user.username, realmName, linkExpirationFormatter(linkExpiration)))?no_esc}
+${kcSanitize(msg("passwordResetBodyHtml", link, user.getAttributes().exact_username, link?keep_after("realms/")?keep_before("/"), linkExpirationFormatter(linkExpiration)))?no_esc}
 <#else>
 ${kcSanitize(msg("executeActionsBodyHtml", link, linkExpiration, realmName, requiredActionsText, linkExpirationFormatter(linkExpiration)))?no_esc}
 </#if>

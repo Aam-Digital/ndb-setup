@@ -129,7 +129,7 @@ if [ ! -f "$path/keycloak.json" ]; then
         read -r userName
       fi
       if [ -n "$userEmail" ] && [ -n "$userName" ]; then
-        curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "{\"username\": \"$userName\",\"enabled\": true,\"email\": \"$userEmail\",\"attributes\": {\"exact_username\": \"$userName\"},\"emailVerified\": false,\"credentials\": [], \"requiredActions\": [\"UPDATE_PASSWORD\", [\"VERIFY_EMAIL\"]}" "https://$KEYCLOAK_URL/admin/realms/$org/users"
+        curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "{\"username\": \"$userName\",\"enabled\": true,\"email\": \"$userEmail\",\"attributes\": {\"exact_username\": \"$userName\"},\"emailVerified\": false,\"credentials\": [], \"requiredActions\": [\"UPDATE_PASSWORD\", \"VERIFY_EMAIL\"]}" "https://$KEYCLOAK_URL/admin/realms/$org/users"
         userId=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_URL/admin/realms/$org/users?username=$userName&exact=true")
         userId=${userId#*\"id\":\"}
         userId=${userId%%\"*}

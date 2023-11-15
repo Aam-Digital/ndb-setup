@@ -185,8 +185,8 @@ fi
 
 
 if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_ID" != "" ]; then
-  if [ -n "$3" ]; then
-    createsMonitors="$3"
+  if [ -n "$5" ]; then
+    createsMonitors="$5"
   else
     echo "Do you want create UptimeRobot monitoring?[y/n]"
     read -r createsMonitors

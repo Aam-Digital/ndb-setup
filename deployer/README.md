@@ -6,10 +6,9 @@ Automatically deploy new instances on the server.
 
 1. Create the `arg-pipe`
     > mkfifo arg-pipe
-2. Start the app
+2. Assign all required variables in `.env`
+3. Start the app
     > docker compose up -d
-3. On the parent folder pass the arguments to the `interactive_setup.sh` script
-   > ./interactive_setup.sh $(cat deployer/arg-pipe)
-4. On your local machine run 
-    > ssh -N -L 3000:127.0.0.1:3000 user@server
-5. Visit `localhost:3000/api` in you browser and send requests to the `/deploy` endpoint
+4. Run the script which listens to new deployment instructions
+   > ./pipe-listener.sh
+5. Visit `<DEPLOYER_URL>/api` in you browser and send requests to the `/deploy` endpoint

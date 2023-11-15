@@ -129,13 +129,12 @@ if [ ! -f "$path/keycloak.json" ]; then
         read -r userName
       fi
       if [ -n "$userEmail" ] && [ -n "$userName" ]; then
-        curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "{\"username\": \"$userName\",\"enabled\": true,\"email\": \"$userEmail\",\"attributes\": {\"exact_username\": \"$userName\"},\"emailVerified\": false,\"credentials\": [], \"requiredActions\": [\"UPDATE_PASSWORD\"]}" "https://$KEYCLOAK_URL/admin/realms/$org/users"
+        curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "{\"username\": \"$userName\",\"enabled\": true,\"email\": \"$userEmail\",\"attributes\": {\"exact_username\": \"$userName\"},\"emailVerified\": false,\"credentials\": [], \"requiredActions\": [\"UPDATE_PASSWORD\", [\"VERIFY_EMAIL\"]}" "https://$KEYCLOAK_URL/admin/realms/$org/users"
         userId=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_URL/admin/realms/$org/users?username=$userName&exact=true")
         userId=${userId#*\"id\":\"}
         userId=${userId%%\"*}
         echo "User id $userId"
         roles=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_URL/admin/realms/$org/roles")
-        echo "Roles are $roles"
         curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$roles" "https://$KEYCLOAK_URL/admin/realms/$org/users/$userId/role-mappings/realm"
         curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_URL/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="
         curl -X PUT -u "admin:$COUCHDB_PASSWORD" -H 'Content-Type: application/json' -d "{\"name\": \"$userName\"}" "https://$APP_URL/db/app/User:$userName"

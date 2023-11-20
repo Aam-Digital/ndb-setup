@@ -209,6 +209,7 @@ fi
     read -r baseConfig
   fi
   if [ -n "$baseConfig" ]; then
+    source "$path/.env"
     if [ "$backend" == 1 ]; then
       couchdb="https://$APP_URL/db/couchdb"
     else

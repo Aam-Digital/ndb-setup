@@ -201,7 +201,7 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
   fi
 fi
 
-if [ "$app" == 0 ]; then
+#if [ "$app" == 0 ]; then
   if [ -n "$4" ]; then
     baseConfig="$4"
   else
@@ -209,9 +209,37 @@ if [ "$app" == 0 ]; then
     read -r baseConfig
   fi
   if [ -n "$baseConfig" ]; then
-      # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
-      curl -u "admin:$COUCHDB_PASSWORD" -d "@baseConfigs/$baseConfig.json" -H 'Content-Type: application/json' "https://$APP_URL/db/app/_bulk_docs"
+    if [ "$backend" == 1 ]; then
+      couchdb="https://$APP_URL/db/couchdb"
+    else
+      couchdb="https://$APP_URL/db"
+    fi
+
+    # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
+    curl -u "admin:$COUCHDB_PASSWORD" -d "@baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "$couchdb/app/_bulk_docs"
+    if [ -d "baseConfigs/$baseConfig/attachments" ]; then
+      # Uploading attachments - ONLY IMAGES ARE SUPPORTED
+      # create folder inside 'attachments' with name of the entity containing images with name of the property
+      for dir in baseConfigs/"$baseConfig"/attachments/*
+      do
+        entity=${dir##*/}
+        # Create parent document
+        rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" "$couchdb/app-attachments/$entity")
+        rev="${rev#*\"rev\":\"}"
+        rev="${rev%%\"*}"
+        for file in dir/*
+        do
+          prop="${file##*/}"
+          ext="${prop##*.}"
+          prop="${prop%%.*}"
+          # Upload image
+          rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -H "Content-Type: image/$ext" -d "@$file" "$couchdb/app-attachments/$entity/$prop?rev=$rev")
+          rev="${rev#*\"rev\":\"}"
+          rev="${rev%%\"*}"
+        done
+      done
+    fi
   fi
-fi
+#fi
 
 echo "app is now available under https://$APP_URL"

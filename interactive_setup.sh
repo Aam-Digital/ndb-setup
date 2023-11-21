@@ -151,9 +151,44 @@ if [ ! -f "$path/keycloak.json" ]; then
   fi
 fi
 
-if [ "$backend" == 0 ]; then
+if [ "$app" == 0 ]; then
   if [ -n "$4" ]; then
-    withBackend="$4"
+    baseConfig="$4"
+  else
+    echo "Which basic config do you want to include?"
+    read -r baseConfig
+  fi
+  if [ -n "$baseConfig" ]; then
+    # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
+    curl -u "admin:$COUCHDB_PASSWORD" -d "@baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$APP_URL/db/app/_bulk_docs"
+    if [ -d "baseConfigs/$baseConfig/attachments" ]; then
+      # Uploading attachments - ONLY IMAGES ARE SUPPORTED
+      # create folder inside 'attachments' with name of the entity containing images with name of the property
+      for dir in baseConfigs/"$baseConfig"/attachments/*
+      do
+        entity=${dir##*/}
+        # Create parent document
+        rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -d "{}" "https://$APP_URL/db/app-attachments/$entity")
+        rev="${rev#*\"rev\":\"}"
+        rev="${rev%%\"*}"
+        for file in "$dir"/*
+        do
+          prop="${file##*/}"
+          ext="${prop##*.}"
+          prop="${prop%%.*}"
+          # Upload image
+          rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -H "Content-Type: image/$ext" --data-binary "@$file" "https://$APP_URL/db/app-attachments/$entity/$prop?rev=$rev")
+          rev="${rev#*\"rev\":\"}"
+          rev="${rev%%\"*}"
+        done
+      done
+    fi
+  fi
+fi
+
+if [ "$backend" == 0 ]; then
+  if [ -n "$5" ]; then
+    withBackend="$5"
   else
     echo "Do you want to add the permission backend?[y/n]"
     read -r withBackend
@@ -180,11 +215,9 @@ if [ "$backend" == 0 ]; then
   fi
 fi
 
-
-
 if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_ID" != "" ]; then
-  if [ -n "$5" ]; then
-    createsMonitors="$5"
+  if [ -n "$6" ]; then
+    createsMonitors="$6"
   else
     echo "Do you want create UptimeRobot monitoring?[y/n]"
     read -r createsMonitors
@@ -197,47 +230,6 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
       curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/couchdb/_utils/&friendly_name=Aam - $org DB&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
     else
       curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/_utils/&friendly_name=Aam - $org DB&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
-    fi
-  fi
-fi
-
-if [ "$app" == 0 ]; then
-  if [ -n "$6" ]; then
-    baseConfig="$6"
-  else
-    echo "Which basic config do you want to include?"
-    read -r baseConfig
-  fi
-  if [ -n "$baseConfig" ]; then
-    if [ "$backend" == 1 ]; then
-      couchdb="https://$APP_URL/db/couchdb"
-    else
-      couchdb="https://$APP_URL/db"
-    fi
-
-    # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
-    curl -u "admin:$COUCHDB_PASSWORD" -d "@baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "$couchdb/app/_bulk_docs"
-    if [ -d "baseConfigs/$baseConfig/attachments" ]; then
-      # Uploading attachments - ONLY IMAGES ARE SUPPORTED
-      # create folder inside 'attachments' with name of the entity containing images with name of the property
-      for dir in baseConfigs/"$baseConfig"/attachments/*
-      do
-        entity=${dir##*/}
-        # Create parent document
-        rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -d "{}" "$couchdb/app-attachments/$entity")
-        rev="${rev#*\"rev\":\"}"
-        rev="${rev%%\"*}"
-        for file in "$dir"/*
-        do
-          prop="${file##*/}"
-          ext="${prop##*.}"
-          prop="${prop%%.*}"
-          # Upload image
-          rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -H "Content-Type: image/$ext" --data-binary "@$file" "$couchdb/app-attachments/$entity/$prop?rev=$rev")
-          rev="${rev#*\"rev\":\"}"
-          rev="${rev%%\"*}"
-        done
-      done
     fi
   fi
 fi

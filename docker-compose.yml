@@ -9,6 +9,7 @@ services:
     depends_on:
       - ${COMPOSE_PROFILES:-couchdb}
     volumes:
+      - ./assets:/usr/share/nginx/html/assets
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
     environment:

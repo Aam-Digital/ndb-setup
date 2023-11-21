@@ -183,6 +183,10 @@ if [ "$app" == 0 ]; then
         done
       done
     fi
+    if [ -d "baseConfigs/$baseConfig/assets" ]; then
+      cp -r "baseConfigs/$baseConfig/assets" "$path"
+      (cd path && docker compose down && docker compose up -d)
+    fi
   fi
 fi
 

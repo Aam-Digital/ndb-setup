@@ -201,15 +201,14 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
   fi
 fi
 
-#if [ "$app" == 0 ]; then
-  if [ -n "$4" ]; then
-    baseConfig="$4"
+if [ "$app" == 0 ]; then
+  if [ -n "$6" ]; then
+    baseConfig="$6"
   else
     echo "Which basic config do you want to include?"
     read -r baseConfig
   fi
   if [ -n "$baseConfig" ]; then
-    source "$path/.env"
     if [ "$backend" == 1 ]; then
       couchdb="https://$APP_URL/db/couchdb"
     else
@@ -241,6 +240,6 @@ fi
       done
     fi
   fi
-#fi
+fi
 
 echo "app is now available under https://$APP_URL"

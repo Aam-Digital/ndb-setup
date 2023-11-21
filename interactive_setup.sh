@@ -184,8 +184,13 @@ if [ "$app" == 0 ]; then
       done
     fi
     if [ -d "baseConfigs/$baseConfig/assets" ]; then
-      cp -r "baseConfigs/$baseConfig/assets" "$path"
-      (cd path && docker compose down && docker compose up -d)
+      for dir in baseConfigs/"$baseConfig"/assets/*
+      do
+        cp -r "$dir" "$path"
+        folder=${dir##*/}
+        sed -i "s|assets/config.json|assets/config.json\n      -./$folder:/usr/share/nginx/html/assets/$folder|g" docker-compose.yml
+      done
+      (cd "$path" && docker compose down && docker compose up -d)
     fi
   fi
 fi

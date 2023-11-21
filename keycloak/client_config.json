@@ -88,7 +88,8 @@
     }
   ],
   "defaultClientScopes": [
-    "email"
+    "email",
+    "openid"
   ],
   "optionalClientScopes": [],
   "access": {

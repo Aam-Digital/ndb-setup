@@ -76,10 +76,17 @@ if [ ! -f "$path/keycloak.json" ]; then
   fi
   source "$path/.env"
   if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]; then
+    if [ -n "$2" ]; then
+      locale="$2"
+    else
+      echo "Which should be the default language for Keycloak ('en', 'de', ...)?"
+      read -r locale
+    fi
+
     container=$(docker ps -aqf "name=keycloak-keycloak")
     # Initialize realm and client
     docker exec -i "$container" /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$ADMIN_PASSWORD"
-    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -f /realm_config.json -i
+    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -s defaultLocale="$locale" -f /realm_config.json -i
     client=$(docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create clients -r "$org" -s baseUrl="https://$APP_URL" -f /client_config.json -i)
 
     # Get Keycloak config from API
@@ -116,14 +123,14 @@ if [ ! -f "$path/keycloak.json" ]; then
         node keycloak/migrate_couchdb_users.js "$couchUrl" "$COUCHDB_PASSWORD" "https://$KEYCLOAK_URL" "$ADMIN_PASSWORD" "$org"
       fi
     else
-      if [ -n "$2" ]; then
-        userEmail="$2"
+      if [ -n "$3" ]; then
+        userEmail="$3"
       else
         echo "Email address of initial user"
         read -r userEmail
       fi
-      if [ -n "$3" ]; then
-        userName="$3"
+      if [ -n "$4" ]; then
+        userName="$4"
       else
         echo "Name of initial user"
         read -r userName
@@ -152,8 +159,8 @@ if [ ! -f "$path/keycloak.json" ]; then
 fi
 
 if [ "$app" == 0 ]; then
-  if [ -n "$4" ]; then
-    baseConfig="$4"
+  if [ -n "$5" ]; then
+    baseConfig="$5"
   else
     echo "Which basic config do you want to include?"
     read -r baseConfig
@@ -196,8 +203,8 @@ if [ "$app" == 0 ]; then
 fi
 
 if [ "$backend" == 0 ]; then
-  if [ -n "$5" ]; then
-    withBackend="$5"
+  if [ -n "$6" ]; then
+    withBackend="$6"
   else
     echo "Do you want to add the permission backend?[y/n]"
     read -r withBackend
@@ -225,8 +232,8 @@ if [ "$backend" == 0 ]; then
 fi
 
 if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_ID" != "" ]; then
-  if [ -n "$6" ]; then
-    createsMonitors="$6"
+  if [ -n "$7" ]; then
+    createsMonitors="$7"
   else
     echo "Do you want create UptimeRobot monitoring?[y/n]"
     read -r createsMonitors

@@ -188,7 +188,7 @@ if [ "$app" == 0 ]; then
       do
         cp -r "$dir" "$path"
         folder=${dir##*/}
-        sed -i "s|assets/config.json|assets/config.json\n      -./$folder:/usr/share/nginx/html/assets/$folder|g" docker-compose.yml
+        sed -i "s|assets/config.json|assets/config.json\n      - ./$folder:/usr/share/nginx/html/assets/$folder|g" "$path/docker-compose.yml"
       done
       (cd "$path" && docker compose down && docker compose up -d)
     fi

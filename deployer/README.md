@@ -13,6 +13,8 @@ Automatically deploy new instances on the server.
    > ./pipe-listener.sh
 5. Visit `<DEPLOYER_URL>/api` in you browser and send requests to the `/deploy` endpoint
 
+The logfile for the deployments can be found at `deployer/deploy-log.txt`.
+
 ## Listen infinitely
 
 To start the script without a shell run

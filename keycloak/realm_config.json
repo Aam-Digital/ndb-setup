@@ -16,7 +16,6 @@
     "fr",
     "it"
   ],
-  "defaultLocale": "de",
   "smtpServer": {
     "starttls": "true",
     "auth": "true",

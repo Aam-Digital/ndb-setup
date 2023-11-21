@@ -225,16 +225,16 @@ fi
       do
         entity=${dir##*/}
         # Create parent document
-        rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" "$couchdb/app-attachments/$entity")
+        rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -d "{}" "$couchdb/app-attachments/$entity")
         rev="${rev#*\"rev\":\"}"
         rev="${rev%%\"*}"
-        for file in dir/*
+        for file in "$dir"/*
         do
           prop="${file##*/}"
           ext="${prop##*.}"
           prop="${prop%%.*}"
           # Upload image
-          rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -H "Content-Type: image/$ext" -d "@$file" "$couchdb/app-attachments/$entity/$prop?rev=$rev")
+          rev=$(curl -X PUT -u "admin:$COUCHDB_PASSWORD" -H "Content-Type: image/$ext" --data-binary "@$file" "$couchdb/app-attachments/$entity/$prop?rev=$rev")
           rev="${rev#*\"rev\":\"}"
           rev="${rev%%\"*}"
         done

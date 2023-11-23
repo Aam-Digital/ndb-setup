@@ -1249,6 +1249,9 @@
       }
     },
     {
+      "_id": "SiteSettings:global"
+    },
+    {
       "_id": "ConfigurableEnum:attendance-status",
       "values": [
         {

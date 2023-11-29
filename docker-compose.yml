@@ -49,6 +49,29 @@ services:
       COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?Admin password not set}
     restart: unless-stopped
 
+  query:
+    image: aamdigital/query-ms:latest
+    networks:
+      - internal
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN}
+      # TODO multiple profiles (e.g. backend,query) will break this
+      DATABASE_URL: http://${COMPOSE_PROFILES:-couchdb}:5984
+      DATABASE_USERNAME: ${COUCHDB_PASSWORD}
+      DATABASE_PASSWORD: admin
+      QUERY_URL: "sqs:4984"
+    profiles:
+      - query
+
+  sqs:
+    build: ${SETUP_DIR:-/var/docker/setup}
+    volumes:
+      - ./sqs:/data
+    environment:
+      COUCHDB_URL: couchdb
+    profiles:
+      - query
+
 networks:
   internal:
   nginx-proxy_default:

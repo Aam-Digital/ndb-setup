@@ -14,6 +14,7 @@ services:
       KEYCLOAK_URL: ${KEYCLOAK_URL:?No Keycloak URL set}
     volumes:
       - ./arg-pipe:/app/dist/assets/arg-pipe
+      - ./log.txt:/app/dist/assets/log.txt
     restart: unless-stopped
 
 networks:

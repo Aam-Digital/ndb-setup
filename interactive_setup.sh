@@ -256,4 +256,4 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
   fi
 fi
 
-echo "app is now available under https://$APP_URL"
+echo "DONE app is now available under https://$APP_URL"

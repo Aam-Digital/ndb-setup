@@ -62,7 +62,13 @@ if [ "$app" == 0 ]; then
   echo "APP_URL=$url" >> "$path/.env"
   echo "App URL: $url"
 else
-  echo "Instance '$org' already exists"
+  if [ -n "$1" ]; then
+    # When started with args, fail on existing name
+    echo "ERROR name already exists"
+    exit 1
+  else
+    echo "Instance '$org' already exists"
+  fi
 fi
 
 backend=$(docker ps | grep -c "\-$org-backend")

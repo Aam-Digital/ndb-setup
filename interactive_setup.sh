@@ -92,7 +92,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     container=$(docker ps -aqf "name=keycloak-keycloak")
     # Initialize realm and client
     docker exec -i "$container" /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$ADMIN_PASSWORD"
-    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -s defaultLocale="$locale" -f /realm_config.json -i
+    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -s displayName="Aam Digital - $org" -s defaultLocale="$locale" -f /realm_config.json -i
     client=$(docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create clients -r "$org" -s baseUrl="https://$APP_URL" -f /client_config.json -i)
 
     # Get Keycloak config from API

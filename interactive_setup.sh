@@ -36,7 +36,7 @@ else
 fi
 
 path="../$PREFIX$org"
-app=$(docker ps | grep -c "\-$org-app")
+app=$(docker ps | grep -ic "\-$org-app")
 if [ "$app" == 0 ]; then
   echo "Setting up new instance '$org'"
   mkdir "$path"

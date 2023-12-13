@@ -55,13 +55,12 @@ services:
       - internal
     environment:
       SENTRY_DSN: ${SENTRY_DSN}
-      # TODO multiple profiles (e.g. backend,query) will break this
       DATABASE_URL: http://${COMPOSE_PROFILES:-couchdb}:5984
       DATABASE_USERNAME: ${COUCHDB_PASSWORD}
       DATABASE_PASSWORD: admin
       QUERY_URL: "sqs:4984"
     profiles:
-      - query
+      - ${SQS_PROFILE:-other}
 
   sqs:
     build: ${SETUP_DIR:-/var/docker/setup}
@@ -70,7 +69,9 @@ services:
     environment:
       COUCHDB_URL: couchdb
     profiles:
-      - query
+      # We currently use the `COMPOSE_PROFILES` value to create URLs, so we cannot set multiple profiles there.
+      # Therefore this uses a variable to set the name of the profile instead.
+      - ${SQS_PROFILE:-other}
 
 networks:
   internal:

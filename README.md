@@ -108,6 +108,17 @@ There are many ways in which the authentication flow can be configured.
 For example, you could also add the trust device step to the OTP with authenticator app, or you could make the user decide which OTP (email or app) should be used.
 Consult the [Keycloak docs](https://www.keycloak.org/docs/latest/server_admin/index.html#_authentication-flows) for ways to edit flows or configure new ones.
 
+# Reporting with SQS
+It is possible to create reports on the apps data using SQL queries.
+For this we have integrated the [structured-query-service (SQS)](https://neighbourhood.ie/products-and-services/structured-query-server).
+This creates a read-only copy of the data in the CouchDB and allows to run Sqlite queries against it.
+
+To activate it for an application, simply add `SQS_PROFILE=backend` to the applications `.env` file and run `docker compose up -d`.
+
+The SQS executable needs to be placed in the setup folder (next to the `Dockerfile`).
+The path to the `Dockerfile` can be adjusted by adding `SETUP_DIR=/path/to/setup/dir` to the applications `.env` file. 
+Default is `/var/docker/setup`.
+
 # Building the Docker Image
 *If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server).*
 

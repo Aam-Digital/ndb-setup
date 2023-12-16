@@ -1,6 +1,6 @@
 # A simple wrapper to have SQS running inside a Docker container
 FROM alpine:3.18.4
-COPY ./structured-query-server sturctured-query-server
+COPY ./structured-query-server structured-query-server
 ENV COUCHDB_URL="http://localhost"
 ENV DATA_DIR="./data"
 ENV PORT=4984

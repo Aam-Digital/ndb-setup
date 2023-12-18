@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  deployer-ms:
+    image: aamdigital/deployer-ms:latest
+    networks:
+      - nginx-proxy_default
+    environment:
+      LETSENCRYPT_HOST: ${DEPLOYER_URL:?No Deployer backend URL set}
+      VIRTUAL_HOST: $DEPLOYER_URL
+      VIRTUAL_PORT: $PORT
+      SENTRY_DSN: $SENTRY_DSN
+      PORT: $PORT
+      KEYCLOAK_URL: ${KEYCLOAK_URL:?No Keycloak URL set}
+    volumes:
+      - ./arg-pipe:/app/dist/assets/arg-pipe
+      - ./log.txt:/app/dist/assets/log.txt
+    restart: unless-stopped
+
+networks:
+  nginx-proxy_default:
+    external: true

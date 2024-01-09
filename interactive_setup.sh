@@ -36,7 +36,7 @@ else
 fi
 
 path="../$PREFIX$org"
-app=$(docker ps | grep -c "\-$org-app")
+app=$(docker ps | grep -ic "\-$org-app")
 if [ "$app" == 0 ]; then
   echo "Setting up new instance '$org'"
   mkdir "$path"
@@ -62,7 +62,13 @@ if [ "$app" == 0 ]; then
   echo "APP_URL=$url" >> "$path/.env"
   echo "App URL: $url"
 else
-  echo "Instance '$org' already exists"
+  if [ -n "$1" ]; then
+    # When started with args, fail on existing name
+    echo "ERROR name already exists"
+    exit 1
+  else
+    echo "Instance '$org' already exists"
+  fi
 fi
 
 backend=$(docker ps | grep -c "\-$org-backend")
@@ -86,7 +92,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     container=$(docker ps -aqf "name=keycloak-keycloak")
     # Initialize realm and client
     docker exec -i "$container" /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$ADMIN_PASSWORD"
-    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -s defaultLocale="$locale" -f /realm_config.json -i
+    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -s displayName="Aam Digital - $org" -s defaultLocale="$locale" -f /realm_config.json -i
     client=$(docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create clients -r "$org" -s baseUrl="https://$APP_URL" -f /client_config.json -i)
 
     # Get Keycloak config from API
@@ -250,4 +256,4 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
   fi
 fi
 
-echo "app is now available under https://$APP_URL"
+echo "DONE app is now available under https://$APP_URL"

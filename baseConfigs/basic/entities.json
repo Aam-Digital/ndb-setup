@@ -1249,7 +1249,8 @@
       }
     },
     {
-      "_id": "SiteSettings:global"
+      "_id": "SiteSettings:global",
+      "siteName": "Aam Digital"
     },
     {
       "_id": "ConfigurableEnum:attendance-status",

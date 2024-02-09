@@ -15,6 +15,7 @@ services:
       VIRTUAL_HOST: ${APP_URL:?App URL not set}
       LETSENCRYPT_HOST: ${APP_URL:?App URL not set}
       COUCHDB_URL: http://${COMPOSE_PROFILES:-couchdb}:5984
+      QUERY_URL: http://query:3000
     restart: unless-stopped
 
   # (optional) backend. Only deployed if "COMPOSE_PROFILES=backend" is set in the `.env` file
@@ -56,18 +57,22 @@ services:
     environment:
       SENTRY_DSN: ${SENTRY_DSN}
       DATABASE_URL: http://${COMPOSE_PROFILES:-couchdb}:5984
-      DATABASE_USERNAME: ${COUCHDB_PASSWORD}
-      DATABASE_PASSWORD: admin
-      QUERY_URL: "sqs:4984"
+      DATABASE_USERNAME: admin
+      DATABASE_PASSWORD: ${COUCHDB_PASSWORD}
+      QUERY_URL: "http://sqs:4984"
     profiles:
       - ${SQS_PROFILE:-other}
 
   sqs:
     build: ${SETUP_DIR:-/var/docker/setup}
+    networks:
+      - internal
+    depends_on:
+      - couchdb
     volumes:
       - ./sqs:/data
     environment:
-      COUCHDB_URL: couchdb
+      COUCHDB_URL: http://couchdb:5984
     profiles:
       # We currently use the `COMPOSE_PROFILES` value to create URLs, so we cannot set multiple profiles there.
       # Therefore this uses a variable to set the name of the profile instead.

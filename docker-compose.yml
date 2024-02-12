@@ -57,7 +57,6 @@ services:
     environment:
       SENTRY_DSN: ${SENTRY_DSN}
       DATABASE_URL: http://${COMPOSE_PROFILES:-couchdb}:5984
-      DATABASE_USERNAME: admin
       DATABASE_PASSWORD: ${COUCHDB_PASSWORD}
       QUERY_URL: "http://sqs:4984"
     profiles:

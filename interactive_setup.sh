@@ -34,6 +34,8 @@ else
   echo "What is the name of the organisation?"
   read -r org
 fi
+# always ensure org is lowercase to avoid problems with keycloak realms being case sensitive
+org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 
 path="../$PREFIX$org"
 app=$(docker ps | grep -ic "\-$org-app")

@@ -3,3 +3,4 @@ assets/*
 docker-image/dist/*
 .idea/
 */postgres/*
+**/.env

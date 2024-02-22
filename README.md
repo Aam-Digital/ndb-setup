@@ -4,6 +4,9 @@ This includes deploying the app, deploying and connecting the database and optio
 
 *The source code of the actual application, as well as instructions to run it on your local machine during development, can be found in the [Aam-Digital/ndb-core](https://github.com/Aam-Digital/ndb-core) repository.*
 
+(!) copy the example.* files (e.g. example.env) and add your actual variables and config
+
+
 ## Systems requirements
 The deployment works with minimal requirements. 
 All you need is a system that runs [Docker](https://www.docker.com/) and allows to reach endpoints through a public URL.

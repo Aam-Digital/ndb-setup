@@ -4,3 +4,4 @@ docker-image/dist/*
 .idea/
 */postgres/*
 **/.env
+**/credentials.json

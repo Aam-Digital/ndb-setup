@@ -3,5 +3,5 @@ assets/*
 docker-image/dist/*
 .idea/
 */postgres/*
-**/.env
+**/*.env
 **/credentials.json

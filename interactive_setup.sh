@@ -136,6 +136,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/report-calculation"
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/notification-webhook"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments"
 
     if [ "$app" == 1 ]; then

@@ -53,6 +53,9 @@ services:
       VIRTUAL_PORT: 3000
       CORS: "*"
       SENTRY_DSN: $SENTRY_DSN
+      SENTRY_ENABLED: true
+      SENTRY_INSTANCE_NAME: accounts.aam-digital.com
+      SENTRY_ENVIRONMENT: production
       KEYCLOAK_URL: https://$KEYCLOAK_URL
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_PASSWORD: $ADMIN_PASSWORD

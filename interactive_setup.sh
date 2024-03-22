@@ -135,6 +135,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     done
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app"
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/report-calculation"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments"
 
     if [ "$app" == 1 ]; then
@@ -337,6 +338,7 @@ if [ "$app" == 0 ]; then
 
     # aam-backend-service config file
     {
+      echo "SENTRY_AUTH_TOKEN=\"$(get_env_variable "SENTRY_AUTH_TOKEN")\"";
       echo "SENTRY_DSN=$(get_env_variable "SENTRY_DSN_AAM_BACKEND_SERVICE")";
       echo "SENTRY_TRACES_SAMPLE_RATE=1.0";
       echo "SENTRY_LOGGING_ENABLED=true";

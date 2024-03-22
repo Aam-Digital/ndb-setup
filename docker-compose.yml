@@ -14,7 +14,7 @@ services:
     environment:
       VIRTUAL_HOST: ${APP_URL:?App URL not set}
       LETSENCRYPT_HOST: ${APP_URL:?App URL not set}
-      COUCHDB_URL: ${APP_BACKEND_URL:?App Backend URL not set}
+      COUCHDB_URL: ${APP_BACKEND_URL:-http://couchdb:5984}
     restart: unless-stopped
 
   couchdb:

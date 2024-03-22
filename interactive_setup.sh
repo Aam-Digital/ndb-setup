@@ -262,8 +262,8 @@ if [ "$replicationBackend" == 0 ]; then
 fi
 
 if [ "$aamBackendService" == 0 ]; then
-  if [ -n "$6" ]; then
-    withAamBackendService="$6"
+  if [ -n "$7" ]; then
+    withAamBackendService="$7"
   else
     echo "Do you want to add aam-backend-services (query-backend)?[y/n]"
     read -r withAamBackendService
@@ -275,6 +275,9 @@ if [ "$aamBackendService" == 0 ]; then
     else
       sed -i -e 's/COMPOSE_PROFILES=/COMPOSE_PROFILES=aam-backend-service/g' "$path/.env"
     fi
+
+    mkdir "$path/config"
+    mkdir "$path/config/aam-backend-service"
 
     generate_password
     {
@@ -302,8 +305,8 @@ if [ "$aamBackendService" == 0 ]; then
 fi
 
 if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_ID" != "" ]; then
-  if [ -n "$7" ]; then
-    createsMonitors="$7"
+  if [ -n "$8" ]; then
+    createsMonitors="$8"
   else
     echo "Do you want create UptimeRobot monitoring?[y/n]"
     read -r createsMonitors
@@ -321,8 +324,8 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
 fi
 
 if [ "$app" == 0 ]; then
-  if [ -n "$8" ]; then
-    enableSentry="$8"
+  if [ -n "$9" ]; then
+    enableSentry="$9"
   else
     echo "Do you want to enable Sentry logging?[y/n]"
     read -r enableSentry
@@ -334,7 +337,7 @@ if [ "$app" == 0 ]; then
 
     # aam-backend-service config file
     {
-      echo "SENTRY_AUTH_TOKEN=$(get_env_variable "SENTRY_AUTH_TOKEN")";
+      echo "SENTRY_AUTH_TOKEN=\"$(get_env_variable "SENTRY_AUTH_TOKEN")\"";
       echo "SENTRY_DSN=$(get_env_variable "SENTRY_DSN_AAM_BACKEND_SERVICE")";
       echo "SENTRY_TRACES_SAMPLE_RATE=1.0";
       echo "SENTRY_LOGGING_ENABLED=true";
@@ -345,8 +348,8 @@ if [ "$app" == 0 ]; then
       echo "SENTRY_ENABLE_TRACING=true";
     } >> "$path/config/aam-backend-service/application.env"
 
-      if [ -n "$9" ]; then
-          environment="$9"
+      if [ -n "$env" ]; then
+          environment="$env"
         else
           echo "Wich environment are you on?[development/production]"
           read -r environment

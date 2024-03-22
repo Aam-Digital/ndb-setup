@@ -337,7 +337,6 @@ if [ "$app" == 0 ]; then
 
     # aam-backend-service config file
     {
-      echo "SENTRY_AUTH_TOKEN=\"$(get_env_variable "SENTRY_AUTH_TOKEN")\"";
       echo "SENTRY_DSN=$(get_env_variable "SENTRY_DSN_AAM_BACKEND_SERVICE")";
       echo "SENTRY_TRACES_SAMPLE_RATE=1.0";
       echo "SENTRY_LOGGING_ENABLED=true";

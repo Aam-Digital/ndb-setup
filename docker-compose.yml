@@ -13,7 +13,7 @@ services:
       VIRTUAL_HOST: ${APP_URL:?App URL not set}
       LETSENCRYPT_HOST: ${APP_URL:?App URL not set}
       COUCHDB_URL: ${APP_BACKEND_URL:-http://couchdb:5984}
-      QUERY_URL: $AAM_BACKEND_SERVICE_URL
+      QUERY_URL: ${AAM_BACKEND_SERVICE_URL:-http://localhost}
     restart: unless-stopped
 
   couchdb:

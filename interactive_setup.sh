@@ -13,6 +13,19 @@ generate_password() {
   done
 }
 
+# Funktion, um den Wert einer Variable aus einer .env-Datei auszulesen
+get_env_variable() {
+    # Überprüfen, ob die .env-Datei existiert
+    if [ -f .env ]; then
+        # Die Variable aus der .env-Datei auslesen
+        value=$(grep "^$1=" .env | cut -d '=' -f2-)
+        # Ausgabe des Werts
+        echo "$value"
+    else
+        echo "Die .env-Datei existiert nicht."
+    fi
+}
+
 getKeycloakKey() {
   token=$(curl -s -L "https://$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode username=admin --data-urlencode password="$ADMIN_PASSWORD" --data-urlencode grant_type=password --data-urlencode client_id=admin-cli)
   token=${token#*\"access_token\":\"}
@@ -55,6 +68,7 @@ if [ "$app" == 0 ]; then
   echo "COUCHDB_USER=admin" >> "$path/.env"
 
   generate_password
+  couchdbPassword=$password
   echo "COUCHDB_PASSWORD=$password" >> "$path/.env"
   echo "Admin password: $password"
 
@@ -256,12 +270,30 @@ if [ "$aamBackendService" == 0 ]; then
   fi
 
   if [ "$withAamBackendService" == "y" ] || [ "$withAamBackendService" == "Y" ]; then
-
     if [ "$withReplicationBackend" == "y" ] || [ "$withReplicationBackend" == "Y" ]; then
       sed -i -e 's/COMPOSE_PROFILES=replication-backend/COMPOSE_PROFILES=replication-backend,aam-backend-service/g' "$path/.env"
     else
-        sed -i -e 's/COMPOSE_PROFILES=/COMPOSE_PROFILES=aam-backend-service/g' "$path/.env"
+      sed -i -e 's/COMPOSE_PROFILES=/COMPOSE_PROFILES=aam-backend-service/g' "$path/.env"
     fi
+
+    generate_password
+    {
+      echo "CRYPTO_CONFIGURATION_SECRET=$password";
+      echo "SPRING_WEBFLUX_BASE_PATH=/api";
+      echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI=https://keycloak.aam-digital.com/realms/$org";
+      echo "SPRING_RABBITMQ_VIRTUALHOST=/";
+      echo "SPRING_RABBITMQ_HOST=rabbitmq";
+      echo "SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_ENABLED=true";
+      echo "SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_MAXATTEMPTS=5";
+      echo "COUCHDBCLIENTCONFIGURATION_BASEPATH=http://couchdb:5984";
+      echo "COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME=admin";
+      echo "COUCHDBCLIENTCONFIGURATION_BASICAUTHPASSWORD=$couchdbPassword";
+      echo "SQSCLIENTCONFIGURATION_BASEPATH=http://sqs:4984";
+      echo "SQSCLIENTCONFIGURATION_BASICAUTHUSERNAME=admin";
+      echo "SQSCLIENTCONFIGURATION_BASICAUTHPASSWORD=$couchdbPassword";
+      echo "DATABASECHANGEDETECTION_ENABLED=true";
+      echo "REPORTCALCULATIONPROCESSOR_ENABLED=true";
+    } >> "$path/config/aam-backend-service/application.env"
 
     (cd "$path" && docker compose up -d)
     aamBackendService=1
@@ -297,8 +329,21 @@ if [ "$app" == 0 ]; then
   fi
 
   if [ "$enableSentry" == "y" ] || [ "$enableSentry" == "Y" ]; then
-      echo "SENTRY_ENABLED=true" >> "$path/.env"
-      echo "SENTRY_INSTANCE=$url" >> "$path/.env"
+    echo "SENTRY_ENABLED=true" >> "$path/.env"
+    echo "SENTRY_INSTANCE_NAME=$url" >> "$path/.env"
+
+    # aam-backend-service config file
+    {
+      echo "SENTRY_AUTH_TOKEN=$(get_env_variable "SENTRY_AUTH_TOKEN")";
+      echo "SENTRY_DSN=$(get_env_variable "SENTRY_DSN_AAM_BACKEND_SERVICE")";
+      echo "SENTRY_TRACES_SAMPLE_RATE=1.0";
+      echo "SENTRY_LOGGING_ENABLED=true";
+      echo "SENTRY_ENVIRONMENT=$environment";
+      echo "SENTRY_SERVER_NAME=$url";
+      echo "SENTRY_ATTACH_THREADS=true";
+      echo "SENTRY_ATTACH_STACKTRACE=true";
+      echo "SENTRY_ENABLE_TRACING=true";
+    } >> "$path/config/aam-backend-service/application.env"
 
       if [ -n "$9" ]; then
           environment="$9"
@@ -310,6 +355,8 @@ if [ "$app" == 0 ]; then
       if [ "$environment" == "development" ] || [ "$environment" == "production" ]; then
         echo "SENTRY_ENVIRONMENT=$environment" >> "$path/.env"
       fi
+
+      (cd "$path" && docker compose up -d)
   fi
 fi
 

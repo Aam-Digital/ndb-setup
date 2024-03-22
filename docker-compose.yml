@@ -65,7 +65,7 @@ services:
     volumes:
       - ./storage/query-backend/data:/aam-backend-service/bin/data
     env_file:
-      - ./config/aam-backend-service/dev.env
+      - ./config/aam-backend-service/application.env
     restart: unless-stopped
     profiles:
       - aam-backend-service

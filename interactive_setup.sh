@@ -288,4 +288,29 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
   fi
 fi
 
+if [ "$app" == 0 ]; then
+  if [ -n "$8" ]; then
+    enableSentry="$8"
+  else
+    echo "Do you want to enable Sentry logging?[y/n]"
+    read -r enableSentry
+  fi
+
+  if [ "$enableSentry" == "y" ] || [ "$enableSentry" == "Y" ]; then
+      echo "SENTRY_ENABLED=true" >> "$path/.env"
+      echo "SENTRY_INSTANCE=$url" >> "$path/.env"
+
+      if [ -n "$9" ]; then
+          environment="$9"
+        else
+          echo "Wich environment are you on?[development/production]"
+          read -r environment
+        fi
+
+      if [ "$environment" == "development" ] || [ "$environment" == "production" ]; then
+        echo "SENTRY_ENVIRONMENT=$environment" >> "$path/.env"
+      fi
+  fi
+fi
+
 echo "DONE app is now available under https://$APP_URL"

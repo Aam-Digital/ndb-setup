@@ -278,6 +278,8 @@ if [ "$aamBackendService" == 0 ]; then
       sed -i -e 's/COMPOSE_PROFILES=/COMPOSE_PROFILES=aam-backend-service/g' "$path/.env"
     fi
 
+    echo "AAM_BACKEND_SERVICE_URL=http://aam-backend-service:5984" >> "$path/.env"
+
     mkdir "$path/config"
     mkdir "$path/config/aam-backend-service"
 
@@ -303,6 +305,8 @@ if [ "$aamBackendService" == 0 ]; then
     (cd "$path" && docker compose up -d)
     aamBackendService=1
     echo "aam-backend-service added"
+  else
+    echo "AAM_BACKEND_SERVICE_URL=" >> "$path/.env"
   fi
 fi
 

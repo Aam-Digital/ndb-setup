@@ -24,7 +24,7 @@ services:
       - ./couchdb/data:/opt/couchdb/data
       - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini
     environment:
-      COUCHDB_USER: ${COUCHDB_USER:?CouchDB User not set}
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
       COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?CouchDB password not set}
     restart: unless-stopped
 
@@ -44,7 +44,7 @@ services:
       JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----"
       SENTRY_DSN: ${SENTRY_DSN}
       SENTRY_ENABLED: ${SENTRY_ENABLED}
-      SENTRY_INSTANCE_NAME: ${SENTRY_INSTANCE_NAME}
+      SENTRY_INSTANCE_NAME: ${APP_URL}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}
       PORT: 5984
     restart: unless-stopped

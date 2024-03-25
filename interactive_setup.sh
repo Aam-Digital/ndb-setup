@@ -13,16 +13,15 @@ generate_password() {
   done
 }
 
-# Funktion, um den Wert einer Variable aus einer .env-Datei auszulesen
+# function to read the value of a variable from an .env file
 get_env_variable() {
-    # Überprüfen, ob die .env-Datei existiert
+    # check if .env file exists
     if [ -f .env ]; then
-        # Die Variable aus der .env-Datei auslesen
+        # get value
         value=$(grep "^$1=" .env | cut -d '=' -f2-)
-        # Ausgabe des Werts
         echo "$value"
     else
-        echo "Die .env-Datei existiert nicht."
+        echo ".env file does not exist"
     fi
 }
 

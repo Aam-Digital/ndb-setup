@@ -40,7 +40,7 @@ services:
       DATABASE_NAME: app
       DATABASE_USER: ${COUCHDB_USER:-admin}
       DATABASE_PASSWORD: ${COUCHDB_PASSWORD:?Admin password not set}
-      JWT_SECRET: ${JWT_SECRET:?JWT secret not set}
+      JWT_SECRET: ${JWT_SECRET}
       JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----"
       SENTRY_DSN: ${SENTRY_DSN}
       SENTRY_ENABLED: ${SENTRY_ENABLED}

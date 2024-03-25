@@ -4,7 +4,7 @@ This includes deploying the app, deploying and connecting the database and optio
 
 *The source code of the actual application, as well as instructions to run it on your local machine during development, can be found in the [Aam-Digital/ndb-core](https://github.com/Aam-Digital/ndb-core) repository.*
 
-(!) copy the example.* files (e.g. example.env) and add your actual variables and config
+(!) copy the example.* files (e.g. setup.example.env) and add your actual variables and config
 
 
 ## Systems requirements
@@ -22,8 +22,8 @@ The interactive script `interactive_setup.sh` walks you through the process of s
 Running the setup script will create a new folder in the same parent folder, next to the cloned repo. You can use the script multiple times to create new instances.
 
 1. Clone this repository
-2. Edit the `interactive_setup.sh` script and review the variables where necessary (see below "Adjusting the script")
-3. Then run the script and follow the questions in the console
+2. Set up local environment by copying setup.example.env file and editing the `setup.env` and `keyloak/.env`
+3. Then run the script and follow the questions in the console to generate the required .env and other files:
    > ./interactive_setup.sh
 
 The following things can be automatically done
@@ -36,12 +36,12 @@ The following things can be automatically done
 To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `.env` file to you sentry DSN.
 
 ## Adjusting the script
-Some things might need to be adjusted based on how you environment looks.
-Have a look at the comments at the beginning of the file `interactive_setup.sh`
+Some things have to be set for the interactive setup script through environment variables.
+Have a look at `interactive_setup.sh` to see which .env files are loaded there.
 
 1. Domain name for the final applications (variable `domain`)
 2. Prefix for created folders (variable `prefix`)
-3. Location of the `.env` file of the keycloak deployment (see section [User management in Keycloak](#user-management-in-keycloak))
+3. the `.env` file of the keycloak deployment (see section [User management in Keycloak](#user-management-in-keycloak))
 
 # Deploying under a domain name using nginx-proxy
 In order to make the application's docker container accessible under a public URL, you need to expose it using a tool of your choice.

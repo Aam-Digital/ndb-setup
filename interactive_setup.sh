@@ -286,7 +286,7 @@ if [ "$aamBackendService" == 0 ]; then
     {
       echo "CRYPTO_CONFIGURATION_SECRET=$password";
       echo "SPRING_WEBFLUX_BASE_PATH=/api";
-      echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI=https://keycloak.aam-digital.com/realms/$org";
+      echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI=https://keycloak.$DOMAIN/realms/$org";
       echo "SPRING_RABBITMQ_VIRTUALHOST=/";
       echo "SPRING_RABBITMQ_HOST=rabbitmq";
       echo "SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_ENABLED=true";
@@ -338,7 +338,6 @@ if [ "$app" == 0 ]; then
 
   if [ "$enableSentry" == "y" ] || [ "$enableSentry" == "Y" ]; then
     echo "SENTRY_ENABLED=true" >> "$path/.env"
-    echo "SENTRY_INSTANCE_NAME=$url" >> "$path/.env"
 
     # aam-backend-service config file
     {
@@ -356,7 +355,7 @@ if [ "$app" == 0 ]; then
       if [ -n "$env" ]; then
           environment="$env"
         else
-          echo "Wich environment are you on?[development/production]"
+          echo "Which environment are you on? [development/production]"
           read -r environment
         fi
 

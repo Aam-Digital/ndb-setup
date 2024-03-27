@@ -8,9 +8,21 @@ source "./keycloak/.env"
 chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 generate_password() {
   password=""
-  for _ in {1..16} ; do
+  for _ in {1..24} ; do
     password="$password${chars:RANDOM%${#chars}:1}"
   done
+}
+
+# function to read the value of a variable from an .env file
+get_env_variable() {
+    # check if .env file exists
+    if [ -f .env ]; then
+        # get value
+        value=$(grep "^$1=" .env | cut -d '=' -f2-)
+        echo "$value"
+    else
+        echo ".env file does not exist"
+    fi
 }
 
 getKeycloakKey() {
@@ -52,8 +64,10 @@ if [ "$app" == 0 ]; then
   version=${version#*\"tag_name\":\"}
   version=${version%%\"*}
   echo "VERSION=$version" >> "$path/.env"
+  echo "COUCHDB_USER=admin" >> "$path/.env"
 
   generate_password
+  couchdbPassword=$password
   echo "COUCHDB_PASSWORD=$password" >> "$path/.env"
   echo "Admin password: $password"
 
@@ -73,7 +87,8 @@ else
   fi
 fi
 
-backend=$(docker ps | grep -c "\-$org-backend")
+replicationBackend=$(docker ps | grep -c "\-$org-replication-backend")
+aamBackendService=$(docker ps | grep -c "\-$org-aam-backend-service")
 
 if [ ! -f "$path/keycloak.json" ]; then
   if [ "$app" == 0 ]; then
@@ -103,7 +118,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     sed -i "s/\"account_url\": \".*\"/\"account_url\": \"https:\/\/$ACCOUNTS_URL\"/g" "$path/config.json"
 
     # Set Keycloak public key for bearer auth
-    if [ "$backend" == 1 ]; then
+    if [ "$replicationBackend" == 1 ]; then
       echo "PUBLIC_KEY=$publicKey" >> "$path/.env"
     else
       sed -i "s/<KID>/$kid/g" "$path/couchdb.ini"
@@ -119,6 +134,8 @@ if [ ! -f "$path/keycloak.json" ]; then
     done
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app"
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/report-calculation"
+    curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/notification-webhook"
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments"
 
     if [ "$app" == 1 ]; then
@@ -127,7 +144,7 @@ if [ ! -f "$path/keycloak.json" ]; then
       if [ "$migrate" == "y" ] || [ "$migrate" == "Y" ]
       then
         couchUrl="https://$APP_URL/db"
-        if [ "$backend" == 1 ]; then couchUrl="$couchUrl/couchdb"; fi
+        if [ "$replicationBackend" == 1 ]; then couchUrl="$couchUrl/couchdb"; fi
         node keycloak/migrate_couchdb_users.js "$couchUrl" "$COUCHDB_PASSWORD" "https://$KEYCLOAK_URL" "$ADMIN_PASSWORD" "$org"
       fi
     else
@@ -159,7 +176,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     echo "App is connected with Keycloak"
   elif [ "$app" == 0  ]; then
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users"
-    if [ "$backend" == 0 ]; then
+    if [ "$replicationBackend" == 0 ]; then
       curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/_users/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
     fi
     echo "'user_app' has access to database 'app'"
@@ -210,16 +227,17 @@ if [ "$app" == 0 ]; then
   fi
 fi
 
-if [ "$backend" == 0 ]; then
+if [ "$replicationBackend" == 0 ]; then
   if [ -n "$6" ]; then
-    withBackend="$6"
+    withReplicationBackend="$6"
   else
     echo "Do you want to add the permission backend?[y/n]"
-    read -r withBackend
+    read -r withReplicationBackend
   fi
 
-  if [ "$withBackend" == "y" ] || [ "$withBackend" == "Y" ]; then
-    echo "COMPOSE_PROFILES=backend" >> "$path/.env"
+  if [ "$withReplicationBackend" == "y" ] || [ "$withReplicationBackend" == "Y" ]; then
+    echo "APP_BACKEND_URL=http://replication-backend:5984" >> "$path/.env"
+    echo "COMPOSE_PROFILES=replication-backend" >> "$path/.env"
 
     if [ -f "$path/keycloak.json" ]; then
       # adjust Keycloak config
@@ -231,17 +249,69 @@ if [ "$backend" == 0 ]; then
     fi
 
     (cd "$path" && docker compose up -d)
-    backend=1
-    echo "Backend added"
+    replicationBackend=1
+    echo "replication-backend added"
   elif [ "$app" == 0 ]; then
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
     curl -X PUT -u "admin:$COUCHDB_PASSWORD" "https://$APP_URL/db/app-attachments/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
   fi
+
+  if [ "$withReplicationBackend" != "y" ] && [ "$withReplicationBackend" != "Y" ]; then
+    echo "APP_BACKEND_URL=http://couchdb:5984" >> "$path/.env"
+    echo "COMPOSE_PROFILES=" >> "$path/.env"
+  fi
+fi
+
+if [ "$aamBackendService" == 0 ]; then
+  if [ -n "$7" ]; then
+    withAamBackendService="$7"
+  else
+    echo "Do you want to add aam-backend-services (query-backend)?[y/n]"
+    read -r withAamBackendService
+  fi
+
+  if [ "$withAamBackendService" == "y" ] || [ "$withAamBackendService" == "Y" ]; then
+    if [ "$withReplicationBackend" == "y" ] || [ "$withReplicationBackend" == "Y" ]; then
+      sed -i -e 's/COMPOSE_PROFILES=replication-backend/COMPOSE_PROFILES=replication-backend,aam-backend-service/g' "$path/.env"
+    else
+      sed -i -e 's/COMPOSE_PROFILES=/COMPOSE_PROFILES=aam-backend-service/g' "$path/.env"
+    fi
+
+    echo "AAM_BACKEND_SERVICE_URL=http://aam-backend-service:5984" >> "$path/.env"
+
+    mkdir "$path/config"
+    mkdir "$path/config/aam-backend-service"
+
+    generate_password
+    {
+      echo "CRYPTO_CONFIGURATION_SECRET=$password";
+      echo "SPRING_WEBFLUX_BASE_PATH=/api";
+      echo "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI=https://keycloak.$DOMAIN/realms/$org";
+      echo "SPRING_RABBITMQ_VIRTUALHOST=/";
+      echo "SPRING_RABBITMQ_HOST=rabbitmq";
+      echo "SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_ENABLED=true";
+      echo "SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_MAXATTEMPTS=5";
+      echo "COUCHDBCLIENTCONFIGURATION_BASEPATH=http://couchdb:5984";
+      echo "COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME=admin";
+      echo "COUCHDBCLIENTCONFIGURATION_BASICAUTHPASSWORD=$couchdbPassword";
+      echo "SQSCLIENTCONFIGURATION_BASEPATH=http://sqs:4984";
+      echo "SQSCLIENTCONFIGURATION_BASICAUTHUSERNAME=admin";
+      echo "SQSCLIENTCONFIGURATION_BASICAUTHPASSWORD=$couchdbPassword";
+      echo "DATABASECHANGEDETECTION_ENABLED=true";
+      echo "REPORTCALCULATIONPROCESSOR_ENABLED=true";
+    } >> "$path/config/aam-backend-service/application.env"
+
+    (cd "$path" && docker compose up -d)
+    aamBackendService=1
+    echo "aam-backend-service added"
+  else
+    echo "AAM_BACKEND_SERVICE_URL=" >> "$path/.env"
+  fi
 fi
 
 if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_ID" != "" ]; then
-  if [ -n "$7" ]; then
-    createsMonitors="$7"
+  if [ -n "$8" ]; then
+    createsMonitors="$8"
   else
     echo "Do you want create UptimeRobot monitoring?[y/n]"
     read -r createsMonitors
@@ -249,12 +319,51 @@ if [ "$app" == 0 ] && [ "$UPTIMEROBOT_API_KEY" != "" ] && [ "$UPTIMEROBOT_ALERT_
 
   if [ "$createsMonitors" == "y" ] || [ "$createsMonitors" == "Y" ]; then
     curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url&friendly_name=Aam - $org App&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
-    if [ "$backend" == 1 ]; then
+    if [ "$replicationBackend" == 1 ]; then
       curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/api&friendly_name=Aam - $org Backend&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
       curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/couchdb/_utils/&friendly_name=Aam - $org DB&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
     else
       curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/_utils/&friendly_name=Aam - $org DB&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
     fi
+  fi
+fi
+
+if [ "$app" == 0 ]; then
+  if [ -n "$9" ]; then
+    enableSentry="$9"
+  else
+    echo "Do you want to enable Sentry logging?[y/n]"
+    read -r enableSentry
+  fi
+
+  if [ "$enableSentry" == "y" ] || [ "$enableSentry" == "Y" ]; then
+    echo "SENTRY_ENABLED=true" >> "$path/.env"
+
+    # aam-backend-service config file
+    {
+      echo "SENTRY_AUTH_TOKEN=\"$(get_env_variable "SENTRY_AUTH_TOKEN")\"";
+      echo "SENTRY_DSN=$(get_env_variable "SENTRY_DSN_AAM_BACKEND_SERVICE")";
+      echo "SENTRY_TRACES_SAMPLE_RATE=1.0";
+      echo "SENTRY_LOGGING_ENABLED=true";
+      echo "SENTRY_ENVIRONMENT=$environment";
+      echo "SENTRY_SERVER_NAME=$url";
+      echo "SENTRY_ATTACH_THREADS=true";
+      echo "SENTRY_ATTACH_STACKTRACE=true";
+      echo "SENTRY_ENABLE_TRACING=true";
+    } >> "$path/config/aam-backend-service/application.env"
+
+      if [ -n "$env" ]; then
+          environment="$env"
+        else
+          echo "Which environment are you on? [development/production]"
+          read -r environment
+        fi
+
+      if [ "$environment" == "development" ] || [ "$environment" == "production" ]; then
+        echo "SENTRY_ENVIRONMENT=$environment" >> "$path/.env"
+      fi
+
+      (cd "$path" && docker compose up -d)
   fi
 fi
 

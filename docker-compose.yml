@@ -30,7 +30,7 @@ services:
 
   # (optional) replication-backend. Only deployed if "COMPOSE_PROFILES=replication-backend" is set in the `.env` file
   replication-backend:
-    image: aamdigital/replication-ms:latest
+    image: ghcr.io/aam-digital/replication-backend:latest
     networks:
       - internal
     depends_on:

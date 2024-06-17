@@ -114,13 +114,8 @@ Consult the [Keycloak docs](https://www.keycloak.org/docs/latest/server_admin/in
 
 # API Integrations and SQL Reports
 It is possible to calculate reports for the app's data using SQL queries.
-For this we have integrated the [structured-query-service (SQS)](https://neighbourhood.ie/products-and-services/structured-query-server)
-(this creates a read-only copy of the data in the CouchDB and allows to run Sqlite queries against it).
 
-To activate it for an application, simply activate "aam-backend-service" profile (`COMPOSE_PROFILES=replication-backend,aam-backend-service`) in the applications `.env` file and run `docker compose up -d`.
-
-The SQS image is not available as open source and pulled from a private container registry.
-
+For details information, check our [Report documentation](http://aam-digital.github.io/ndb-core/documentation/additional-documentation/how-to-guides/create-a-report.html)
 
 -----
 # Building the Docker Image

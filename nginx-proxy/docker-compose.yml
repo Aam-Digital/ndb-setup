@@ -1,5 +1,3 @@
-version: '3'
-
 # Inspired by https://github.com/nginx-proxy/acme-companion/blob/main/docs/Docker-Compose.md
 services:
   nginx-proxy:

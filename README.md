@@ -121,7 +121,7 @@ For details information, check our [Report documentation](http://aam-digital.git
 
 1. Enable the reporting backend:
     - add `aam-backend-service` to you COMPOSE_PROFILES .env variable to activate that container in the docker compose: `COMPOSE_PROFILES=replication-backend,aam-backend-service`
-    - add an `application.env` for the backend (`config/aam-backend-service/application.env`) --> see TODO [https://github.com/Aam-Digital/aam-services/blob/main/docs/modules/reporting.md]
+    - add an `application.env` for the backend (`config/aam-backend-service/application.env`) --> see [aam-services README](https://github.com/Aam-Digital/aam-services/blob/main/README.md)
     - (re-up the docker compose and confirm the new containers are running)
 2. Create a "client" in Keycloak for login credentials:
     - Log into Keycloak and open the "Clients" section of the realm

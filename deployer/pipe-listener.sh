@@ -1,3 +1,3 @@
 #!/bin/bash
-# shellcheck disable=SC2046
-while true; do (cd /var/docker/ndb-setup || exit; ./interactive_setup.sh $(cat deployer/arg-pipe) >> deployer/log.txt 2>&1 ); done
+# shellcheck disable=SC2086
+while true; do (cd /var/docker/ndb-setup || exit; while read -r line; do ./interactive_setup.sh ${line}; done<deployer/arg-pipe ); done

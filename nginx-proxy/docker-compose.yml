@@ -16,7 +16,7 @@ services:
       - nginx-proxy_default
 
   nginx-gen:
-    image: nginxproxy/docker-gen
+    image: nginxproxy/docker-gen:0.14.0
     container_name: nginx-gen
     volumes:
       - vhost:/etc/nginx/vhost.d

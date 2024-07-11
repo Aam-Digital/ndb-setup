@@ -276,6 +276,9 @@
         grpc_pass {{ trim $proto }}://{{ trim $upstream }};
         {{- else }}
         proxy_pass {{ trim $proto }}://{{ trim $upstream }}{{ trim $dest }};
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
         set $upstream_keepalive {{ if ne $keepalive "disabled" }}true{{ else }}false{{ end }};
         {{- end }}
 
@@ -474,7 +477,7 @@ proxy_set_header Proxy "";
     {{- range $hostname, $vhost := $parsedVhosts }}
         {{- $vhost_data := when (hasKey $globals.vhosts $hostname) (get $globals.vhosts $hostname) (dict) }}
         {{- $paths := coalesce $vhost_data.paths (dict) }}
-        
+
         {{- if (empty $vhost) }}
             {{ $vhost = dict "/" (dict) }}
         {{- end }}

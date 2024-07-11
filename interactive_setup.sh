@@ -25,11 +25,14 @@ get_env_variable() {
     fi
 }
 
-getKeycloakKey() {
+getKeycloakToken() {
   token=$(curl -s -L "https://$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode username=admin --data-urlencode password="$ADMIN_PASSWORD" --data-urlencode grant_type=password --data-urlencode client_id=admin-cli)
   token=${token#*\"access_token\":\"}
   token=${token%%\"*}
+}
 
+
+getKeycloakKey() {
   keys=$(curl -s -L "https://$KEYCLOAK_URL/admin/realms/$org/keys" -H "Authorization: Bearer $token")
   kid=${keys#*\"RS256\":\"}
   kid=${kid%%\"*}
@@ -97,7 +100,9 @@ if [ ! -f "$path/keycloak.json" ]; then
     echo "Do you want to add authentication via Keycloak?[y/n]"
     read -r keycloak
   fi
+
   source "$path/.env"
+
   if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]; then
     if [ -n "$2" ]; then
       locale="$2"
@@ -106,11 +111,25 @@ if [ ! -f "$path/keycloak.json" ]; then
       read -r locale
     fi
 
-    container=$(docker ps -aqf "name=keycloak-keycloak")
-    # Initialize realm and client
-    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$ADMIN_PASSWORD"
-    docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create realms -s realm="$org" -s displayName="Aam Digital - $org" -s defaultLocale="$locale" -f /realm_config.json -i
-    client=$(docker exec -i "$container" /opt/keycloak/bin/kcadm.sh create clients -r "$org" -s baseUrl="https://$APP_URL" -f /client_config.json -i)
+    getKeycloakToken
+
+    # create a realm
+    curl -X "POST" "https://$KEYCLOAK_URL/admin/realms" \
+         -H "Authorization: Bearer $token" \
+         -H "Content-Type: application/json" \
+         -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' ./keycloak/realm_config.json)"
+
+    # create a client
+    clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_URL/admin/realms/$org/clients" \
+                          -H "Authorization: Bearer $token" \
+                          -H "Content-Type: application/json" \
+                          -d "$(jq '.baseUrl = "https://'"$APP_URL"'"' ./keycloak/client_config.json)")
+
+    # Extrahiere den Location-Header
+    location=$(echo "$clientResponse" | grep -i "^location:")
+
+    # Extrahiere die UUID aus dem Location-Header
+    client=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
 
     # Get Keycloak config from API
     getKeycloakKey

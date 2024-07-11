@@ -31,7 +31,6 @@ getKeycloakToken() {
   token=${token%%\"*}
 }
 
-
 getKeycloakKey() {
   keys=$(curl -s -L "https://$KEYCLOAK_URL/admin/realms/$org/keys" -H "Authorization: Bearer $token")
   kid=${keys#*\"RS256\":\"}
@@ -93,6 +92,25 @@ fi
 replicationBackend=$(docker ps | grep -c "\-$org-replication-backend")
 aamBackendService=$(docker ps | grep -c "\-$org-aam-backend-service")
 
+if [ "$app" == 0 ]; then
+  if [ -n "$2" ]; then
+    baseConfig="$2"
+  else
+    echo "Which basic config do you want to include? (e.g. [default], basic, codo, ...)"
+    read -r baseConfig
+
+    if [ ! "$baseConfig" ]; then
+      baseConfig=default
+    fi
+
+    if [ ! -d "./baseConfigs/$baseConfig" ]; then
+      echo "ERROR Invalid base config '$baseConfig'. Abort."
+      exit 1
+    fi
+
+  fi
+fi
+
 if [ ! -f "$path/keycloak.json" ]; then
   if [ "$app" == 0 ]; then
     keycloak="y"
@@ -104,8 +122,8 @@ if [ ! -f "$path/keycloak.json" ]; then
   source "$path/.env"
 
   if [ "$keycloak" == "y" ] || [ "$keycloak" == "Y" ]; then
-    if [ -n "$2" ]; then
-      locale="$2"
+    if [ -n "$3" ]; then
+      locale="$3"
     else
       echo "Which should be the default language for Keycloak ('en', 'de', ...)?"
       read -r locale
@@ -117,7 +135,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     curl -X "POST" "https://$KEYCLOAK_URL/admin/realms" \
          -H "Authorization: Bearer $token" \
          -H "Content-Type: application/json" \
-         -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' ./keycloak/realm_config.json)"
+         -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' ./baseConfigs/"$baseConfig"/realm_config.json)"
 
     # create a client
     clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_URL/admin/realms/$org/clients" \
@@ -167,14 +185,14 @@ if [ ! -f "$path/keycloak.json" ]; then
         node keycloak/migrate_couchdb_users.js "$couchUrl" "$COUCHDB_PASSWORD" "https://$KEYCLOAK_URL" "$ADMIN_PASSWORD" "$org"
       fi
     else
-      if [ -n "$3" ]; then
-        userEmail="$3"
+      if [ -n "$4" ]; then
+        userEmail="$4"
       else
         echo "Email address of initial user"
         read -r userEmail
       fi
-      if [ -n "$4" ]; then
-        userName="$4"
+      if [ -n "$5" ]; then
+        userName="$5"
       else
         echo "Name of initial user"
         read -r userName
@@ -203,12 +221,6 @@ if [ ! -f "$path/keycloak.json" ]; then
 fi
 
 if [ "$app" == 0 ]; then
-  if [ -n "$5" ]; then
-    baseConfig="$5"
-  else
-    echo "Which basic config do you want to include?"
-    read -r baseConfig
-  fi
   if [ -n "$baseConfig" ]; then
     # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
     curl -u "admin:$COUCHDB_PASSWORD" -d "@baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$APP_URL/db/app/_bulk_docs"
@@ -357,6 +369,8 @@ if [ "$app" == 0 ]; then
 
   if [ "$enableSentry" == "y" ] || [ "$enableSentry" == "Y" ]; then
     echo "SENTRY_ENABLED=true" >> "$path/.env"
+
+    mkdir -p "$path/config/aam-backend-service"
 
     # aam-backend-service config file
     {

@@ -7,11 +7,12 @@ Automatically deploy new instances on the server.
 1. Create the `arg-pipe`
     > mkfifo arg-pipe
 2. Assign all required variables in `.env`
-3. Start the app
+3. Create empty `log.txt` file
+4. Start the app
     > docker compose up -d
-4. Run the script which listens to new deployment instructions
+5. Run the script which listens to new deployment instructions
    > ./pipe-listener.sh
-5. Visit `<DEPLOYER_URL>/api` in you browser and send requests to the `/deploy` endpoint
+6. Visit `<DEPLOYER_URL>/api` in you browser and send requests to the `/deploy` endpoint
 
 The logfile for the deployments can be found at `deployer/deploy-log.txt`.
 

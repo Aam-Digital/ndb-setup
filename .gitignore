@@ -5,3 +5,6 @@ docker-image/dist/*
 */postgres/*
 **/*.env
 **/credentials.json
+
+# do not check in actual realm_configs
+baseConfigs/*/realm_config.json

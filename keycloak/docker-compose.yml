@@ -18,6 +18,7 @@ services:
       VIRTUAL_PORT: 8080
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme
+      - ./aam-theme-prod-2:/opt/keycloak/themes/aam-theme-prod-2
       - ./client_config.json:/client_config.json
       - ./realm_config.json:/realm_config.json
     command: start --optimized --spi-theme-login-theme=aam-theme

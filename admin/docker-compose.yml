@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   admin-ms:
     image: aamdigital/ndb-admin:latest
@@ -10,5 +8,26 @@ services:
       KEYCLOAK_URL: ${KEYCLOAK_URL:?No Keycloak URL set}
       DOMAIN: ${DOMAIN:?No domain set}
     restart: unless-stopped
-    ports:
-      - "3000:3000"   # only available on localhost:3000 on server
+    networks:
+      - admin_api
+
+  admin-oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    networks:
+      - admin_api
+      - nginx-proxy_default
+    depends_on:
+      - admin-ms
+    volumes:
+      - "./oauth2-proxy.cfg:/oauth2-proxy.cfg"
+    command: --config /oauth2-proxy.cfg
+    environment:
+      VIRTUAL_PORT: 4180
+      VIRTUAL_HOST: $VIRTUAL_HOST
+      LETSENCRYPT_HOST: $LETSENCRYPT_HOST
+    restart: unless-stopped
+
+networks:
+  admin_api: {}
+  nginx-proxy_default:
+    external: true

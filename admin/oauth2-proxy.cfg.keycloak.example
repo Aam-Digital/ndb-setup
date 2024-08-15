@@ -1,0 +1,26 @@
+# example for aam-prod (admin.aam-digital.com)
+
+http_address="0.0.0.0:4180"
+cookie_secret="<16 byte secret>"
+email_domains="*"
+cookie_secure="false"
+upstreams="http://admin-ms:3000"
+cookie_domains=["admin.aam-digital.com", "auth.aam-digital.dev"] # Required so cookie can be read on all subdomains.
+whitelist_domains=["admin.aam-digital.com"] # Required to allow redirection back to original requested target.
+
+# keycloak provider
+client_secret="<secret>"
+client_id="<client_id>"
+redirect_url="https://admin.aam-digital.com/oauth2/callback"
+
+# in this case oauth2-proxy is going to visit
+# http://keycloak.localtest.me:9080/realms/oauth2-proxy/.well-known/openid-configuration for configuration
+oidc_issuer_url="https://auth.aam-digital.dev/realms/aam-digital"
+provider="keycloak-oidc"
+provider_display_name="Aam-Digital ID"
+code_challenge_method="S256"
+
+# support for jwt tokens, needed for access over rest
+set_authorization_header="true"
+skip_jwt_bearer_tokens="true"
+oidc_extra_audiences="grafana"

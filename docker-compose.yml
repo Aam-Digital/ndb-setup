@@ -1,104 +1,140 @@
 services:
   app:
-    image: aamdigital/ndb-server:${VERSION:?No release specified}
+    image: aamdigital/ndb-server:${APP_VERSION:-latest}
+    container_name: ${INSTANCE_NAME}-app
     networks:
-      - internal
-      - nginx-proxy_default
-    depends_on:
-      - couchdb
+      - internal_aam
+      - external_web
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
-    environment:
-      VIRTUAL_HOST: ${APP_URL:?App URL not set}
-      LETSENCRYPT_HOST: ${APP_URL:?App URL not set}
-      COUCHDB_URL: ${APP_BACKEND_URL:-http://couchdb:5984}
-      QUERY_URL: ${AAM_BACKEND_SERVICE_URL:-http://localhost}
     restart: unless-stopped
 
-  couchdb:
+  couchdb-only:
     image: couchdb:3
+    container_name: ${INSTANCE_NAME}-database-entrypoint
+    user: "1000:1000"
     networks:
-      - internal
+      - internal_aam
+      - external_web
     volumes:
       - ./couchdb/data:/opt/couchdb/data
       - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini
     environment:
-      COUCHDB_USER: ${COUCHDB_USER:-admin}
-      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?CouchDB password not set}
+      COUCHDB_USER: ${COUCHDB_USER:?COUCHDB_USER is not set}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?COUCHDB_PASSWORD is not set}
     restart: unless-stopped
+    profiles:
+      - database-only
 
-  # (optional) replication-backend. Only deployed if "COMPOSE_PROFILES=replication-backend" is set in the `.env` file
+  couchdb-with-permissions:
+    image: couchdb:3
+    container_name: ${INSTANCE_NAME}-database
+    user: "1000:1000"
+    networks:
+      - internal_aam
+      - external_web
+    volumes:
+      - ./couchdb/data:/opt/couchdb/data
+      - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:?COUCHDB_USER is not set}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?COUCHDB_PASSWORD is not set}
+    restart: unless-stopped
+    profiles:
+      - with-permissions
+      - full-stack
+
+  # (optional) replication-backend. Only deployed if "COMPOSE_PROFILES" is "with-permissions" or "full-stack" is set in the `.env` file
   replication-backend:
     image: ghcr.io/aam-digital/replication-backend:latest
+    container_name: ${INSTANCE_NAME}-database-entrypoint
     networks:
-      - internal
+      - internal_aam
+      - external_web
     depends_on:
-      - couchdb
+      - couchdb-with-permissions
     environment:
-      DATABASE_URL: http://couchdb:5984
+      DATABASE_URL: http://couchdb-with-permissions:5984
       DATABASE_NAME: app
-      DATABASE_USER: ${COUCHDB_USER:-admin}
-      DATABASE_PASSWORD: ${COUCHDB_PASSWORD:?Admin password not set}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n${PUBLIC_KEY}\n-----END PUBLIC KEY-----"
+      DATABASE_USER: ${COUCHDB_USER}
+      DATABASE_PASSWORD: ${COUCHDB_PASSWORD}
+      JWT_SECRET: ${REPLICATION_BACKEND_JWT_SECRET:?REPLICATION_BACKEND_JWT_SECRET is not set}
+      JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n${REPLICATION_BACKEND_PUBLIC_KEY:?REPLICATION_BACKEND_PUBLIC_KEY is not set}\n-----END PUBLIC KEY-----"
       SENTRY_DSN: ${SENTRY_DSN}
       SENTRY_ENABLED: ${SENTRY_ENABLED}
-      SENTRY_INSTANCE_NAME: ${APP_URL}
+      SENTRY_INSTANCE_NAME: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}
       PORT: 5984
     restart: unless-stopped
     profiles:
-      - replication-backend
+      - with-permissions
+      - full-stack
 
-  # (optional) aam-backend-service (query-backend). Only deployed if "COMPOSE_PROFILES=aam-backend-service" is set in the `.env` file
+  # (optional) aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
   aam-backend-service:
-    image: ghcr.io/aam-digital/aam-backend-service:latest
-    expose:
-      - "3000"
+    image: ghcr.io/aam-digital/aam-backend-service:${AAM_BACKEND_SERVICE_VERSION:-latest}
+    container_name: ${INSTANCE_NAME}-aam-backend-service
     networks:
-      - internal
+      - internal_aam
+      - external_web
     depends_on:
-      - couchdb
+      - couchdb-with-permissions
+      - aam-backend-service-db
       - rabbitmq
     volumes:
-      - ./storage/query-backend/data:/aam-backend-service/bin/data
+      - ./storage/aam-backend-service/data:/aam-backend-service/bin/data
     env_file:
       - ./config/aam-backend-service/application.env
     restart: unless-stopped
     profiles:
-      - aam-backend-service
+      - full-stack
 
-  # (optional) needed for aam-backend-service (query-backend). Only deployed if "COMPOSE_PROFILES=aam-backend-service" is set in the `.env` file
+  aam-backend-service-db:
+    image: postgres:16.5-bookworm
+    container_name: ${INSTANCE_NAME}-aam-backend-service-db
+    networks:
+      - internal_aam
+    volumes:
+      - ./storage/aam-backend-service/postgresql-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: aam-backend-service
+      POSTGRES_USER:  ${COUCHDB_USER}
+      POSTGRES_PASSWORD: ${COUCHDB_PASSWORD}
+    restart: unless-stopped
+    profiles:
+      - full-stack
+
+  # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
   rabbitmq:
     image: rabbitmq:3-management-alpine
+    container_name: ${INSTANCE_NAME}-rabbitmq
     networks:
-      - internal
-    restart: always
+      - internal_aam
+    restart: unless-stopped
     volumes:
       - ./storage/rabbitmq/data:/var/lib/rabbitmq/
       - ./storage/rabbitmq/log:/var/log/rabbitmq
     profiles:
-      - aam-backend-service
+      - full-stack
 
-  # (optional) needed for aam-backend-service (query-backend). Only deployed if "COMPOSE_PROFILES=aam-backend-service" is set in the `.env` file
+  # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
   sqs:
     image: ghcr.io/aam-digital/aam-sqs-linux:latest
+    container_name: ${INSTANCE_NAME}-sqs
     networks:
-      - internal
+      - internal_aam
     depends_on:
-      - couchdb
-    restart: always
-    expose:
-      - "4984"
+      - couchdb-with-permissions
+    restart: unless-stopped
     volumes:
       - ./storage/sqs:/data
     environment:
-      SQS_COUCHDB_URL: http://couchdb:5984
+      SQS_COUCHDB_URL: http://couchdb-with-permissions:5984
     profiles:
-      - aam-backend-service
+      - full-stack
 
 networks:
-  internal:
-  nginx-proxy_default:
+  internal_aam:
+  external_web:
     external: true

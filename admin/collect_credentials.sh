@@ -4,7 +4,7 @@ initial=$PWD
 cd ${1:-/var/docker} || exit
 res="["
 for D in *; do
-        if [ -d "${D}" ] && [[ $D == ndb-* ]]; then
+        if [ -d "${D}" ] && [[ $D == c-* ]]; then
                 cd "$D" || continue ;
                 if [ -f ".env" ]
                 then
@@ -18,7 +18,7 @@ for D in *; do
                 cd ..
 
                 if [[ $pw == "version:" ]]; then continue; fi
-                res=$res$'\n\t{ "name": "'${D#*ndb-}'", "password": "'$pw'" },'
+                res=$res$'\n\t{ "name": "'${D#*c-}'", "password": "'$pw'" },'
         fi
 done
 res=${res::-1}  # Remove last comma

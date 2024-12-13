@@ -3,7 +3,10 @@ services:
     image: aamdigital/ndb-admin:latest
     volumes:
       - ./credentials.json:/app/dist/assets/credentials.json
+    user: 1000:1000
     environment:
+      PUID: 1000
+      PGID: 1000
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?No Keycloak password set}
       KEYCLOAK_URL: ${KEYCLOAK_URL:?No Keycloak URL set}
       DOMAIN: ${DOMAIN:?No domain set}
@@ -15,19 +18,15 @@ services:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     networks:
       - admin_api
-      - nginx-proxy_default
+      - external_web
     depends_on:
       - admin-ms
     volumes:
       - "./oauth2-proxy.cfg:/oauth2-proxy.cfg"
     command: --config /oauth2-proxy.cfg
-    environment:
-      VIRTUAL_PORT: 4180
-      VIRTUAL_HOST: $VIRTUAL_HOST
-      LETSENCRYPT_HOST: $LETSENCRYPT_HOST
     restart: unless-stopped
 
 networks:
   admin_api: {}
-  nginx-proxy_default:
+  external_web:
     external: true

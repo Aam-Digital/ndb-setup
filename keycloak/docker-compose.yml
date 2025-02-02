@@ -20,7 +20,7 @@ services:
     command: start --optimized --spi-theme-login-theme=aam-theme
     networks:
       - internal
-      - nginx-proxy_default
+      - external_web
     depends_on:
       - postgres
     restart: unless-stopped
@@ -43,11 +43,8 @@ services:
       - keycloak
     networks:
       - internal
-      - nginx-proxy_default
+      - external_web
     environment:
-      LETSENCRYPT_HOST: ${ACCOUNTS_URL:?No Accounts backend URL set}
-      VIRTUAL_HOST: $ACCOUNTS_URL
-      VIRTUAL_PORT: 3000
       CORS: "*"
       SENTRY_DSN: $SENTRY_DSN
       SENTRY_ENABLED: true
@@ -60,5 +57,5 @@ services:
 
 networks:
   internal:
-  nginx-proxy_default:
+  external_web:
     external: true

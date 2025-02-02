@@ -19,6 +19,8 @@ services:
     volumes:
       - ./config/dns-conf/hetzner.ini:/config/dns-conf/hetzner.ini
       - ./config/nginx/proxy-confs/aam-prod-3.subdomain.conf:/config/nginx/proxy-confs/aam-prod-3.subdomain.conf
+      - ./config/nginx/proxy-confs/keycloak.subdomain.conf:/config/nginx/proxy-confs/keycloak.subdomain.conf
+      - ./config/nginx/proxy-confs/accounts.subdomain.conf:/config/nginx/proxy-confs/accounts.subdomain.conf
       - ./config/nginx/proxy-confs/api.dev.subdomain.conf:/config/nginx/proxy-confs/api.dev.subdomain.conf
       - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
       - ./config/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf

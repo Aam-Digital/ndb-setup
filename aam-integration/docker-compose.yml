@@ -1,0 +1,30 @@
+services:
+  aam-integration:
+    image: ghcr.io/aam-digital/aam-integration:${AAM_INTEGRATION_VERSION:-latest}
+    container_name: aam-integration-${INSTANCE_NAME}
+    networks:
+      - internal_aam_integration
+      - external_web
+    depends_on:
+      - aam-integration-db
+    env_file:
+      - ./config/aam-integration/application.env
+    restart: unless-stopped
+
+  aam-integration-db:
+    image: postgres:16.5-bookworm
+    container_name: aam-integration-db-${INSTANCE_NAME}
+    networks:
+      - internal_aam_integration
+    volumes:
+      - ./data/aam-integration-db/postgresql-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: aam-integration
+      POSTGRES_USER:  ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    restart: unless-stopped
+
+networks:
+  internal_aam_integration:
+  external_web:
+    external: true

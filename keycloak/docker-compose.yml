@@ -2,8 +2,7 @@ version: '3'
 
 services:
   keycloak:
-    # Building from local Dockerfile
-    build: .
+    image: ghcr.io/aam-digital/aam-keycloak:23.0.7
     environment:
       # For all available options see https://www.keycloak.org/server/all-config
       KEYCLOAK_ADMIN: admin
@@ -13,9 +12,6 @@ services:
       KC_DB_PASSWORD: ${DB_PASSWORD:?No DB password set}
       KC_PROXY: edge
       KC_HOSTNAME: ${KEYCLOAK_URL:?No Keycloak URL set}
-      LETSENCRYPT_HOST: $KEYCLOAK_URL
-      VIRTUAL_HOST: $KEYCLOAK_URL
-      VIRTUAL_PORT: 8080
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme
       - ./aam-theme-prod-2:/opt/keycloak/themes/aam-theme-prod-2

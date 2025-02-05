@@ -21,8 +21,10 @@ services:
       - ./config/nginx/proxy-confs/aam-prod-3.subdomain.conf:/config/nginx/proxy-confs/aam-prod-3.subdomain.conf
       - ./config/nginx/proxy-confs/keycloak.dev.subdomain.conf:/config/nginx/proxy-confs/keycloak.dev.subdomain.conf
       - ./config/nginx/proxy-confs/keycloak.prod.subdomain.conf:/config/nginx/proxy-confs/keycloak.prod.subdomain.conf
-      - ./config/nginx/proxy-confs/accounts.subdomain.conf:/config/nginx/proxy-confs/accounts.subdomain.conf
+      - ./config/nginx/proxy-confs/accounts.dev.subdomain.conf:/config/nginx/proxy-confs/accounts.dev.subdomain.conf
+      - ./config/nginx/proxy-confs/accounts.prod.subdomain.conf:/config/nginx/proxy-confs/accounts.prod.subdomain.conf
       - ./config/nginx/proxy-confs/api.dev.subdomain.conf:/config/nginx/proxy-confs/api.dev.subdomain.conf
+      - ./config/nginx/proxy-confs/api.prod.subdomain.conf:/config/nginx/proxy-confs/api.prod.subdomain.conf
       - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
       - ./config/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf
       - ./config/nginx/site-confs/static.net.aam-digital.conf:/config/nginx/site-confs/static.net.aam-digital.conf

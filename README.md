@@ -122,17 +122,9 @@ For details information, check our [Report documentation](http://aam-digital.git
 1. Enable the reporting backend:
     - add `aam-backend-service` to you COMPOSE_PROFILES .env variable to activate that container in the docker compose: `COMPOSE_PROFILES=replication-backend,aam-backend-service`
     - add `AAM_BACKEND_SERVICE_URL=http://aam-backend-service:3000` to the .env file that feeds into the docker-compose.yml
-    - add an `application.env` for the backend (`config/aam-backend-service/application.env`) --> see [aam-services README](https://github.com/Aam-Digital/aam-services/blob/main/README.md)
+2. Set up Reporting API according to [aam-services README](https://github.com/Aam-Digital/aam-services/blob/main/README.md)
     - (re-up the docker compose and confirm the new containers are running)
-2. Create a "client" in Keycloak for login credentials:
-    - Log into Keycloak and open the "Clients" section of the realm
-    - Create a new client (type: OpenID Connect; Client authentication: On)
-    - In the "Credentials" tab of the new client, copy the client secret
-3. For integration with TolaData:
-    - In TolaData, navigate to Data Tables or User Profile and add Aam Digital credentials (customer_id: the realm / url prefix of the Aam Digital system; client id/secret: from Keycloak)
-4. Create `ReportConfig:` entities
-    - the API / backend reports only support the `"mode": "sql"`
-    - for details on report definitions, see https://aam-digital.github.io/ndb-core/documentation/additional-documentation/how-to-guides/create-a-report.html
+    - follow instructions there to set up an auth client to access results via API
 
 
 -----

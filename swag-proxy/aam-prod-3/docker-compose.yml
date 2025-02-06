@@ -1,7 +1,7 @@
 name: swag-proxy-aam-prod-3
 services:
   swag-proxy:
-    image: ghcr.io/linuxserver/swag:3.0.0-ls335
+    image: ghcr.io/linuxserver/swag:3.1.0-ls361
     networks:
       - external_web
     cap_add:

@@ -1,7 +1,7 @@
----
+name: swag-proxy-aam-prod-3
 services:
   swag-proxy:
-    image: ghcr.io/linuxserver/swag:3.0.0-ls335
+    image: ghcr.io/linuxserver/swag:3.1.0-ls361
     networks:
       - external_web
     cap_add:
@@ -19,7 +19,12 @@ services:
     volumes:
       - ./config/dns-conf/hetzner.ini:/config/dns-conf/hetzner.ini
       - ./config/nginx/proxy-confs/aam-prod-3.subdomain.conf:/config/nginx/proxy-confs/aam-prod-3.subdomain.conf
+      - ./config/nginx/proxy-confs/keycloak.dev.subdomain.conf:/config/nginx/proxy-confs/keycloak.dev.subdomain.conf
+      - ./config/nginx/proxy-confs/keycloak.prod.subdomain.conf:/config/nginx/proxy-confs/keycloak.prod.subdomain.conf
+      - ./config/nginx/proxy-confs/accounts.dev.subdomain.conf:/config/nginx/proxy-confs/accounts.dev.subdomain.conf
+      - ./config/nginx/proxy-confs/accounts.prod.subdomain.conf:/config/nginx/proxy-confs/accounts.prod.subdomain.conf
       - ./config/nginx/proxy-confs/api.dev.subdomain.conf:/config/nginx/proxy-confs/api.dev.subdomain.conf
+      - ./config/nginx/proxy-confs/api.prod.subdomain.conf:/config/nginx/proxy-confs/api.prod.subdomain.conf
       - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
       - ./config/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf
       - ./config/nginx/site-confs/static.net.aam-digital.conf:/config/nginx/site-confs/static.net.aam-digital.conf

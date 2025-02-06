@@ -1,9 +1,6 @@
-version: '3'
-
 services:
   keycloak:
-    # Building from local Dockerfile
-    build: .
+    image: ghcr.io/aam-digital/aam-keycloak:23.0.7
     environment:
       # For all available options see https://www.keycloak.org/server/all-config
       KEYCLOAK_ADMIN: admin
@@ -13,9 +10,6 @@ services:
       KC_DB_PASSWORD: ${DB_PASSWORD:?No DB password set}
       KC_PROXY: edge
       KC_HOSTNAME: ${KEYCLOAK_URL:?No Keycloak URL set}
-      LETSENCRYPT_HOST: $KEYCLOAK_URL
-      VIRTUAL_HOST: $KEYCLOAK_URL
-      VIRTUAL_PORT: 8080
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme
       - ./aam-theme-prod-2:/opt/keycloak/themes/aam-theme-prod-2
@@ -24,7 +18,7 @@ services:
     command: start --optimized --spi-theme-login-theme=aam-theme
     networks:
       - internal
-      - nginx-proxy_default
+      - external_web
     depends_on:
       - postgres
     restart: unless-stopped
@@ -47,11 +41,8 @@ services:
       - keycloak
     networks:
       - internal
-      - nginx-proxy_default
+      - external_web
     environment:
-      LETSENCRYPT_HOST: ${ACCOUNTS_URL:?No Accounts backend URL set}
-      VIRTUAL_HOST: $ACCOUNTS_URL
-      VIRTUAL_PORT: 3000
       CORS: "*"
       SENTRY_DSN: $SENTRY_DSN
       SENTRY_ENABLED: true
@@ -64,5 +55,5 @@ services:
 
 networks:
   internal:
-  nginx-proxy_default:
+  external_web:
     external: true

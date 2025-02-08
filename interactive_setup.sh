@@ -107,7 +107,7 @@ if [ "$app" == 0 ]; then
   sed -i "s/^APP_VERSION=.*/APP_VERSION=$appVersion/g" "$path/.env"
 
   # setting backend version. Pinned to prevent config conflicts
-  backendVersion=v1.10.0
+  backendVersion=v1.13.0
   sed -i "s/^AAM_BACKEND_SERVICE_VERSION=.*/AAM_BACKEND_SERVICE_VERSION=$backendVersion/g" "$path/.env"
 
   # default couchdb user
@@ -370,8 +370,12 @@ if [ "$aamBackendService" == 0 ]; then
       echo "SPRING_RABBITMQ_HOST=rabbitmq";
       echo "SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_ENABLED=true";
       echo "SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_MAXATTEMPTS=5";
+      echo "SPRING_DATASOURCE_URL=jdbc:postgresql://aam-backend-service-db:5432/aam-backend-service";
+      echo "SPRING_DATASOURCE_USERNAME=$couchDbUser";
+      echo "SPRING_DATASOURCE_PASSWORD=$couchDbPassword";
       echo "SPRING_SERVLET_MULTIPART_MAXFILESIZE=5MB";
       echo "LOGGING_LEVEL_COM_AAMDIGITAL_AAMBACKENDSERVICE=warn";
+      echo "FEATURES_SKILLAPI_MODE=disabled";
       echo "COUCHDBCLIENTCONFIGURATION_BASEPATH=http://couchdb-with-permissions:5984";
       echo "COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME=$couchDbUser";
       echo "COUCHDBCLIENTCONFIGURATION_BASICAUTHPASSWORD=$couchDbPassword";

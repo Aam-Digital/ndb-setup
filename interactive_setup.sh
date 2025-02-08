@@ -313,7 +313,7 @@ if [ "$app" == 0 ]; then
   fi
 fi
 
-(cd "$path" && docker compose down && docker stop "$org-database-entrypoint" && docker remove "$org-database-entrypoint")
+(cd "$path" && docker compose down && docker stop "$org-db-entrypoint" && docker remove "$org-db-entrypoint")
 
 #####
 # Ask for permission backend (replication-backend)

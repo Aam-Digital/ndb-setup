@@ -12,7 +12,7 @@ services:
 
   couchdb-only:
     image: couchdb:3
-    container_name: ${INSTANCE_NAME}-database-entrypoint
+    container_name: ${INSTANCE_NAME}-db-entrypoint
     user: "1000:1000"
     networks:
       - internal_aam
@@ -48,7 +48,7 @@ services:
   # (optional) replication-backend. Only deployed if "COMPOSE_PROFILES" is "with-permissions" or "full-stack" is set in the `.env` file
   replication-backend:
     image: ghcr.io/aam-digital/replication-backend:latest
-    container_name: ${INSTANCE_NAME}-database-entrypoint
+    container_name: ${INSTANCE_NAME}-db-entrypoint
     networks:
       - internal_aam
       - external_web

@@ -70,7 +70,7 @@ To start the required docker containers execute the following (this is only need
 Once done, applications can be connected with Keycloak through the `interactive_setup.sh`.
 
 ## 2-Factor-Auth
-Keycloak supports a second login factor.
+Keycloak supports a second login factor through the following methods:
 
 ### Authenticator app OTP
 The only built-in second factor ist OTP using a Authenticator app.
@@ -81,12 +81,22 @@ It can also be activated for everyone by changing the `Browser - Conditional OTP
 Through 3rd party libraries OTP via Email is supported.
 This also comes with the option to trust the device for a configured time period (during which you do not have to enter the OTP when logging in).
 
-To enable this feature visit `<KEYCLOAK_URL>/admin/master/console/#/<REALM>/authentication/`.
-If you created this realm using a recent version of the `realm_config.json` then you should find a flow with the name `Email 2FA`.
-Click on the 3 dot menu on the right of this flow and select `Bind flow` and select `Browser flow`.
+To enable this feature visit `<KEYCLOAK_URL>/admin/master/console/#/<REALM>/authentication/` (i.e. open the "Authentication" section of the Keycloak realm).
+If you created this realm using a recent version of the `realm_config.json` then you should find a flow with the name `Email 2FA`,
+otherwise see the steps below in the next section.
+
+#### Activating Email 2FA
+To activate 2FA over email, click on the 3 dot menu on the right of the `Email 2FA` flow and select `Bind flow` and select `Browser flow`.
 After saving, when trying to log in to the app you should be asked to enter the OTP which has been sent to the email that is associated with the username.
 
-If you don't see the `Email 2FA` flow you have to configure it manually.
+#### Deactivating Email 2FA
+Similar to the steps of activating the 2FA flow, to disable it you need to re-activate the normal "browser" flow:
+Click on the 3 dot menu on the right of the `browser` flow, select `Bind flow` and then select `Browser flow`.
+
+To disable email 2FA for only one individually user ... TODO
+
+#### Setting up Email OTP manually
+If the `Email 2FA` flow is not available in the realm (section "Authentication"), you can configure it manually:
 
 1. Click on the 3 dot menu of the `browser` flow and select duplicate
 2. Enter `Email 2FA` as name

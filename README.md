@@ -96,7 +96,10 @@ After saving, when trying to log in to the app you should be asked to enter the 
 Similar to the steps of activating the 2FA flow, to disable it you need to re-activate the normal "browser" flow:
 Click on the 3 dot menu on the right of the `browser` flow, select `Bind flow` and then select `Browser flow`.
 
-To disable email 2FA for only one individually user ... TODO
+To disable email 2FA for only one individually user assign the Keycloak User Role "no-email-2fa" to that user account to skip 2FA for that person.
+If the role does not exist yet, create it in the Keycloak Admin interface.
+(The logic of this special role is configured within the `Email 2FA` Authentication flow as a condition)
+
 
 #### Setting up Email OTP manually
 If the `Email 2FA` flow is not available in the realm (section "Authentication"), you can configure it manually:
@@ -106,7 +109,7 @@ If the `Email 2FA` flow is not available in the realm (section "Authentication")
 3. Delete the last two steps (`Condition - user configured` and `OTP form`)
 4. Click on the `+` button in the last row (`Email 2FA Browser - Conditional OTP`)
 5. Select `Add condition`, there select `Condition - Device Trusted` and click `Add`
-6. On the new step (`Condition - Device Trsuted`) click on `Disabled` and change it to `Required`
+6. On the new step (`Condition - Device Trusted`) click on `Disabled` and change it to `Required`
 7. Click on the cog icon next to `Required` and enter `trusted-config` as `Alias` and click `Save`
 8. Again click on the `+` icon for `Email 2FA Browser - Conditional OTP`
 9. Select `Add step`, there select `Email OTP` and click `Add`

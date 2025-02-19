@@ -96,9 +96,10 @@ After saving, when trying to log in to the app you should be asked to enter the 
 Similar to the steps of activating the 2FA flow, to disable it you need to re-activate the normal "browser" flow:
 Click on the 3 dot menu on the right of the `browser` flow, select `Bind flow` and then select `Browser flow`.
 
-To disable email 2FA for only one individually user assign the Keycloak User Role "no-email-2fa" to that user account to skip 2FA for that person.
-If the role does not exist yet, create it in the Keycloak Admin interface.
-(The logic of this special role is configured within the `Email 2FA` Authentication flow as a condition)
+_Disabling 2FA for a specific account can be configured but is not part of default setup yet. Please check with existing sample systems for the setup to make the following instructions work:_
+> To disable email 2FA for only one individually user assign the Keycloak User Role "no-email-2fa" to that user account to skip 2FA for that person.
+> If the role does not exist yet, create it in the Keycloak Admin interface.
+> (The logic of this special role is configured within the `Email 2FA` Authentication flow as a condition)
 
 
 #### Setting up Email OTP manually

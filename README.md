@@ -60,6 +60,9 @@ This setup repository comes with a [docker compose](https://github.com/Aam-Digit
 The system uses the [Keycloak](https://www.keycloak.org/) identity management system.
 All the required configuration can be found in the `keycloak` folder.
 
+We use a custom build of Keycloak that includes certain plugins required for 2-Factor-Auth.
+Plugin versions are managed within that custom docker image in [Aam-Digital/aam-cloud-infrastructure](https://github.com/Aam-Digital/aam-cloud-infrastructure).
+
 To start the required docker containers execute the following (this is only needed once on a server, you can skip these steps if you just want to add another Aam Digital instance to an existing keycloak server):
 1. Open the file `keycloak/.env`
 2. Set the password variables to secure passwords and assign valid urls for the Keycloak and [account backend](https://github.com/Aam-Digital/account-backend) (without `https://`)
@@ -70,7 +73,9 @@ To start the required docker containers execute the following (this is only need
 Once done, applications can be connected with Keycloak through the `interactive_setup.sh`.
 
 ## 2-Factor-Auth
-Keycloak supports a second login factor.
+Keycloak supports a second login factor through the methods described below:
+- Authenticator App
+- E-Mail OTP
 
 ### Authenticator app OTP
 The only built-in second factor ist OTP using a Authenticator app.
@@ -81,19 +86,33 @@ It can also be activated for everyone by changing the `Browser - Conditional OTP
 Through 3rd party libraries OTP via Email is supported.
 This also comes with the option to trust the device for a configured time period (during which you do not have to enter the OTP when logging in).
 
-To enable this feature visit `<KEYCLOAK_URL>/admin/master/console/#/<REALM>/authentication/`.
-If you created this realm using a recent version of the `realm_config.json` then you should find a flow with the name `Email 2FA`.
-Click on the 3 dot menu on the right of this flow and select `Bind flow` and select `Browser flow`.
+To enable this feature visit `<KEYCLOAK_URL>/admin/master/console/#/<REALM>/authentication/` (i.e. open the "Authentication" section of the Keycloak realm) and follow the described steps below ("Activating Email 2FA").
+If you created this realm using a recent version of the `realm_config.json` then you should find a flow with the name `Email 2FA`,
+otherwise see the steps below in the next section ("Setting up Email OTP manually").
+
+#### Activating Email 2FA
+To activate 2FA over email, click on the 3 dot menu on the right of the `Email 2FA` flow and select `Bind flow` and select `Browser flow`.
 After saving, when trying to log in to the app you should be asked to enter the OTP which has been sent to the email that is associated with the username.
 
-If you don't see the `Email 2FA` flow you have to configure it manually.
+#### Deactivating Email 2FA
+Similar to the steps of activating the 2FA flow, to disable it you need to re-activate the normal "browser" flow:
+Click on the 3 dot menu on the right of the `browser` flow, select `Bind flow` and then select `Browser flow`.
+
+_Disabling 2FA for a specific account can be configured but is not part of default setup yet. Please check with existing sample systems for the setup to make the following instructions work:_
+> To disable email 2FA for only one individually user assign the Keycloak User Role "no-email-2fa" to that user account to skip 2FA for that person.
+> If the role does not exist yet, create it in the Keycloak Admin interface.
+> (The logic of this special role is configured within the `Email 2FA` Authentication flow as a condition)
+
+
+#### Setting up Email OTP manually
+If the `Email 2FA` flow is not available in the realm (section "Authentication"), you can configure it manually:
 
 1. Click on the 3 dot menu of the `browser` flow and select duplicate
 2. Enter `Email 2FA` as name
 3. Delete the last two steps (`Condition - user configured` and `OTP form`)
 4. Click on the `+` button in the last row (`Email 2FA Browser - Conditional OTP`)
 5. Select `Add condition`, there select `Condition - Device Trusted` and click `Add`
-6. On the new step (`Condition - Device Trsuted`) click on `Disabled` and change it to `Required`
+6. On the new step (`Condition - Device Trusted`) click on `Disabled` and change it to `Required`
 7. Click on the cog icon next to `Required` and enter `trusted-config` as `Alias` and click `Save`
 8. Again click on the `+` icon for `Email 2FA Browser - Conditional OTP`
 9. Select `Add step`, there select `Email OTP` and click `Add`

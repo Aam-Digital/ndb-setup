@@ -73,7 +73,9 @@ To start the required docker containers execute the following (this is only need
 Once done, applications can be connected with Keycloak through the `interactive_setup.sh`.
 
 ## 2-Factor-Auth
-Keycloak supports a second login factor through the following methods:
+Keycloak supports a second login factor through the methods described below:
+- Authenticator App
+- E-Mail OTP
 
 ### Authenticator app OTP
 The only built-in second factor ist OTP using a Authenticator app.

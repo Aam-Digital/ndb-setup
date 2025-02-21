@@ -86,9 +86,9 @@ It can also be activated for everyone by changing the `Browser - Conditional OTP
 Through 3rd party libraries OTP via Email is supported.
 This also comes with the option to trust the device for a configured time period (during which you do not have to enter the OTP when logging in).
 
-To enable this feature visit `<KEYCLOAK_URL>/admin/master/console/#/<REALM>/authentication/` (i.e. open the "Authentication" section of the Keycloak realm).
+To enable this feature visit `<KEYCLOAK_URL>/admin/master/console/#/<REALM>/authentication/` (i.e. open the "Authentication" section of the Keycloak realm) and follow the described steps below ("Activating Email 2FA").
 If you created this realm using a recent version of the `realm_config.json` then you should find a flow with the name `Email 2FA`,
-otherwise see the steps below in the next section.
+otherwise see the steps below in the next section ("Setting up Email OTP manually").
 
 #### Activating Email 2FA
 To activate 2FA over email, click on the 3 dot menu on the right of the `Email 2FA` flow and select `Bind flow` and select `Browser flow`.

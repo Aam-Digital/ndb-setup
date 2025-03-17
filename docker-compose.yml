@@ -8,6 +8,7 @@ services:
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
+      - ./firebase-config.json:/usr/share/nginx/html/assets/firebase-config.json
     restart: unless-stopped
 
   couchdb-only:

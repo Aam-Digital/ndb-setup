@@ -99,8 +99,8 @@ while IFS='=' read -r key value; do
 
     # Überprüfen, ob der Wert (value) in der anderen Datei (check_file) vorkommt
     if grep -q "$key" "$path/config/aam-backend-service/application.env"; then
-#        sed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env.template" # linux
-        gsed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # macos
+        sed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # linux
+#        gsed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # macos
     else
         echo "Der Key '$key' mit dem Wert '$value' existiert NICHT mehr im template. Wert wird nicht übertragen"
     fi

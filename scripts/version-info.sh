@@ -34,13 +34,14 @@ getComposeProfiles() {
 }
 
 {
-echo -e "instance-name \t app-version \t backend-version \t export-api \t skilllab-api \t notification-api \t change-detection"
+echo -e "instance-name \t deployment-type \t app-version \t backend-version \t export-api \t skilllab-api \t notification-api \t change-detection"
 for D in *; do
         if [ -d "${D}" ] && [[ $D == c-* ]]; then
                 cd "$D" || exit;
                 instance_name="${D#c-}"
 
                 echo -e -n "$instance_name \t"
+                echo -e -n "$(getVar .env COMPOSE_PROFILES) \t"
                 echo -e -n "$(getVar .env APP_VERSION) \t"
                 echo -e -n "$(getVar .env AAM_BACKEND_SERVICE_VERSION) \t"
                 echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_EXPORTAPI_ENABLED)\t"

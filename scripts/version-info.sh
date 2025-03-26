@@ -4,9 +4,10 @@
 getVar() {
     local file="$1"
     local var="$2"
+    local value
 
     # grep sucht die Zeile mit der Variable, cut extrahiert den Wert
-    local value=$(grep "^$var=" "$file" | cut -d '=' -f2-)
+    value=$(grep "^$var=" "$file" | cut -d '=' -f2-)
 
     # Falls die Variable nicht existiert oder leer ist, eine Meldung ausgeben
     if [ -z "$value" ]; then
@@ -28,7 +29,6 @@ getComposeProfiles() {
           ;;
       *)
           echo "Unbekannter Wert: $raw_value"
-          return 1
           ;;
   esac
 }

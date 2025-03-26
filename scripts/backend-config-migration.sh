@@ -1,27 +1,18 @@
 #!/bin/bash
 
-# This script enable a specific feature for an instance.
-# All needed credentials are loaded from the Bitwarden Secrets Manager
-
-# how to use
+# This script will migrate the current backend config to the latest template.
+# A backup file is created. Existing backups will be overwritten.
 #
-# make sure to install the dependencies: ./install-dependencies.sh
+# How to use
 #
-# ./set-backend-features.sh <instance> <feature-name> <enable/disable>
-# example: ./set-backend-features.sh qm notification enable
+# ./backend-config-migration.sh <instance>
+# example: ./backend-config-migration.sh qm
 
 source "../setup.env"
 
-# check if BWS_ACCESS_TOKEN is set
-if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
-  echo "BWS_ACCESS_TOKEN is not set. Abort."
-  exit 1
-fi
-
-# set server-base to EU instance
-bws config server-base https://vault.bitwarden.eu
-
-##########
+##############################
+# ask for input data
+##############################
 
 if [ -n "$1" ]; then
   instance="$1"
@@ -30,21 +21,10 @@ else
   read -r instance
 fi
 
-#if [ -n "$2" ]; then
-#  featureName="$2"
-#else
-#  echo "What is the name of the feature? [export, notification]"
-#  read -r featureName
-#fi
-#
-#if [ -n "$3" ]; then
-#  action="$3"
-#else
-#  echo "Should the feature enabled or disabled? [enable, disable]"
-#  read -r action
-#fi
 
-##########
+##############################
+# setup
+##############################
 
 path="../../$PREFIX$instance"
 isBackendEnabled=0
@@ -57,11 +37,9 @@ backendEnabledCheck() {
   fi
 }
 
-#enableNotification() {
-#  # todo
-#}
-
-##########
+##############################
+# setup
+##############################
 
 # 1. check if backend is already enabled for this instance
 backendEnabledCheck
@@ -81,39 +59,26 @@ cp "../config-templates/application.env.template" "$path/config/aam-backend-serv
 
 # 4. migrate values from backend to template if value is still part of the template
 
-
-# Überprüfen, ob die .env-Datei bereits mit einer Leerzeile endet
+# check if .env files end on empty line and adds it if not
 if [ "$(tail -c 1 "$path/config/aam-backend-service/application.env_backup")" != $'\n' ]; then
-    # Falls nicht, eine Leerzeile hinzufügen
     echo "" >> "$path/config/aam-backend-service/application.env_backup"
-    echo "Eine Leerzeile wurde am Ende der Datei hinzugefügt."
-else
-    echo "Die Datei endet bereits mit einer Leerzeile."
+    echo "Empty line added to .env file."
 fi
 
 ## read backup file and check, if key is still part of the template
 while IFS='=' read -r key value; do
-    # Entferne mögliche Leerzeichen am Anfang und Ende
+    # remove spaces
     key=$(echo "$key" | xargs)
     value=$(echo "$value" | xargs)
 
-    # Überprüfen, ob der Wert (value) in der anderen Datei (check_file) vorkommt
+    # check, if key still exist in new template file
     if grep -q "$key" "$path/config/aam-backend-service/application.env"; then
         sed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # linux
 #        gsed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # macos
     else
-        echo "Der Key '$key' mit dem Wert '$value' existiert NICHT mehr im template. Wert wird nicht übertragen"
+        echo "Der Key '$key' mit dem Wert '$value' existiert NICHT mehr im template. Wert wird nicht übertragen."
     fi
 done < "$path/config/aam-backend-service/application.env_backup" # backup file
 
-## todo check for empty values in new template file and ask for filling
 
-# 5. enable feature
-
-
-
-# 6. set feature specific values
-
-# 7. remove backup
-
-# restart service
+echo "Backend config migration complete. Please restart the service."

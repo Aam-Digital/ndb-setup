@@ -35,6 +35,9 @@ fi
 path="../../$PREFIX$instance"
 isBackendEnabled=0
 
+# setting backend version. Pinned to prevent config conflicts
+backendVersion=v1.16.0
+
 ##############################
 # functions
 ##############################
@@ -42,9 +45,10 @@ isBackendEnabled=0
 setEnv() {
     local key="$1"
     local value="$2"
+    local path="$3"
 
-    sed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # linux
-    # gsed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # macos
+    sed -i "s|^$key=.*|$key=$value|g" "$path" # linux
+    # gsed -i "s|^$key=.*|$key=$value|g" "$path" # macos
 }
 
 backendEnabledCheck() {
@@ -71,6 +75,9 @@ fi
 
 (cd "$path" && docker compose down)
 
+# set aam-backend-service-version to supported version
+setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
+
 # backup current config
 cp "$path/config/aam-backend-service/application.env" "$path/config/aam-backend-service/application.env_backup"
 
@@ -93,7 +100,7 @@ while IFS='=' read -r key value; do
 
     # check, if key still exist in new template file
     if grep -q "$key" "$path/config/aam-backend-service/application.env"; then
-      setEnv "$key" "$value"
+      setEnv "$key" "$value" "$path/config/aam-backend-service/application.env"
     else
       echo "Der Key '$key' mit dem Wert '$value' existiert NICHT mehr im template. Wert wird nicht übertragen."
     fi

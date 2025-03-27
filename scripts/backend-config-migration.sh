@@ -7,6 +7,13 @@
 #
 # ./backend-config-migration.sh <instance>
 # example: ./backend-config-migration.sh qm
+#
+# Attention: on macos, see setEnv function and enable the macos line instead the linux line
+#
+
+##############################
+# setup
+##############################
 
 source "../setup.env"
 
@@ -21,13 +28,24 @@ else
   read -r instance
 fi
 
-
 ##############################
-# setup
+# variables
 ##############################
 
 path="../../$PREFIX$instance"
 isBackendEnabled=0
+
+##############################
+# functions
+##############################
+
+setEnv() {
+    local key="$1"
+    local value="$2"
+
+    sed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # linux
+    # gsed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # macos
+}
 
 backendEnabledCheck() {
   if [ ! -f "$path/config/aam-backend-service/application.env" ]; then
@@ -38,10 +56,10 @@ backendEnabledCheck() {
 }
 
 ##############################
-# setup
+# script
 ##############################
 
-# 1. check if backend is already enabled for this instance
+# check if backend is already enabled for this instance
 backendEnabledCheck
 
 if [ "$isBackendEnabled" == 0 ]; then
@@ -51,13 +69,13 @@ else
   echo ""
 fi
 
-# 2. backup current config
+# backup current config
 cp "$path/config/aam-backend-service/application.env" "$path/config/aam-backend-service/application.env_backup"
 
-# 3. copy template config
+# copy template config
 cp "../config-templates/application.env.template" "$path/config/aam-backend-service/application.env"
 
-# 4. migrate values from backend to template if value is still part of the template
+# migrate values from backend to template if value is still part of the template
 
 # check if .env files end on empty line and adds it if not
 if [ "$(tail -c 1 "$path/config/aam-backend-service/application.env_backup")" != $'\n' ]; then
@@ -65,7 +83,7 @@ if [ "$(tail -c 1 "$path/config/aam-backend-service/application.env_backup")" !=
     echo "Empty line added to .env file."
 fi
 
-## read backup file and check, if key is still part of the template
+# read backup file and check, if key is still part of the template
 while IFS='=' read -r key value; do
     # remove spaces
     key=$(echo "$key" | xargs)
@@ -73,10 +91,9 @@ while IFS='=' read -r key value; do
 
     # check, if key still exist in new template file
     if grep -q "$key" "$path/config/aam-backend-service/application.env"; then
-        sed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # linux
-#        gsed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # macos
+      setEnv "$key" "$value"
     else
-        echo "Der Key '$key' mit dem Wert '$value' existiert NICHT mehr im template. Wert wird nicht übertragen."
+      echo "Der Key '$key' mit dem Wert '$value' existiert NICHT mehr im template. Wert wird nicht übertragen."
     fi
 done < "$path/config/aam-backend-service/application.env_backup" # backup file
 

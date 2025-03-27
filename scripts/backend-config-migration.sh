@@ -69,6 +69,8 @@ else
   echo ""
 fi
 
+(cd "$path" && docker compose down)
+
 # backup current config
 cp "$path/config/aam-backend-service/application.env" "$path/config/aam-backend-service/application.env_backup"
 
@@ -97,5 +99,6 @@ while IFS='=' read -r key value; do
     fi
 done < "$path/config/aam-backend-service/application.env_backup" # backup file
 
+(cd "$path" && docker compose up -d)
 
-echo "Backend config migration complete. Please restart the service."
+echo "Backend config migration complete."

@@ -128,9 +128,6 @@ else
   echo ""
 fi
 
-# set aam-backend-service-version to supported version
-setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
-
 replicationBackendEnabledCheck
 
 if [ "$isReplicationBackendEnabled" == 0 ]; then
@@ -139,6 +136,11 @@ if [ "$isReplicationBackendEnabled" == 0 ]; then
 else
   echo ""
 fi
+
+(cd "$path" && docker compose down)
+
+# set aam-backend-service-version to supported version
+setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 
 # create backend config directory
 mkdir -p "$path/config/aam-backend-service"
@@ -167,4 +169,6 @@ setEnv SENTRY_SERVER_NAME "$instance.$DOMAIN" "$path/config/aam-backend-service/
 
 setEnv COMPOSE_PROFILES "full-stack" "$path/.env"
 
-echo "Backend enabled. Please restart the service."
+(cd "$path" && docker compose up -d)
+
+echo "Backend enabled."

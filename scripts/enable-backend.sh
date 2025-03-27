@@ -129,7 +129,7 @@ else
 fi
 
 # set aam-backend-service-version to supported version
-setEnv AAM_BACKEND_SEVICE_VERSION "$backendVersion" "$path/.env"
+setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 
 replicationBackendEnabledCheck
 

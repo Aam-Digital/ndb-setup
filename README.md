@@ -43,6 +43,11 @@ Have a look at `interactive_setup.sh` to see which .env files are loaded there.
 2. Prefix for created folders (variable `prefix`)
 3. the `.env` file of the keycloak deployment (see section [User management in Keycloak](#user-management-in-keycloak))
 
+## Enabling API Modules
+The [scripts folder](./scripts/) provides utilities to enable the backend and its specific API modules.
+Check the documentation in the comments at the top of each file for usage instructions.
+
+
 # Deploying under a domain name using nginx-proxy
 In order to make the application's docker container accessible under a public URL, you need to expose it using a tool of your choice.
 The system works well with the [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) docker. This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).

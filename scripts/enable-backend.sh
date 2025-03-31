@@ -57,7 +57,7 @@ isBackendEnabled=0
 isBackendConfigCreated=0
 isReplicationBackendEnabled=0
 
-# setting backend version. Pinned to prevent config conflicts
+# setting backend version. Use latest available version by default.
 backendVersion=
 
 ##############################

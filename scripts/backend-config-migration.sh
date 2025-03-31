@@ -35,8 +35,8 @@ fi
 path="../../$PREFIX$instance"
 isBackendConfigCreated=0
 
-# setting backend version. Pinned to prevent config conflicts
-backendVersion=v1.16.0
+# setting backend version. Use latest available version by default.
+backendVersion=
 
 ##############################
 # functions
@@ -59,9 +59,16 @@ isBackendConfigCreated() {
   fi
 }
 
+setLatestBackendVersion() {
+  backendVersion=$(curl -s -L "curl -s https://api.github.com/repos/Aam-Digital/aam-services/tags | jq -r 'map(select(.name | test(\"^aam-backend-service/\"))) | .[0].name | split(\"/\") | .[1]'" -H 'Accept: application/json')
+}
+
 ##############################
 # script
 ##############################
+
+setLatestBackendVersion
+echo "Latest backendVersion available: $backendVersion"
 
 # check if backend is already enabled for this instance
 isBackendConfigCreated

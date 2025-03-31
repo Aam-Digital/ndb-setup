@@ -41,8 +41,6 @@ SENTRY_AUTH_TOKEN=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b9a3e1eb-3925-4ed6-93
 SENTRY_DSN_APP=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b1b07d2d-05de-41c6-8ac6-b22700766968" | jq -r .value)
 SENTRY_DSN_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "a858a580-9643-4330-8667-b2270073d7a6" | jq -r .value)
 
-
-
 ##############################
 # variables
 ##############################
@@ -159,6 +157,7 @@ if [ "$app" == 0 ]; then
   cp ../couchdb.ini "$path/couchdb.ini"
   cp ../config.json "$path/config.json"
   cp ../docker-compose.yml "$path/docker-compose.yml"
+  cp ../firebase-config.json "$path/firebase-config.json"
   mkdir -p "$path/couchdb/data"
 
   setEnv INSTANCE_NAME "$org" "$path/.env"
@@ -265,7 +264,7 @@ if [ ! -f "$path/keycloak.json" ]; then
   sed -i "s/\"account_url\": \".*\"/\"account_url\": \"https:\/\/$ACCOUNTS_URL\"/g" "$path/config.json" # todo mac/linux
 
   # Set Keycloak public key for bearer auth
-  setEnv REPLICATION_BACKEND_PUBLIC_KEY "$publicKey" "$path/.env"
+  sed -i "s|^REPLICATION_BACKEND_PUBLIC_KEY=.*|REPLICATION_BACKEND_PUBLIC_KEY=$publicKey|g" "$path/.env" # todo mac/linux
   sed -i "s/<KID>/$kid/g" "$path/couchdb.ini" # todo mac/linux
   sed -i "s|<PUBLIC_KEY>|$publicKey|g" "$path/couchdb.ini" # todo mac/linux
 

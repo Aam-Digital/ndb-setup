@@ -83,7 +83,7 @@ isBackendConfigCreated() {
 }
 
 setLatestBackendVersion() {
-  backendVersion=$(curl -s -L "curl -s https://api.github.com/repos/Aam-Digital/aam-services/tags | jq -r 'map(select(.name | test(\"^aam-backend-service/\"))) | .[0].name | split(\"/\") | .[1]'" -H 'Accept: application/json')
+  backendVersion=$(curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]')
 }
 
 replicationBackendEnabledCheck() {

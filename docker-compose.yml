@@ -48,7 +48,7 @@ services:
 
   # (optional) replication-backend. Only deployed if "COMPOSE_PROFILES" is "with-permissions" or "full-stack" is set in the `.env` file
   replication-backend:
-    image: ghcr.io/aam-digital/replication-backend:latest
+    image: ghcr.io/aam-digital/replication-backend:${AAM_REPLICATION_BACKEND_VERSION:-latest}
     container_name: ${INSTANCE_NAME}-db-entrypoint
     networks:
       - internal_aam

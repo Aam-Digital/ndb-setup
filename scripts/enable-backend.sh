@@ -157,6 +157,7 @@ fi
 replicationBackendEnabledCheck
 
 if [ "$isReplicationBackendEnabled" == 0 ]; then
+  # all functionality should be the same with a direct CouchDB without replication-backend. However, some URLs will need to be adapted for this scenario
   echo "Replication Backend is required for backend. Please enable first. Abort."
   exit 1
 else

@@ -287,8 +287,20 @@ if [ ! -f "$path/keycloak.json" ]; then
     userId=${userId%%\"*}
     echo "User id $userId"
     roles=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_HOST/admin/realms/$org/roles")
+    echo "create roles... ($roles)"
     curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$roles" "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm"
+    echo "verify email..."
     curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="
+    echo "create user document in couchdb..."
+
+    (cd "$path" && docker compose up -d)
+
+    while [ "$status" != 200 ]; do
+      sleep 4
+      echo "Waiting for DB to be ready"
+      status=$(curl -s -o /dev/null  "https://$url/db/_utils/" -I -w "%{http_code}\n")
+    done
+
     curl -X PUT -u "$couchDbUser:$couchDbPassword" -H 'Content-Type: application/json' -d "{\"name\": \"$userName\"}" "https://$url/db/app/User:$userName"
   fi
 

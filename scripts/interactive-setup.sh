@@ -267,10 +267,25 @@ if [ ! -f "$path/keycloak.json" ]; then
   # Set Keycloak public key for bearer auth
   echo "set publicKey in .env"
   sed -i "s|^REPLICATION_BACKEND_PUBLIC_KEY=.*|REPLICATION_BACKEND_PUBLIC_KEY=$publicKey|g" "$path/.env" # todo mac/linux
+
   echo "set kid in .couchdb.ini"
   sed -i "s/<KID>/$kid/g" "$path/couchdb.ini" # todo mac/linux
+
   echo "set publicKey in couchdb.ini"
   sed -i "s|<PUBLIC_KEY>|$publicKey|g" "$path/couchdb.ini" # todo mac/linux
+
+  # wait for DB to be ready
+  (cd "$path" && docker compose up -d)
+  while [ "$status" != 200 ]; do
+    sleep 4
+    echo "Waiting for DB to be ready"
+    status=$(curl -s -o /dev/null  "https://$url/db/_utils/" -I -w "%{http_code}\n")
+  done
+  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/_users"
+  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/app"
+  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/report-calculation"
+  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/notification-webhook"
+  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/app-attachments"
 
   if [ -n "$4" ]; then
     userEmail="$4"
@@ -297,14 +312,6 @@ if [ ! -f "$path/keycloak.json" ]; then
     curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="
     echo "create user document in couchdb..."
 
-    (cd "$path" && docker compose up -d)
-
-    while [ "$status" != 200 ]; do
-      sleep 4
-      echo "Waiting for DB to be ready"
-      status=$(curl -s -o /dev/null  "https://$url/db/_utils/" -I -w "%{http_code}\n")
-    done
-
     curl -X PUT -u "$couchDbUser:$couchDbPassword" -H 'Content-Type: application/json' -d "{\"name\": \"$userName\"}" "https://$url/db/app/User:$userName"
   fi
 
@@ -317,16 +324,6 @@ fi
 
 if [ "$app" == 0 ]; then
   if [ -n "$baseConfig" ]; then
-
-    # wait for DB to be ready
-    (cd "$path" && docker compose up -d)
-
-    while [ "$status" != 200 ]; do
-      sleep 4
-      echo "Waiting for DB to be ready"
-      status=$(curl -s -o /dev/null  "https://$url/db/_utils/" -I -w "%{http_code}\n")
-    done
-
     # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
     curl -u "$couchDbUser:$couchDbPassword" -d "@baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$url/db/app/_bulk_docs"
     if [ -d "baseConfigs/$baseConfig/attachments" ]; then

@@ -124,6 +124,8 @@ if grep -Fxq "$org" "./blacklist.txt"; then
     exit 1
 fi
 
+echo "organisation name length: ${#org}"
+
 if [ ${#org} -ge 24 ]; then
     echo "Error: The organisation name must have less than 24 letters. Please try a shorter one."
     exit 1

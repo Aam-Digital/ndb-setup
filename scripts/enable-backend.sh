@@ -54,21 +54,36 @@ SENTRY_DSN_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "a858a580-9643-4330-8
 chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 
 isBackendEnabled=0
+isBackendConfigCreated=0
 isReplicationBackendEnabled=0
 
 # setting backend version. Pinned to prevent config conflicts
-backendVersion=v1.16.0
+backendVersion=
 
 ##############################
 # functions
 ##############################
 
 backendEnabledCheck() {
-  if [ ! -f "$path/config/aam-backend-service/application.env" ]; then
-    isBackendEnabled=0
-  else
+  composeProfiles=$(getVar "$path/.env" COMPOSE_PROFILES)
+
+  if [ "$composeProfiles" = "full-stack" ]; then
     isBackendEnabled=1
+  else
+    isBackendEnabled=0
   fi
+}
+
+isBackendConfigCreated() {
+  if [ ! -f "$path/config/aam-backend-service/application.env" ]; then
+    isBackendConfigCreated=0
+  else
+    isBackendConfigCreated=1
+  fi
+}
+
+setLatestBackendVersion() {
+  backendVersion=$(curl -s -L "curl -s https://api.github.com/repos/Aam-Digital/aam-services/tags | jq -r 'map(select(.name | test(\"^aam-backend-service/\"))) | .[0].name | split(\"/\") | .[1]'" -H 'Accept: application/json')
 }
 
 replicationBackendEnabledCheck() {
@@ -118,11 +133,22 @@ generate_password() {
 # script
 ##############################
 
+setLatestBackendVersion
+echo "Latest backendVersion available: $backendVersion"
+
 # check if backend is already enabled for this instance
 backendEnabledCheck
+isBackendConfigCreated
 
 if [ "$isBackendEnabled" == 1 ]; then
-  echo "Backend already enabled for '$instance'.Abort."
+  echo "Backend already enabled for '$instance'. Abort."
+  exit 1
+else
+  echo ""
+fi
+
+if [ "$isBackendConfigCreated" == 1 ]; then
+  echo "Backend config already created for '$instance'. Abort."
   exit 1
 else
   echo ""
@@ -145,8 +171,8 @@ setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 # create backend config directory
 mkdir -p "$path/config/aam-backend-service"
 
-# copy template config
-cp "../config-templates/application.env.template" "$path/config/aam-backend-service/application.env"
+# copy latest template config (from aam-services repository)
+curl -L -o "$path/config/aam-backend-service/application.env" "https://github.com/Aam-Digital/aam-services/blob/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
 
 generate_password
 

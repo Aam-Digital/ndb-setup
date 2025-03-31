@@ -33,7 +33,7 @@ fi
 ##############################
 
 path="../../$PREFIX$instance"
-isBackendEnabled=0
+isBackendConfigCreated=0
 
 # setting backend version. Pinned to prevent config conflicts
 backendVersion=v1.16.0
@@ -51,11 +51,11 @@ setEnv() {
     # gsed -i "s|^$key=.*|$key=$value|g" "$path" # macos
 }
 
-backendEnabledCheck() {
+isBackendConfigCreated() {
   if [ ! -f "$path/config/aam-backend-service/application.env" ]; then
-    isBackendEnabled=0
+    isBackendConfigCreated=0
   else
-    isBackendEnabled=1
+    isBackendConfigCreated=1
   fi
 }
 
@@ -64,10 +64,10 @@ backendEnabledCheck() {
 ##############################
 
 # check if backend is already enabled for this instance
-backendEnabledCheck
+isBackendConfigCreated
 
-if [ "$isBackendEnabled" == 0 ]; then
-  echo "No backend found for instance '$instance'. Please run './enable-backend.sh' first."
+if [ "$isBackendConfigCreated" == 0 ]; then
+  echo "No backend config found for instance '$instance'. Please run './enable-backend.sh' first."
   exit 1
 else
   echo ""

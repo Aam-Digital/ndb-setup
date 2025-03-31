@@ -137,7 +137,7 @@ curl -X "POST" "https://dns.hetzner.com/api/v1/records" \
      -H 'Content-Type: application/json' \
      -H "Auth-API-Token: $DNS_HETZNER_API_TOKEN" \
      -d "{
-  \"value\": \"$DNS_SERVER_NAME.$DOMAIN.\",
+  \"value\": \"$DNS_SERVER_NAME.aam-digital.net.\",
   \"type\": \"CNAME\",
   \"name\": \"$org\",
   \"zone_id\": \"$DNS_HETZNER_ZONE_ID_APP\"
@@ -261,11 +261,15 @@ if [ ! -f "$path/keycloak.json" ]; then
   # Get Keycloak config from API
   getKeycloakKey
   curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" -H "Authorization: Bearer $token" > "$path/keycloak.json"
+  echo "set account_url to config.json"
   sed -i "s/\"account_url\": \".*\"/\"account_url\": \"https:\/\/$ACCOUNTS_URL\"/g" "$path/config.json" # todo mac/linux
 
   # Set Keycloak public key for bearer auth
+  echo "set publicKey in .env"
   sed -i "s|^REPLICATION_BACKEND_PUBLIC_KEY=.*|REPLICATION_BACKEND_PUBLIC_KEY=$publicKey|g" "$path/.env" # todo mac/linux
+  echo "set kid in .couchdb.ini"
   sed -i "s/<KID>/$kid/g" "$path/couchdb.ini" # todo mac/linux
+  echo "set publicKey in couchdb.ini"
   sed -i "s|<PUBLIC_KEY>|$publicKey|g" "$path/couchdb.ini" # todo mac/linux
 
   if [ -n "$4" ]; then
@@ -287,7 +291,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     userId=${userId%%\"*}
     echo "User id $userId"
     roles=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_HOST/admin/realms/$org/roles")
-    echo "create roles... ($roles)"
+    echo "create roles..."
     curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$roles" "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm"
     echo "verify email..."
     curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="

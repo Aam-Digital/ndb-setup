@@ -325,11 +325,11 @@ fi
 if [ "$app" == 0 ]; then
   if [ -n "$baseConfig" ]; then
     # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
-    curl -u "$couchDbUser:$couchDbPassword" -d "@baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$url/db/app/_bulk_docs"
-    if [ -d "baseConfigs/$baseConfig/attachments" ]; then
+    curl -u "$couchDbUser:$couchDbPassword" -d "@../baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$url/db/app/_bulk_docs"
+    if [ -d "../baseConfigs/$baseConfig/attachments" ]; then
       # Uploading attachments - ONLY IMAGES ARE SUPPORTED
       # create folder inside 'attachments' with name of the entity containing images with name of the property
-      for dir in baseConfigs/"$baseConfig"/attachments/*
+      for dir in ../baseConfigs/"$baseConfig"/attachments/*
       do
         entity=${dir##*/}
         # Create parent document

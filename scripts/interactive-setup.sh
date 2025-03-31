@@ -147,16 +147,16 @@ curl -X "POST" "https://dns.hetzner.com/api/v1/records" \
 # Create folder for instance if not already existing
 ####
 
-path="../$PREFIX$org"
+path="../../$PREFIX$org"
 app=$(docker ps | grep -ic "$org-app")
 
 if [ "$app" == 0 ]; then
   echo "Setting up new instance '$org'"
   mkdir "$path"
-  cp .env.template "$path/.env"
-  cp couchdb.ini "$path/couchdb.ini"
-  cp config.json "$path/config.json"
-  cp docker-compose.yml "$path/docker-compose.yml"
+  cp ../.env.template "$path/.env"
+  cp ../couchdb.ini "$path/couchdb.ini"
+  cp ../config.json "$path/config.json"
+  cp ../docker-compose.yml "$path/docker-compose.yml"
   mkdir -p "$path/couchdb/data"
 
   setEnv INSTANCE_NAME "$org" "$path/.env"
@@ -213,7 +213,7 @@ if [ "$app" == 0 ]; then
       baseConfig=default
     fi
 
-    if [ ! -d "./baseConfigs/$baseConfig" ]; then
+    if [ ! -d "../baseConfigs/$baseConfig" ]; then
       echo "ERROR Invalid base config '$baseConfig'. Abort."
       exit 1
     fi
@@ -243,13 +243,13 @@ if [ ! -f "$path/keycloak.json" ]; then
   curl -X "POST" "https://$KEYCLOAK_HOST/admin/realms" \
        -H "Authorization: Bearer $token" \
        -H "Content-Type: application/json" \
-       -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' ./baseConfigs/"$baseConfig"/realm_config.json)"
+       -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' ../baseConfigs/"$baseConfig"/realm_config.json)"
 
   # create a client
   clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$org/clients" \
                         -H "Authorization: Bearer $token" \
                         -H "Content-Type: application/json" \
-                        -d "$(jq '.baseUrl = "https://'"$url"'"' ./keycloak/client_config.json)")
+                        -d "$(jq '.baseUrl = "https://'"$url"'"' ../keycloak/client_config.json)")
 
   # Extrahiere den Location-Header
   location=$(echo "$clientResponse" | grep -i "^location:")
@@ -334,12 +334,12 @@ if [ "$app" == 0 ]; then
         done
       done
     fi
-    if [ -d "baseConfigs/$baseConfig/assets" ]; then
-      for dir in baseConfigs/"$baseConfig"/assets/*
+    if [ -d "../baseConfigs/$baseConfig/assets" ]; then
+      for dir in ../baseConfigs/"$baseConfig"/assets/*
       do
         cp -r "$dir" "$path"
         folder=${dir##*/}
-        sed -i "s|assets/config.json|assets/config.json\n      - ./$folder:/usr/share/nginx/html/assets/$folder|g" "$path/docker-compose.yml" # todo mac/linux
+        sed -i "s|assets/config.json|assets/config.json\n      - ../$folder:/usr/share/nginx/html/assets/$folder|g" "$path/docker-compose.yml" # todo mac/linux
       done
     fi
   fi

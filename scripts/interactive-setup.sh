@@ -479,7 +479,7 @@ fi
 if [ "$app" == 0 ]; then
   if [ -n "$9" ]; then
     enableSentry="$9"
-  elsefe
+  else
     echo "Do you want to enable Sentry logging?[y/n]"
     read -r enableSentry
   fi

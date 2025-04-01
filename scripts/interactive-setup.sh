@@ -487,6 +487,7 @@ if [ "$app" == 0 ]; then
   if [ "$enableSentry" == "y" ] || [ "$enableSentry" == "Y" ]; then
     setEnv SENTRY_DSN "$SENTRY_DSN_APP" "$path/.env"
     setEnv SENTRY_ENABLED "true" "$path/.env"
+    setEnv SENTRY_ENVIRONMENT "production" "$path/.env"
   else
     setEnv SENTRY_LOGGING_ENABLED "false" "$path/config/aam-backend-service/application.env"
   fi

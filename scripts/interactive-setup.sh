@@ -154,11 +154,11 @@ app=$(docker ps | grep -ic "$org-app")
 if [ "$app" == 0 ]; then
   echo "Setting up new instance '$org'"
   mkdir "$path"
-  cp ../.env.template "$path/.env"
-  cp ../couchdb.ini "$path/couchdb.ini"
-  cp ../config.json "$path/config.json"
-  cp ../docker-compose.yml "$path/docker-compose.yml"
-  cp ../firebase-config.json "$path/firebase-config.json"
+  cp $baseDirectory/ndb-setup/.env.template "$path/.env"
+  cp $baseDirectory/ndb-setup/couchdb.ini "$path/couchdb.ini"
+  cp $baseDirectory/ndb-setup/config.json "$path/config.json"
+  cp $baseDirectory/ndb-setup/docker-compose.yml "$path/docker-compose.yml"
+  cp $baseDirectory/ndb-setup/firebase-config.json "$path/firebase-config.json"
   mkdir -p "$path/couchdb/data"
 
   setEnv INSTANCE_NAME "$org" "$path/.env"
@@ -245,13 +245,13 @@ if [ ! -f "$path/keycloak.json" ]; then
   curl -X "POST" "https://$KEYCLOAK_HOST/admin/realms" \
        -H "Authorization: Bearer $token" \
        -H "Content-Type: application/json" \
-       -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' ../baseConfigs/"$baseConfig"/realm_config.json)"
+       -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' $baseDirectory/ndb-setup/baseConfigs/"$baseConfig"/realm_config.json)"
 
   # create a client
   clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$org/clients" \
                         -H "Authorization: Bearer $token" \
                         -H "Content-Type: application/json" \
-                        -d "$(jq '.baseUrl = "https://'"$url"'"' ../keycloak/client_config.json)")
+                        -d "$(jq '.baseUrl = "https://'"$url"'"' $baseDirectory/ndb-setup/keycloak/client_config.json)")
 
   # Extrahiere den Location-Header
   location=$(echo "$clientResponse" | grep -i "^location:")

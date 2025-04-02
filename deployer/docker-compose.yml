@@ -1,6 +1,6 @@
 services:
   deployer-ms:
-    image: aamdigital/deployer-ms:latest
+    image: ghcr.io/aam-digital/deployer-backend/deployer-api:pr-8
     user: 1000:1000
     environment:
       PUID: 1000

@@ -18,7 +18,8 @@
 # setup
 ##############################
 
-source "../setup.env"
+baseDirectory="/var/docker"
+source "$baseDirectory/ndb-setup/setup.env"
 
 # check if BWS_ACCESS_TOKEN is set
 if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
@@ -117,7 +118,7 @@ fi
 # always ensure org is lowercase to avoid problems with keycloak realms being case sensitive
 org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 
-if grep -Fxq "$org" "./blacklist.txt"; then
+if grep -Fxq "$org" "$baseDirectory/ndb-setup/scripts/blacklist.txt"; then
     echo "Error: The organisation name '$org' is blacklisted. Please try another one."
     exit 1
 fi
@@ -147,7 +148,7 @@ curl -X "POST" "https://dns.hetzner.com/api/v1/records" \
 # Create folder for instance if not already existing
 ####
 
-path="../../$PREFIX$org"
+path="$baseDirectory/$PREFIX$org"
 app=$(docker ps | grep -ic "$org-app")
 
 if [ "$app" == 0 ]; then
@@ -214,7 +215,7 @@ if [ "$app" == 0 ]; then
       baseConfig=default
     fi
 
-    if [ ! -d "../baseConfigs/$baseConfig" ]; then
+    if [ ! -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig" ]; then
       echo "ERROR Invalid base config '$baseConfig'. Abort."
       exit 1
     fi
@@ -325,11 +326,11 @@ fi
 if [ "$app" == 0 ]; then
   if [ -n "$baseConfig" ]; then
     # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
-    curl -u "$couchDbUser:$couchDbPassword" -d "@../baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$url/db/app/_bulk_docs"
-    if [ -d "../baseConfigs/$baseConfig/attachments" ]; then
+    curl -u "$couchDbUser:$couchDbPassword" -d "@$baseDirectory/ndb-setup/baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$url/db/app/_bulk_docs"
+    if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/attachments" ]; then
       # Uploading attachments - ONLY IMAGES ARE SUPPORTED
       # create folder inside 'attachments' with name of the entity containing images with name of the property
-      for dir in ../baseConfigs/"$baseConfig"/attachments/*
+      for dir in "$baseDirectory"/ndb-setup/baseConfigs/"$baseConfig"/attachments/*
       do
         entity=${dir##*/}
         # Create parent document
@@ -348,8 +349,8 @@ if [ "$app" == 0 ]; then
         done
       done
     fi
-    if [ -d "../baseConfigs/$baseConfig/assets" ]; then
-      for dir in ../baseConfigs/"$baseConfig"/assets/*
+    if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/assets" ]; then
+      for dir in "$baseDirectory"/ndb-setup/baseConfigs/"$baseConfig"/assets/*
       do
         cp -r "$dir" "$path"
         folder=${dir##*/}

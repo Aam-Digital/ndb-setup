@@ -48,18 +48,17 @@ The [scripts folder](./scripts/) provides utilities to enable the backend and it
 Check the documentation in the comments at the top of each file for usage instructions.
 
 
-# Deploying under a domain name using nginx-proxy
+# Deploying under a domain name using swag-proxy
 In order to make the application's docker container accessible under a public URL, you need to expose it using a tool of your choice.
-The system works well with the [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) docker. This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).
+The system works well with the [swag-proxy](https://docs.linuxserver.io/general/swag/). This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).
 
-This setup repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/nginx-proxy/docker-compose.yml) for setting up the nginx-proxy.
+This setup repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/swag-proxy/aam-prod-2/docker-compose.yml) for setting up the swag-proxy. (we have multiple production instances, so as an example the aam-prod-2 config)
 
 1. Create the required network
-   > docker network create nginx-proxy_default
-2. In `nginx-proxy/docker-compose.yml` set `DEFAULT_EMAIL` to a valid email address
+   > docker network create external_web
+2. In `swag-proxy/docker-compose.yml` set `EMAIL` to a valid email address and adapt the DOMAINS config to match your setup. 
 3. Start the required containers (this is only needed once on a server)
    > cd nginx-proxy && docker-compose up -d  
-4. Set the `VIRTUAL_HOST`and`LETSENCRYPT_HOST` as environment variables on new docker containers to define under which URL they should be reachable
 
 # User management in Keycloak
 The system uses the [Keycloak](https://www.keycloak.org/) identity management system.

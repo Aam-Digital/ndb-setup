@@ -83,7 +83,7 @@ isBackendConfigCreated() {
 }
 
 setLatestBackendVersion() {
-  backendVersion=$(curl -s -L "curl -s https://api.github.com/repos/Aam-Digital/aam-services/tags | jq -r 'map(select(.name | test(\"^aam-backend-service/\"))) | .[0].name | split(\"/\") | .[1]'" -H 'Accept: application/json')
+  backendVersion=$(curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]')
 }
 
 replicationBackendEnabledCheck() {
@@ -173,7 +173,7 @@ setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 mkdir -p "$path/config/aam-backend-service"
 
 # copy latest template config (from aam-services repository)
-curl -L -o "$path/config/aam-backend-service/application.env" "https://github.com/Aam-Digital/aam-services/blob/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
+curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
 
 generate_password
 

@@ -1221,6 +1221,8 @@
       "_id": "SiteSettings:global",
       "siteName": "Aam Digital"
     },
+
+
     {
       "_id": "Config:SetupWizard",
       "data": {
@@ -1270,7 +1272,9 @@
           }
         ]
       }
-    }
+    },
+
+
     {
       "_id": "ConfigurableEnum:attendance-status",
       "values": [
@@ -1397,6 +1401,54 @@
           "label": "Urgent Follow-Up"
         }
       ]
+    },
+
+
+    {
+      "_id": "Config:Permissions",
+      "data": {
+        "public": [
+          {
+            "subject": [
+              "Config",
+              "SiteSettings",
+              "PublicFormConfig",
+              "ConfigurableEnum"
+            ],
+            "action": "read"
+          }
+        ],
+        "default": [
+          {
+            "subject": [
+              "Config",
+              "SiteSettings",
+              "PublicFormConfig",
+              "ConfigurableEnum"
+            ],
+            "action": "read"
+          },
+          {
+            "subject": [
+              "NotificationConfig",
+              "NotificationEvent"
+            ],
+            "action": "manage"
+          }
+        ],
+        "user_app": [
+          {
+            "subject": "all",
+            "action": "manage"
+          }
+        ],
+        "admin_app": [
+          {
+            "subject": "all",
+            "action": "manage"
+          }
+        ]
+      }
     }
   ]
 }

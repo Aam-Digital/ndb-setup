@@ -55,7 +55,6 @@
         "description": "Users assigned to this group, will not asked for 2FA email ",
         "composite": false,
         "clientRole": false,
-        "containerId": "df3644b6-95d7-4465-b41f-a88231f25d26",
         "attributes": {}
       },
       {
@@ -767,7 +766,7 @@
       "alias": "CONFIGURE_TOTP",
       "name": "Configure OTP",
       "providerId": "CONFIGURE_TOTP",
-      "enabled": true,
+      "enabled": false,
       "defaultAction": false,
       "priority": 10,
       "config": {}
@@ -845,7 +844,7 @@
       "config": {}
     }
   ],
-  "browserFlow": "Email 2FA",
+  "browserFlow": "browser",
   "clientScopes": [
     {
       "name": "email",

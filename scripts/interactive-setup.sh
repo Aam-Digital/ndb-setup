@@ -310,7 +310,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     echo "create roles..."
     curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$roles" "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm"
     echo "enable 2fa for user..."
-    curl -X DELETE "https://$KEYCLOAK_HOST/realms/$org/users/$userId/role-mappings/realm" \
+    curl -X DELETE "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm" \
       -H "Authorization: Bearer $token" \
       -H "Content-Type: application/json" \
       -d '[{ "name": "no-email-2fa" }]'

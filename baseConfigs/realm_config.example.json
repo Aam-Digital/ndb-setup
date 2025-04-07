@@ -51,6 +51,14 @@
         "attributes": {}
       },
       {
+        "name": "no-email-2fa",
+        "description": "Users assigned to this group, will not asked for 2FA email ",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "df3644b6-95d7-4465-b41f-a88231f25d26",
+        "attributes": {}
+      },
+      {
         "name": "user_app",
         "description": "Default rule which every user should have",
         "composite": false,
@@ -167,13 +175,13 @@
           "requirement": "ALTERNATIVE",
           "priority": 30,
           "autheticatorFlow": true,
-          "flowAlias": "forms and OTP",
+          "flowAlias": "Email 2FA forms",
           "userSetupAllowed": false
         }
       ]
     },
     {
-      "alias": "forms and OTP",
+      "alias": "Email 2FA forms",
       "description": "Username, password, otp and other auth forms.",
       "providerId": "basic-flow",
       "topLevel": false,
@@ -192,7 +200,7 @@
           "requirement": "CONDITIONAL",
           "priority": 11,
           "autheticatorFlow": true,
-          "flowAlias": "email OTP",
+          "flowAlias": "Email 2FA Browser - Conditional OTP",
           "userSetupAllowed": false
         }
       ]
@@ -481,15 +489,15 @@
       ]
     },
     {
-      "alias": "email OTP",
-      "description": "",
+      "alias": "Email 2FA Browser - Conditional OTP",
+      "description": "Flow to determine if the OTP is required for the authentication",
       "providerId": "basic-flow",
       "topLevel": false,
       "builtIn": false,
       "authenticationExecutions": [
         {
-          "authenticatorConfig": "trusted-config",
-          "authenticator": "trusted-device-condition",
+          "authenticatorConfig": "email",
+          "authenticator": "conditional-user-attribute",
           "authenticatorFlow": false,
           "requirement": "REQUIRED",
           "priority": 0,
@@ -497,7 +505,8 @@
           "userSetupAllowed": false
         },
         {
-          "authenticator": "email-authenticator",
+          "authenticatorConfig": "no-email-2fa",
+          "authenticator": "conditional-user-role",
           "authenticatorFlow": false,
           "requirement": "REQUIRED",
           "priority": 1,
@@ -505,10 +514,29 @@
           "userSetupAllowed": false
         },
         {
-          "authenticator": "trusted-device-authenticator",
+          "authenticatorConfig": "trusted-config",
+          "authenticator": "trusted-device-condition",
           "authenticatorFlow": false,
           "requirement": "REQUIRED",
           "priority": 2,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorConfig": "otp",
+          "authenticator": "email-authenticator",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 3,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorConfig": "register-trusted-device",
+          "authenticator": "trusted-device-authenticator",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 4,
           "autheticatorFlow": false,
           "userSetupAllowed": false
         }
@@ -691,6 +719,31 @@
       }
     },
     {
+      "alias": "email",
+      "config": {
+        "attribute_name": "email",
+        "not": "true"
+      }
+    },
+    {
+      "alias": "no-email-2fa",
+      "config": {
+        "condUserRole": "no-email-2fa",
+        "negate": "true"
+      }
+    },
+    {
+      "alias": "otp",
+      "config": {
+        "length": "6",
+        "ttl": "300"
+      }
+    },
+    {
+      "alias": "register-trusted-device",
+      "config": {}
+    },
+    {
       "alias": "review profile config",
       "config": {
         "update.profile.on.first.login": "missing"
@@ -701,8 +754,98 @@
       "config": {
         "negate": "true"
       }
+    },
+    {
+      "alias": "trusted-config",
+      "config": {
+        "negate": "true"
+      }
     }
   ],
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 10,
+      "config": {}
+    },
+    {
+      "alias": "TERMS_AND_CONDITIONS",
+      "name": "Terms and Conditions",
+      "providerId": "TERMS_AND_CONDITIONS",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 20,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "name": "Update Profile",
+      "providerId": "UPDATE_PROFILE",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 40,
+      "config": {}
+    },
+    {
+      "alias": "VERIFY_EMAIL",
+      "name": "Verify Email",
+      "providerId": "VERIFY_EMAIL",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 50,
+      "config": {}
+    },
+    {
+      "alias": "delete_account",
+      "name": "Delete Account",
+      "providerId": "delete_account",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 60,
+      "config": {}
+    },
+    {
+      "alias": "webauthn-register",
+      "name": "Webauthn Register",
+      "providerId": "webauthn-register",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 70,
+      "config": {}
+    },
+    {
+      "alias": "webauthn-register-passwordless",
+      "name": "Webauthn Register Passwordless",
+      "providerId": "webauthn-register-passwordless",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 80,
+      "config": {}
+    },
+    {
+      "alias": "update_user_locale",
+      "name": "Update User Locale",
+      "providerId": "update_user_locale",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 1000,
+      "config": {}
+    }
+  ],
+  "browserFlow": "Email 2FA",
   "clientScopes": [
     {
       "name": "email",

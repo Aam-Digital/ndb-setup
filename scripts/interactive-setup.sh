@@ -313,7 +313,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     curl -X DELETE "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm" \
       -H "Authorization: Bearer $token" \
       -H "Content-Type: application/json" \
-      -d '[{ "name": "no-email-2fa" }]'
+      -d '{ "name": "no-email-2fa" }'
     echo "verify email..."
     curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="
     echo "create user document in couchdb..."

@@ -309,12 +309,8 @@ if [ ! -f "$path/keycloak.json" ]; then
     curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="
 
     echo "enable 2fa for user..."
-    curl -X GET "https://$KEYCLOAK_HOST/admin/realms/$org/roles" -H "Authorization: Bearer $token" | jq .
-
     roleId=$(curl -X GET "https://$KEYCLOAK_HOST/admin/realms/$org/roles" -H "Authorization: Bearer $token" | jq -r '.[] | select(.name=="no-email-2fa") | .id')
-
     echo "$roleId"
-
     if [ -z "$roleId" ]; then
       echo "Fehler: Keine Rolle 'no-email-2fa' gefunden."
     else

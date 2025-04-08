@@ -317,7 +317,7 @@ if [ ! -f "$path/keycloak.json" ]; then
       curl -X DELETE "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm" \
         -H "Authorization: Bearer $token" \
         -H "Content-Type: application/json" \
-        -d "[{\"id\": \"$roleId\"}]"
+        -d "{\"id\": \"$roleId\"}"
     fi
 
     echo "create user document in couchdb..."

@@ -13,4 +13,4 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 . "$HOME/.cargo/env"
 
 # install Bitwarden Secrets Manager CLI https://github.com/bitwarden/sdk/tree/main/crates/bws
-cargo install bws
+cargo install bws --locked

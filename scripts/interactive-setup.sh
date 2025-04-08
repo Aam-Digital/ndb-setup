@@ -416,7 +416,7 @@ if [ "$aamBackendService" == 0 ]; then
   fi
 
   if [ "$withAamBackendService" == "y" ] || [ "$withAamBackendService" == "Y" ]; then
-    ./enable-backend.sh "$org"
+    $baseDirectory/ndb-setup/scripts/enable-backend.sh "$org"
     aamBackendService=1
   fi
 fi

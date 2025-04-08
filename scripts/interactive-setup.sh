@@ -309,12 +309,20 @@ if [ ! -f "$path/keycloak.json" ]; then
     curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="
 
     echo "enable 2fa for user..."
-    roleId=$(curl -X GET "http://$KEYCLOAK_HOST/realms/$org/roles" -H "Authorization: Bearer $token" | jq -r '.[] | select(.name=="no-email-2fa") | .id')
+    curl -X GET "https://$KEYCLOAK_HOST/realms/$org/roles" -H "Authorization: Bearer $token" | jq .
 
-    curl -X DELETE "http://$KEYCLOAK_HOST/realms/$org/users/$userId/role-mappings/realm" \
-      -H "Authorization: Bearer $token" \
-      -H "Content-Type: application/json" \
-      -d "[{\"id\": \"$roleId\"}]"
+    roleId=$(curl -X GET "https://$KEYCLOAK_HOST/realms/$org/roles" -H "Authorization: Bearer $token" | jq -r '.[] | select(.name=="no-email-2fa") | .id')
+
+    echo "$roleId"
+
+    if [ -z "$roleId" ]; then
+      echo "Fehler: Keine Rolle 'no-email-2fa' gefunden."
+    else
+      curl -X DELETE "https://$KEYCLOAK_HOST/realms/$org/users/$userId/role-mappings/realm" \
+        -H "Authorization: Bearer $token" \
+        -H "Content-Type: application/json" \
+        -d "[{\"id\": \"$roleId\"}]"
+    fi
 
     echo "create user document in couchdb..."
     curl -X PUT -u "$couchDbUser:$couchDbPassword" -H 'Content-Type: application/json' -d "{\"name\": \"$userName\"}" "https://$url/db/app/User:$userName"

@@ -263,7 +263,7 @@ if [ ! -f "$path/keycloak.json" ]; then
   getKeycloakKey
   curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" -H "Authorization: Bearer $token" > "$path/keycloak.json"
   echo "set account_url to config.json"
-  sed -i "s#\"account_url\": \".*\"#\"account_url\": \"https:\/\/$ACCOUNTS_URL\"#g" "$path/config.json" # todo mac/linux
+  sed -i "s#\"account_url\": \".*\"#\"account_url\": \"$ACCOUNTS_URL\"#g" "$path/config.json" # todo mac/linux
 
   # Set Keycloak public key for bearer auth
   echo "set publicKey in .env"

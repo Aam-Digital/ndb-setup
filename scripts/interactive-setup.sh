@@ -314,7 +314,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     if [ -z "$roleId" ]; then
       echo "Fehler: Keine Rolle 'no-email-2fa' gefunden."
     else
-      curl -X DELETE "https://$KEYCLOAK_HOST/realms/$org/users/$userId/role-mappings/realm" \
+      curl -X DELETE "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm" \
         -H "Authorization: Bearer $token" \
         -H "Content-Type: application/json" \
         -d "[{\"id\": \"$roleId\"}]"

@@ -17,7 +17,8 @@
 # setup
 ##############################
 
-source "../setup.env"
+baseDirectory="/var/docker"
+source "$baseDirectory/ndb-setup/setup.env"
 
 # check if BWS_ACCESS_TOKEN is set
 if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
@@ -43,7 +44,7 @@ fi
 # variables
 ##############################
 
-path="../../$PREFIX$instance"
+path="$baseDirectory/$PREFIX$instance"
 
 # load secrets from Bitwarden Secret Manager
 RENDER_API_CLIENT_ID_DEV=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b53d7a1d-220e-4e07-b1f9-b22700711f79" | jq -r .value)

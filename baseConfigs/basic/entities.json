@@ -1053,6 +1053,8 @@
           }
         },
         "entity:School": {
+          "label": "School",
+          "labelPlural": "Schools",
           "attributes": {
             "name": {
               "dataType": "string",
@@ -1131,7 +1133,13 @@
           }
         },
         "entity:User": {
+          "label": "User",
+          "labelPlural": "Users",
           "attributes": {
+            "name": {
+              "dataType": "string",
+              "label": "Name"
+            },
             "phone": {
               "dataType": "string",
               "label": "Contact",
@@ -1191,6 +1199,8 @@
           }
         },
         "entity:Todo": {
+          "label": "Task",
+          "labelPlural": "Tasks",
           "attributes": {}
         },
         "view:todo": {

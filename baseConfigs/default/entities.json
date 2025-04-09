@@ -352,11 +352,6 @@
                       "fieldGroups": [
                         {
                           "fields": [
-                            "photo"
-                          ]
-                        },
-                        {
-                          "fields": [
                             "name"
                           ]
                         },
@@ -392,13 +387,30 @@
         "entity:Child": {
           "label": "Child",
           "labelPlural": "Children",
-          "attributes": {}
+          "attributes": {
+            "name": {
+              "label": "Name",
+              "dataType": "string"
+            },
+            "dateOfBirth": {
+              "label": "Date of Birth",
+              "dataType": "date-with-age"
+            }
+          }
         },
         "entity:User": {
+          "label": "User",
+          "labelPlural": "Users",
           "attributes": {
+            "name": {
+              "label": "Name",
+              "dataType": "string"
+            }
           }
         },
         "entity:Todo": {
+          "label": "Task",
+          "labelPlural": "Tasks",
           "attributes": {}
         },
         "view:todo": {

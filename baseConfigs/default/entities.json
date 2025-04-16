@@ -387,10 +387,14 @@
         "entity:Child": {
           "label": "Child",
           "labelPlural": "Children",
+          "toStringAttributes": ["name"],
           "attributes": {
             "name": {
               "label": "Name",
-              "dataType": "string"
+              "dataType": "string",
+              "validators": {
+                "required": true
+              }
             },
             "dateOfBirth": {
               "label": "Date of Birth",
@@ -401,10 +405,14 @@
         "entity:User": {
           "label": "User",
           "labelPlural": "Users",
+          "toStringAttributes": ["name"],
           "attributes": {
             "name": {
               "label": "Name",
-              "dataType": "string"
+              "dataType": "string",
+              "validators": {
+                "required": true
+              }
             }
           }
         },

@@ -1018,7 +1018,15 @@
         "entity:Child": {
           "label": "Child",
           "labelPlural": "Children",
+          "toStringAttributes": ["name"],
           "attributes": {
+            "name": {
+              "dataType": "string",
+              "label": "Name",
+              "validators": {
+                "required": true
+              }
+            },
             "address": {
               "dataType": "location",
               "label": "Address",
@@ -1055,11 +1063,14 @@
         "entity:School": {
           "label": "School",
           "labelPlural": "Schools",
+          "toStringAttributes": ["name"],
           "attributes": {
             "name": {
               "dataType": "string",
               "label": "Name",
-              "_isCustomizedField": true
+              "validators": {
+                "required": true
+              }
             },
             "privateSchool": {
               "dataType": "boolean",

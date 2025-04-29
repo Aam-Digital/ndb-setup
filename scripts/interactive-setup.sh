@@ -42,7 +42,6 @@ SENTRY_DSN_APP=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b1b07d2d-05de-41c6-8ac6-
 # variables
 ##############################
 
-ACCOUNTS_URL=https://accounts.aam-digital.com
 chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 
 ##############################
@@ -258,8 +257,6 @@ if [ ! -f "$path/keycloak.json" ]; then
   # Get Keycloak config from API
   getKeycloakKey
   curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" -H "Authorization: Bearer $token" > "$path/keycloak.json"
-  echo "set account_url to config.json"
-  sed -i "s#\"account_url\": \".*\"#\"account_url\": \"$ACCOUNTS_URL\"#g" "$path/config.json" # todo mac/linux
 
   # Set Keycloak public key for bearer auth
   echo "set publicKey in .env"

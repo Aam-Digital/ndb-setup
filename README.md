@@ -72,12 +72,14 @@ Plugin versions are managed within that custom docker image in [Aam-Digital/aam-
 
 To start the required docker containers execute the following (this is only needed once on a server, you can skip these steps if you just want to add another Aam Digital instance to an existing keycloak server):
 1. Open the file `keycloak/.env`
-2. Set the password variables to secure passwords and assign valid urls for the Keycloak and [account backend](https://github.com/Aam-Digital/account-backend) (without `https://`)
-3. Open `keykloak/realm_config.json` and add the required settings for you email server to enable Keycloak to send emails in your name
-4. Start the required containers
+2. Set the password variables to secure passwords and assign valid urls for the Keycloak (without `https://`)
+3. Start the required containers
    > cd keycloak && docker-compose up -d
 
 Once done, applications can be connected with Keycloak through the `interactive_setup.sh`.
+
+`keycloak/realm_config.json` provides a sample configuration that the interactive setup script uses (replacing some placeholders automatically).
+You can create a custom realm_config.json in each baseConfig folder to overwrite this.
 
 ## 2-Factor-Auth
 Keycloak supports a second login factor through the methods described below:

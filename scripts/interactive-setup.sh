@@ -37,6 +37,8 @@ KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b
 KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
 KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
 SENTRY_DSN_APP=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b1b07d2d-05de-41c6-8ac6-b22700766968" | jq -r .value)
+SMTP_SERVER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2ce00cf6760" | jq -r .value)
+SMTP_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" | jq -r .value)
 
 ##############################
 # variables
@@ -95,6 +97,18 @@ getVar() {
     fi
 
     echo "$value"
+}
+
+# Function to check if the first filename exists, if not, return the second filename
+fileOrDefault() {
+  local primary_file="$1"
+  local default_file="$2"
+
+  if [[ -f "$primary_file" ]]; then
+    echo "$primary_file"
+  else
+    echo "$default_file"
+  fi
 }
 
 ##############################
@@ -237,11 +251,25 @@ if [ ! -f "$path/keycloak.json" ]; then
 
   getKeycloakToken
 
+  # take the custom baseConfig realm file or otherwise the default from keycloak folder
+  keycloakRealmFile=$(fileOrDefault "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/realm_config.json" "$baseDirectory/ndb-setup/keycloak/realm_config.json")
+  # add and replace some customized values
+  keycloakRealmJson=$(jq '
+    .realm = "'"$org"'" |
+    .defaultLocale = "'"$locale"'" |
+    .displayName = "Aam Digital - '"$org"'" |
+    .smtpServer.from = "accounts@aam-digital.com" |
+    .smtpServer.host = "'"$SMTP_SERVER"'" |
+    .smtpServer.port = "587" |
+    .smtpServer.user = "accounts@aam-digital.com" |
+    .smtpServer.password = "'"$SMTP_PASSWORD"'"
+    ' "$keycloakRealmFile")
+
   # create a realm
   curl -X "POST" "https://$KEYCLOAK_HOST/admin/realms" \
        -H "Authorization: Bearer $token" \
        -H "Content-Type: application/json" \
-       -d "$(jq '.realm = "'"$org"'" | .defaultLocale = "'"$locale"'" | .displayName = "Aam Digital - '"$org"'"' $baseDirectory/ndb-setup/baseConfigs/"$baseConfig"/realm_config.json)"
+       -d "$keycloakRealmJson"
 
   # create a client
   clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$org/clients" \

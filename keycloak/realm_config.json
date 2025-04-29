@@ -24,10 +24,10 @@
     "replyTo": "",
     "replyToDisplayName": "",
     "from": "<FROM_EMAIL_ADDRESS>",
-    "fromDisplayName": "<FROM_NAME>",
+    "fromDisplayName": "Aam Digital",
     "host": "<EMAIL_SERVER_HOST>",
     "port": "<EMAIL_SERVER_PORT>",
-    "user": "<EMAIL_SERVER_USER>",
+    "user": "<FROM_EMAIL_ADDRESS>",
     "password": "<EMAIL_SERVER_PASSWORD>"
   },
   "eventsListeners": [

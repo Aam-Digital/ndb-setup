@@ -58,6 +58,20 @@
   "nodeReRegistrationTimeout": -1,
   "protocolMappers": [
     {
+      "name": "client roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-client-role-mapper",
+      "consentRequired": false,
+      "config": {
+        "introspection.token.claim": "true",
+        "multivalued": "true",
+        "user.attribute": "foo",
+        "access.token.claim": "true",
+        "claim.name": "resource_access.${client_id}.roles",
+        "jsonType.label": "String"
+      }
+    },
+    {
       "name": "realm roles",
       "protocol": "openid-connect",
       "protocolMapper": "oidc-usermodel-realm-role-mapper",

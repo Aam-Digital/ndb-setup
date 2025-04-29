@@ -39,7 +39,15 @@
       {
         "name": "account_manager",
         "description": "User with this role can create and update accounts",
-        "composite": false,
+        "composite": true,
+        "composites": {
+          "client": {
+            "realm-management": [
+              "view-realm",
+              "manage-users"
+            ]
+          }
+        },
         "clientRole": false,
         "attributes": {}
       },
@@ -51,15 +59,15 @@
         "attributes": {}
       },
       {
-        "name": "no-email-2fa",
-        "description": "Users assigned to this group, will not asked for 2FA email ",
+        "name": "user_app",
+        "description": "Default rule which every user should have",
         "composite": false,
         "clientRole": false,
         "attributes": {}
       },
       {
-        "name": "user_app",
-        "description": "Default rule which every user should have",
+        "name": "no-email-2fa",
+        "description": "Users assigned to this group, will not asked for 2FA email ",
         "composite": false,
         "clientRole": false,
         "attributes": {}
@@ -1265,6 +1273,28 @@
     {
       "name": "openid",
       "description": "",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "gui.order": "",
+        "consent.screen.text": ""
+      }
+    },
+    {
+      "name": "reporting_write",
+      "description": "Access to reporting-api POST endpoints",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "gui.order": "",
+        "consent.screen.text": ""
+      }
+    },
+    {
+      "name": "reporting_read",
+      "description": "Access to reporting-api GET endpoints",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true",

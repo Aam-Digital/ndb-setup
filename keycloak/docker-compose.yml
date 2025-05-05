@@ -35,24 +35,6 @@ services:
       - internal
     restart: unless-stopped
 
-  account-ms:
-    image: aamdigital/account-ms:latest
-    depends_on:
-      - keycloak
-    networks:
-      - internal
-      - external_web
-    environment:
-      CORS: "*"
-      SENTRY_DSN: $SENTRY_DSN
-      SENTRY_ENABLED: true
-      SENTRY_INSTANCE_NAME: accounts.aam-digital.com
-      SENTRY_ENVIRONMENT: production
-      KEYCLOAK_URL: https://$KEYCLOAK_URL
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_PASSWORD: $ADMIN_PASSWORD
-    restart: unless-stopped
-
 networks:
   internal:
   external_web:

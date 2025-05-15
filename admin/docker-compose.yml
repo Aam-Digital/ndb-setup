@@ -1,6 +1,6 @@
 services:
   admin-ms:
-    image: aamdigital/ndb-admin:latest
+    image: ghcr.io/aam-digital/ndb-admin:latest
     volumes:
       - ./credentials.json:/app/dist/assets/credentials.json
     user: 1000:1000

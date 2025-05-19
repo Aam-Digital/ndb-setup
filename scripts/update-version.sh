@@ -29,7 +29,7 @@ case $1 in
 esac
 
 for D in *; do
-        if [ -d "${D}" ] && [[ $D == "${PREFIX}*" ]]; then
+        if [ -d "${D}" ] && [[ $D == ${PREFIX}* ]]; then
                 cd "$D";
                 if [ -f ".env" ]
                 then

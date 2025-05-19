@@ -37,6 +37,7 @@ KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b
 KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
 KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
 SENTRY_DSN_APP=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b1b07d2d-05de-41c6-8ac6-b22700766968" | jq -r .value)
+SENTRY_DSN_REPLICATION_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "359ea1c0-798e-4e17-ae44-b2e20153051d" | jq -r .value)
 SMTP_SERVER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2ce00cf6760" | jq -r .value)
 SMTP_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" | jq -r .value)
 
@@ -176,6 +177,10 @@ if [ "$app" == 0 ]; then
   # setting frontend app version. Using latest available version
   appVersion=$(curl -s https://api.github.com/repos/Aam-Digital/ndb-core/releases | jq -r 'map(select(.name | test("-") | not)) | .[0].name')
   setEnv APP_VERSION "$appVersion" "$path/.env"
+
+  # setting replication-backend version. Using latest available version
+  replicationBackendVersion=$(curl -s https://api.github.com/repos/Aam-Digital/replication-backend/releases | jq -r 'map(select(.name | test("-") | not)) | .[0].name')
+  setEnv AAM_REPLICATION_BACKEND_VERSION "$replicationBackendVersion" "$path/.env"
 
   # setting backend version. Using latest available version
   backendVersion=$(curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]')
@@ -492,6 +497,7 @@ if [ "$app" == 0 ]; then
 
   if [ "$enableSentry" == "y" ] || [ "$enableSentry" == "Y" ]; then
     setEnv SENTRY_DSN "$SENTRY_DSN_APP" "$path/.env"
+    setEnv SENTRY_DSN_REPLICATION_BACKEND "$SENTRY_DSN_REPLICATION_BACKEND" "$path/.env"
     setEnv SENTRY_ENABLED "true" "$path/.env"
     setEnv SENTRY_ENVIRONMENT "production" "$path/.env"
   else

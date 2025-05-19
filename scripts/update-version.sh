@@ -1,6 +1,6 @@
 #!/bin/bash
 # Change the version in each docker-compose.yml file in all folders starting with prefix
-if ! [ $# -eq 2 ]; then
+if ! [ $# -eq 3 ]; then
         echo "Usage: $0 service old_version new_version"
         echo "Example: $0 ndb-core 3.5.0 3.6.0"
         echo "for ndb-core, replication-backend, aam-services"
@@ -33,14 +33,14 @@ for D in *; do
                 cd "$D";
                 if [ -f ".env" ]
                 then
-                  if [ $(grep -c "$VAR=$OLD_VERSION" .env) -eq 0 ]
+                  if grep -q "$VAR=$OLD_VERSION" .env;
                   then
                     sed -i "s|$VAR=$OLD_VERSION|$VAR=$NEW_VERSION|" .env
+                    docker compose pull && docker compose up -d;
                   else
-                    echo "$D/.env: $VAR=$OLD_VERSION not found"
+                    echo "$D/.env: $VAR=$OLD_VERSION not found";
                   fi
                 fi
-                docker compose pull && docker compose up -d;
                 cd ..
         fi
 done

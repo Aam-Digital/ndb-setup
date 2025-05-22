@@ -9,6 +9,7 @@
   "ssoSessionMaxLifespan": 36000,
   "actionTokenGeneratedByAdminLifespan": 864000,
   "passwordPolicy": "hashIterations(27500) and length(8) and digits(1) and upperCase(1)",
+  "bruteForceProtected": true,
   "internationalizationEnabled": true,
   "supportedLocales": [
     "de",

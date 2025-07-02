@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script apply sub-folders of the /assets from a baseConfig to an instance,
+# This script applies sub-folders of the /assets from a baseConfig to an instance,
 # including the adjustment to docker-compose.yml to add volumes.
 
 # how to use

@@ -52,10 +52,10 @@ cp -r "$baseConfigPath/assets" "$instancePath/assets"
 cp "$instancePath/docker-compose.yml" "$instancePath/docker-compose.yml.bak"
 for subfolder in "$instancePath"/assets/*; do
   subfolderName=$(basename "$subfolder")
-  volumeMount="      - ./assets/$subfolderName:/usr/share/nginx/html/assets/$subfolderName"
+  volumeMount="- ./assets/$subfolderName:/usr/share/nginx/html/assets/$subfolderName"
 
   echo "Adding volume mount for $subfolderName: $volumeMount"
 
   # insert the volumeMount line in the docker-compose after the first occurrence of "volumes:"
-  sed -i "/volumes:/a $volumeMount" "$instancePath/docker-compose.yml"
+  sed -i "/volumes:/a\\      $volumeMount" "$instancePath/docker-compose.yml"
 done

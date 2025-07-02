@@ -387,13 +387,9 @@ if [ "$app" == 0 ]; then
         done
       done
     fi
+
     if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/assets" ]; then
-      for dir in "$baseDirectory"/ndb-setup/baseConfigs/"$baseConfig"/assets/*
-      do
-        cp -r "$dir" "$path"
-        folder=${dir##*/}
-        sed -i "s|assets/config.json|assets/config.json\n      - ../$folder:/usr/share/nginx/html/assets/$folder|g" "$path/docker-compose.yml" # todo mac/linux
-      done
+      $baseDirectory/ndb-setup/scripts/enable-assets-overwrites.sh "$org" "$baseConfig"
     fi
   fi
 fi

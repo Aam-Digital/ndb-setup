@@ -59,7 +59,7 @@ cp -r "$baseConfigPath/assets" "$instancePath/assets"
 # add one volume mount to docker-compose.yml for each sub-folder in assets
 for subfolder in "$instancePath"/assets/*; do
   subfolderName=$(basename "$subfolder")
-  volumeMount="- ./assets/$subfolderName:/usr/share/nginx/html/assets/$subfolderName"
+  volumeMount="- .\/assets\/$subfolderName:\/usr\/share\/nginx\/html\/assets\/$subfolderName"
 
   echo "Adding volume mount for $subfolderName: $volumeMount"
 

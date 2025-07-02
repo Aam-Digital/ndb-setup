@@ -4,8 +4,8 @@
 # including the adjustment to docker-compose.yml to add volumes.
 
 # how to use
-# ./enable-asset-overwrites.sh <instance> <baseConfig>
-# example: ./enable-asset-overwrites.sh basic
+# ./enable-assets-overwrites.sh <instance> <baseConfig>
+# example: ./enable-assets-overwrites.sh my-system basic
 
 ##############################
 # setup

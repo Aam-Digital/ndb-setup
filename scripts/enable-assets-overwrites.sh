@@ -45,11 +45,18 @@ if [ ! -d "$baseConfigPath/assets" ]; then
   exit 1
 fi
 
+cp "$instancePath/docker-compose.yml" "$instancePath/docker-compose.yml.bak"
+
 # copy assets from baseConfig to instance
+if [ -d "$instancePath/assets" ]; then
+  echo "Moving existing assets folder to backup."
+  mv "$instancePath/assets" "$instancePath/assets.bak"
+  # remove any volume mounts for the existing assets folder in docker-compose.yml
+  sed -i '/assets\/.*:\/usr\/share\/nginx\/html\/assets/d' "$instancePath/docker-compose.yml"
+fi
 cp -r "$baseConfigPath/assets" "$instancePath/assets"
 
 # add one volume mount to docker-compose.yml for each sub-folder in assets
-cp "$instancePath/docker-compose.yml" "$instancePath/docker-compose.yml.bak"
 for subfolder in "$instancePath"/assets/*; do
   subfolderName=$(basename "$subfolder")
   volumeMount="- ./assets/$subfolderName:/usr/share/nginx/html/assets/$subfolderName"

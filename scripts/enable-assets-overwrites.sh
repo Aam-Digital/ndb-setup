@@ -64,5 +64,5 @@ for subfolder in "$instancePath"/assets/*; do
   echo "Adding volume mount for $subfolderName: $volumeMount"
 
   # insert the volumeMount line in the docker-compose after the first occurrence of "volumes:"
-  sed -i "/volumes:/a\\      $volumeMount" "$instancePath/docker-compose.yml"
+  sed -i "0,/volumes:/s/volumes:/&\n      $volumeMount/" "$instancePath/docker-compose.yml"
 done

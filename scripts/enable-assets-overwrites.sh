@@ -36,7 +36,12 @@ fi
 # script
 ##############################
 
-instancePath="$baseDirectory/$PREFIX$instance"
+# if $instance not starts with $PREFIX, add it
+if [[ ! "$instance" =~ ^$PREFIX ]]; then
+  instancePath="$baseDirectory/$PREFIX$instance"
+else
+  instancePath="$baseDirectory/$instance"
+fi
 
 # abort if no assets folder for baseConfig exists
 baseConfigPath="$baseDirectory/ndb-setup/baseConfigs/$baseConfig"
@@ -66,3 +71,8 @@ for subfolder in "$instancePath"/assets/*; do
   # insert the volumeMount line in the docker-compose after the first occurrence of "volumes:"
   sed -i "0,/volumes:/s/volumes:/&\n      $volumeMount/" "$instancePath/docker-compose.yml"
 done
+
+# restart docker if a third arg ($3) is "y" or "true"
+if [ "$3" == "y" ] || [ "$3" == "true" ]; then
+  docker compose -f "$instance/docker-compose.yml" down && docker compose  -f "$instance/docker-compose.yml" up -d
+fi

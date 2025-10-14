@@ -363,30 +363,9 @@ fi
 
 if [ "$app" == 0 ]; then
   if [ -n "$baseConfig" ]; then
-    # Needs to be in CouchDB '/_bulk_docs' format: https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
-    curl -u "$couchDbUser:$couchDbPassword" -d "@$baseDirectory/ndb-setup/baseConfigs/$baseConfig/entities.json" -H 'Content-Type: application/json' "https://$url/db/app/_bulk_docs"
-    if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/attachments" ]; then
-      # Uploading attachments - ONLY IMAGES ARE SUPPORTED
-      # create folder inside 'attachments' with name of the entity containing images with name of the property
-      for dir in "$baseDirectory"/ndb-setup/baseConfigs/"$baseConfig"/attachments/*
-      do
-        entity=${dir##*/}
-        # Create parent document
-        rev=$(curl -X PUT -u "$couchDbUser:$couchDbPassword" -d "{}" "https://$url/db/app-attachments/$entity")
-        rev="${rev#*\"rev\":\"}"
-        rev="${rev%%\"*}"
-        for file in "$dir"/*
-        do
-          prop="${file##*/}"
-          ext="${prop##*.}"
-          prop="${prop%%.*}"
-          # Upload image
-          rev=$(curl -X PUT -u "$couchDbUser:$couchDbPassword" -H "Content-Type: image/$ext" --data-binary "@$file" "https://$url/db/app-attachments/$entity/$prop?rev=$rev")
-          rev="${rev#*\"rev\":\"}"
-          rev="${rev%%\"*}"
-        done
-      done
-    fi
+    # to add config or other docs to CouchDB, mount them to the assets/base-configs folder of ndb-core
+    # and use an `available-configs.json` entry to make it selectable in the app
+    # see https://github.com/Aam-Digital/ndb-core/blob/master/src/assets/base-configs/available-configs.json
 
     if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/assets" ]; then
       $baseDirectory/ndb-setup/scripts/enable-assets-overwrites.sh "$org" "$baseConfig"

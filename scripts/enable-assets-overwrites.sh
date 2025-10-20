@@ -25,12 +25,16 @@ source "$baseDirectory/ndb-setup/setup.env"
 add_assets_volume_mount() {
   local instancePath="$1"
   local itemName="$2"
-  local volumeMount="- .\/assets\/$itemName:\/usr\/share\/nginx\/html\/assets\/$itemName"
+  local volumeMount="- ./assets/$itemName:/usr/share/nginx/html/assets/$itemName"
 
-  echo "Adding volume mount for $itemName: $volumeMount"
-
-  # insert the volumeMount line in the docker-compose after the first occurrence of "volumes:"
-  sed -i "0,/volumes:/s/volumes:/&\n      $volumeMount/" "$instancePath/docker-compose.yml"
+  # Only add the volume mount if it does not already exist (idempotent)
+  if ! grep -Fq "$volumeMount" "$instancePath/docker-compose.yml"; then
+    echo "Adding volume mount for $itemName: $volumeMount"
+    # insert the volumeMount line in the docker-compose after the first occurrence of "volumes:"
+    sed -i "0,/volumes:/s|volumes:|&\\n      $volumeMount|" "$instancePath/docker-compose.yml"
+  else
+    echo "Volume mount for $itemName already exists, skipping."
+  fi
 }
 
 ##############################

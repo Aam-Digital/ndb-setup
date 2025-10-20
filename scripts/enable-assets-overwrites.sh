@@ -15,6 +15,29 @@ baseDirectory="/var/docker"
 source "$baseDirectory/ndb-setup/setup.env"
 
 ##############################
+# functions
+##############################
+
+# Function to add a volume mount to docker-compose.yml
+# Arguments:
+#   $1 - instancePath: path to the instance directory
+#   $2 - itemName: the asset path (e.g., "icons" or "base-configs/demo")
+add_assets_volume_mount() {
+  local instancePath="$1"
+  local itemName="$2"
+  local volumeMount="- ./assets/$itemName:/usr/share/nginx/html/assets/$itemName"
+
+  # Only add the volume mount if it does not already exist (idempotent)
+  if ! grep -Fq "$volumeMount" "$instancePath/docker-compose.yml"; then
+    echo "Adding volume mount for $itemName: $volumeMount"
+    # insert the volumeMount line in the docker-compose after the first occurrence of "volumes:"
+    sed -i "0,/volumes:/s|volumes:|&\\n      $volumeMount|" "$instancePath/docker-compose.yml"
+  else
+    echo "Volume mount for $itemName already exists, skipping."
+  fi
+}
+
+##############################
 # ask for input data
 ##############################
 
@@ -64,12 +87,17 @@ cp -r "$baseConfigPath/assets" "$instancePath/assets"
 # add one volume mount to docker-compose.yml for each sub-folder in assets
 for subfolder in "$instancePath"/assets/*; do
   subfolderName=$(basename "$subfolder")
-  volumeMount="- .\/assets\/$subfolderName:\/usr\/share\/nginx\/html\/assets\/$subfolderName"
 
-  echo "Adding volume mount for $subfolderName: $volumeMount"
-
-  # insert the volumeMount line in the docker-compose after the first occurrence of "volumes:"
-  sed -i "0,/volumes:/s/volumes:/&\n      $volumeMount/" "$instancePath/docker-compose.yml"
+  # for the assets/base-configs folder, mount every subfolder and top-level file separately
+  if [ "$subfolderName" == "base-configs" ] && [ -d "$subfolder" ]; then
+    echo "Processing base-configs folder with special handling..."
+    for item in "$subfolder"/*; do
+      itemName=$(basename "$item")
+      add_assets_volume_mount "$instancePath" "base-configs/$itemName"
+    done
+  else
+    add_assets_volume_mount "$instancePath" "$subfolderName"
+  fi
 done
 
 # restart docker if a third arg ($3) is "y" or "true"

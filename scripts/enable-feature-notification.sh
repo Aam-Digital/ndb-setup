@@ -46,6 +46,8 @@ backendEnabledCheck() {
   else
     isBackendEnabled=0
   fi
+
+  isBackendConfigCreated
 }
 
 isBackendConfigCreated() {

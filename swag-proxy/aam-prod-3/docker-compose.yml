@@ -13,7 +13,7 @@ services:
       - URL=aam-digital.dev
       - VALIDATION=dns
       - SUBDOMAINS=wildcard
-#      - DNSPLUGIN=hetzner
+      - DOCKER_MODS=linuxserver/mods:universal-package-install
       - INSTALL_PIP_PACKAGES=certbot-dns-hetzner-cloud
       - DNSPLUGIN=hetzner-cloud
       - EMAIL=it@aam-digital.com

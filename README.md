@@ -57,7 +57,9 @@ This setup repository comes with a [docker compose](https://github.com/Aam-Digit
 
 1. Create the required network
    > docker network create external_web
-2. In `swag-proxy/docker-compose.yml` set `EMAIL` to a valid email address and adapt the DOMAINS config to match your setup. 
+2. In `swag-proxy/<server>/docker-compose.yml` set `EMAIL` to a valid email address and adapt the DOMAINS config to match your setup. 
+2. In `swag-proxy/<server>/config/dns-conf/` create a new `hetzner-cloud.ini` file from the example file and add your API token
+   (required for DNS authentication of certbot when creating new SSL certificates)
 3. Start the required containers (this is only needed once on a server)
    > cd nginx-proxy && docker-compose up -d  
 

@@ -1,7 +1,7 @@
 name: swag-proxy-aam-prod-2
 services:
   swag-proxy:
-    image: ghcr.io/linuxserver/swag:3.1.0-ls361
+    image: ghcr.io/linuxserver/swag:5.2.2-ls425
     networks:
       - external_web
     cap_add:
@@ -13,11 +13,13 @@ services:
       - URL=aam-digital.dev
       - VALIDATION=dns
       - SUBDOMAINS=wildcard
-      - DNSPLUGIN=hetzner
+#      - DNSPLUGIN=hetzner
+      - INSTALL_PIP_PACKAGES=certbot-dns-hetzner-cloud
+      - DNSPLUGIN=hetzner-cloud
       - EMAIL=it@aam-digital.com
       - EXTRA_DOMAINS=*.aam-digital.net,*.aam-digital.app,*.aam-digital.com
     volumes:
-      - ./config/dns-conf/hetzner.ini:/config/dns-conf/hetzner.ini
+      - ./config/dns-conf/hetzner-cloud.ini:/config/dns-conf/hetzner-cloud.ini
       - ./config/nginx/proxy-confs/aam-prod-2.subdomain.conf:/config/nginx/proxy-confs/aam-prod-2.subdomain.conf
       - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
       - ./config/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf

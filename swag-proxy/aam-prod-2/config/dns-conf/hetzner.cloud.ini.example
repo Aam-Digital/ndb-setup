@@ -1,0 +1,4 @@
+# Access to DNS of data center needed to register individual subdomains with setup script
+# Instructions: https://github.com/rolschewsky/certbot-dns-hetzner-cloud
+# Replace with your values
+dns_hetzner_cloud_api_token = 

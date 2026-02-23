@@ -9,9 +9,6 @@ services:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
       - ./firebase-config.json:/usr/share/nginx/html/assets/firebase-config.json
-    environment:
-      COUCHDB_URL: http://${INSTANCE_NAME}-db-entrypoint:5984
-      QUERY_URL: http://${INSTANCE_NAME}-aam-backend-service:8080
     restart: unless-stopped
 
   couchdb-only:
@@ -19,8 +16,10 @@ services:
     container_name: ${INSTANCE_NAME}-db-entrypoint
     user: "1000:1000"
     networks:
-      - internal_aam
-      - external_web
+      internal_aam:
+        aliases:
+          - db-entrypoint
+      external_web:
     volumes:
       - ./couchdb/data:/opt/couchdb/data
       - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini
@@ -54,8 +53,10 @@ services:
     image: ghcr.io/aam-digital/replication-backend:${AAM_REPLICATION_BACKEND_VERSION:-latest}
     container_name: ${INSTANCE_NAME}-db-entrypoint
     networks:
-      - internal_aam
-      - external_web
+      internal_aam:
+        aliases:
+          - db-entrypoint
+      external_web:
     depends_on:
       - couchdb-with-permissions
     environment:

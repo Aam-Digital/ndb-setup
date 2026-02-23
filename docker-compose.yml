@@ -9,6 +9,9 @@ services:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
       - ./firebase-config.json:/usr/share/nginx/html/assets/firebase-config.json
+    environment:
+      COUCHDB_URL: http://${INSTANCE_NAME}-db-entrypoint:5984
+      QUERY_URL: http://${INSTANCE_NAME}-aam-backend-service:8080
     restart: unless-stopped
 
   couchdb-only:

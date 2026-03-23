@@ -10,7 +10,7 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
-      - URL=aam-digital.dev
+      - URL=aam-digital.net
       - VALIDATION=dns
       - SUBDOMAINS=wildcard
       - DOCKER_MODS=linuxserver/mods:universal-package-install

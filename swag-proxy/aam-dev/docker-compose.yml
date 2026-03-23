@@ -1,0 +1,38 @@
+name: swag-proxy-aam-dev
+services:
+  swag-proxy:
+    image: ghcr.io/linuxserver/swag:5.2.2-ls425
+    networks:
+      - external_web
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - URL=aam-digital.dev
+      - VALIDATION=dns
+      - SUBDOMAINS=wildcard
+      - DOCKER_MODS=linuxserver/mods:universal-package-install
+      - INSTALL_PIP_PACKAGES=certbot-dns-hetzner-cloud
+      - DNSPLUGIN=hetzner-cloud
+      - EMAIL=it@aam-digital.com
+      - EXTRA_DOMAINS=*.aam-digital.net
+    volumes:
+      - ./config/dns-conf/hetzner-cloud.ini:/config/dns-conf/hetzner-cloud.ini
+      - ./config/nginx/proxy-confs/aam-dev.subdomain.conf:/config/nginx/proxy-confs/aam-dev.subdomain.conf
+      - ./config/nginx/proxy-confs/keycloak.dev.subdomain.conf:/config/nginx/proxy-confs/keycloak.dev.subdomain.conf
+      - ./config/nginx/proxy.conf:/config/nginx/proxy.conf
+      - /var/docker/volumes/swag-proxy/etc:/config/etc
+      - /var/docker/volumes/swag-proxy/fail2ban:/config/fail2ban
+      - /var/docker/volumes/swag-proxy/keys:/config/keys
+      - /var/docker/volumes/swag-proxy/log:/config/log
+      - /var/docker/volumes/swag-proxy/www:/config/www
+    ports:
+      - "443:443"
+      - "80:80"
+    restart: unless-stopped
+
+networks:
+  external_web:
+    external: true

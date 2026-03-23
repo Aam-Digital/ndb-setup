@@ -22,7 +22,6 @@ services:
       - ../jail.local:/config/fail2ban/jail.local
       - ./config/dns-conf/hetzner-cloud.ini:/config/dns-conf/hetzner-cloud.ini
       - ./config/nginx/proxy-confs/aam-prod-3.subdomain.conf:/config/nginx/proxy-confs/aam-prod-3.subdomain.conf
-      - ./config/nginx/proxy-confs/keycloak.dev.subdomain.conf:/config/nginx/proxy-confs/keycloak.dev.subdomain.conf
       - ./config/nginx/proxy-confs/keycloak.prod.subdomain.conf:/config/nginx/proxy-confs/keycloak.prod.subdomain.conf
       - ./config/nginx/proxy-confs/api.dev.subdomain.conf:/config/nginx/proxy-confs/api.dev.subdomain.conf
       - ./config/nginx/proxy-confs/api.prod.subdomain.conf:/config/nginx/proxy-confs/api.prod.subdomain.conf

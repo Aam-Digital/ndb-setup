@@ -1,4 +1,4 @@
-name: swag-proxy-aam-prod-2
+name: swag-proxy-aam-dev
 services:
   swag-proxy:
     image: ghcr.io/linuxserver/swag:5.2.2-ls425
@@ -10,20 +10,19 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
-      - URL=aam-digital.dev
+      - URL=aam-digital.net
       - VALIDATION=dns
       - SUBDOMAINS=wildcard
       - DOCKER_MODS=linuxserver/mods:universal-package-install
       - INSTALL_PIP_PACKAGES=certbot-dns-hetzner-cloud
       - DNSPLUGIN=hetzner-cloud
       - EMAIL=it@aam-digital.com
-      - EXTRA_DOMAINS=*.aam-digital.net,*.aam-digital.app,*.aam-digital.com
     volumes:
       - ../jail.local:/config/fail2ban/jail.local
       - ./config/dns-conf/hetzner-cloud.ini:/config/dns-conf/hetzner-cloud.ini
-      - ./config/nginx/proxy-confs/aam-prod-2.subdomain.conf:/config/nginx/proxy-confs/aam-prod-2.subdomain.conf
-      - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
-      - ./config/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf
+      - ./config/nginx/proxy-confs/instance.net.subdomain.conf:/config/nginx/proxy-confs/instance.net.subdomain.conf
+      - ./config/nginx/proxy-confs/aam-dev.subdomain.conf:/config/nginx/proxy-confs/aam-dev.subdomain.conf
+      - ./config/nginx/proxy-confs/keycloak.dev.subdomain.conf:/config/nginx/proxy-confs/keycloak.dev.subdomain.conf
       - ./config/nginx/proxy.conf:/config/nginx/proxy.conf
       - /var/docker/volumes/swag-proxy/etc:/config/etc
       - /var/docker/volumes/swag-proxy/fail2ban:/config/fail2ban

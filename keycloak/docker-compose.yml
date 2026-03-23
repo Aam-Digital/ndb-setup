@@ -1,3 +1,5 @@
+name: i-keycloak-dev
+
 services:
   keycloak:
     image: ghcr.io/aam-digital/aam-keycloak:23.0.7

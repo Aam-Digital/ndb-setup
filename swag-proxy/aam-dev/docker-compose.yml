@@ -20,6 +20,7 @@ services:
       - EXTRA_DOMAINS=*.aam-digital.net
     volumes:
       - ./config/dns-conf/hetzner-cloud.ini:/config/dns-conf/hetzner-cloud.ini
+      - ./config/nginx/proxy-confs/instance.net.subdomain.conf:/config/nginx/proxy-confs/instance.net.subdomain.conf
       - ./config/nginx/proxy-confs/aam-dev.subdomain.conf:/config/nginx/proxy-confs/aam-dev.subdomain.conf
       - ./config/nginx/proxy-confs/keycloak.dev.subdomain.conf:/config/nginx/proxy-confs/keycloak.dev.subdomain.conf
       - ./config/nginx/proxy.conf:/config/nginx/proxy.conf

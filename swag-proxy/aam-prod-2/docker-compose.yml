@@ -19,6 +19,7 @@ services:
       - EMAIL=it@aam-digital.com
       - EXTRA_DOMAINS=*.aam-digital.net,*.aam-digital.app,*.aam-digital.com
     volumes:
+      - ../jail.local:/config/fail2ban/jail.local
       - ./config/dns-conf/hetzner-cloud.ini:/config/dns-conf/hetzner-cloud.ini
       - ./config/nginx/proxy-confs/aam-prod-2.subdomain.conf:/config/nginx/proxy-confs/aam-prod-2.subdomain.conf
       - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf

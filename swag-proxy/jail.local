@@ -1,0 +1,57 @@
+## Custom fail2ban jail config for SWAG proxy
+## Based on aam-prod-3 settings
+
+[DEFAULT]
+# Prevents banning LAN subnets
+ignoreip = 10.0.0.0/8
+           192.168.0.0/16
+           172.16.0.0/12
+
+# Changes the default ban action from "iptables-multiport", which causes issues
+# on some platforms, to "iptables-allports".
+banaction = iptables-allports
+
+# "bantime" is the number of seconds that a host is banned.
+bantime  = 600
+
+# A host is banned if it has generated "maxretry" during the last "findtime"
+# seconds.
+findtime  = 60
+
+# "maxretry" is the number of failures before a host get banned.
+maxretry = 500
+
+
+[ssh]
+enabled = false
+
+[nginx-http-auth]
+enabled  = false
+filter   = nginx-http-auth
+port     = http,https
+logpath  = /config/log/nginx/error.log
+
+[nginx-badbots]
+enabled  = true
+port     = http,https
+filter   = nginx-badbots
+logpath  = /config/log/nginx/access.log
+maxretry = 2
+
+[nginx-botsearch]
+enabled  = true
+port     = http,https
+filter   = nginx-botsearch
+logpath  = /config/log/nginx/access.log
+
+[nginx-deny]
+enabled  = false
+port     = http,https
+filter   = nginx-deny
+logpath  = /config/log/nginx/error.log
+
+[nginx-unauthorized]
+enabled  = false
+port     = http,https
+filter   = nginx-unauthorized
+logpath  = /config/log/nginx/access.log

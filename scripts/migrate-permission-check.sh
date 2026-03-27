@@ -239,6 +239,7 @@ migrate_instance() {
     couchUser=$(getVar "$envFile" COUCHDB_USER)
     couchPass=$(getVar "$envFile" COUCHDB_PASSWORD)
 
+    ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH" "http://replication-backend:5984" "$appEnvFile"
     ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME" "$couchUser" "$appEnvFile"
     ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD" "$couchPass" "$appEnvFile"
   else

@@ -141,46 +141,72 @@ getKeycloakToken() {
 
 createKeycloakBackendClient() {
   local realm="$1"
+  clientSecret=""
 
   getKeycloakToken
 
-  # create the aam-backend client (confidential, service account enabled)
-  clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/clients" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d '{
-      "clientId": "aam-backend",
-      "enabled": true,
-      "clientAuthenticatorType": "client-secret",
-      "serviceAccountsEnabled": true,
-      "publicClient": false,
-      "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "protocol": "openid-connect"
-    }')
-
-  # extract client UUID from Location header
-  location=$(echo "$clientResponse" | grep -i "^location:")
-  clientUuid=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
+  # check if aam-backend client already exists (idempotent)
+  local existing
+  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=aam-backend" \
+    -H "Authorization: Bearer $token")
+  clientUuid=$(echo "$existing" | jq -r '.[0].id // empty')
 
   if [ -z "$clientUuid" ]; then
-    echo "ERROR: Failed to create aam-backend client in Keycloak realm '$realm'."
-    return 1
-  fi
+    # create the aam-backend client (confidential, service account enabled)
+    clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/clients" \
+      -H "Authorization: Bearer $token" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "clientId": "aam-backend",
+        "enabled": true,
+        "clientAuthenticatorType": "client-secret",
+        "serviceAccountsEnabled": true,
+        "publicClient": false,
+        "standardFlowEnabled": false,
+        "directAccessGrantsEnabled": false,
+        "protocol": "openid-connect"
+      }')
 
-  echo "Created aam-backend client: $clientUuid"
+    # extract client UUID from Location header
+    location=$(echo "$clientResponse" | grep -i "^location:")
+    clientUuid=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
+
+    if [ -z "$clientUuid" ]; then
+      echo "ERROR: Failed to create aam-backend client in Keycloak realm '$realm'."
+      return 1
+    fi
+
+    echo "Created aam-backend client: $clientUuid"
+  else
+    echo "aam-backend client already exists: $clientUuid"
+  fi
 
   # get client secret
   clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/client-secret" \
-    -H "Authorization: Bearer $token" | jq -r .value)
+    -H "Authorization: Bearer $token" | jq -r '.value // empty')
+
+  if [ -z "$clientSecret" ]; then
+    echo "ERROR: Failed to retrieve client secret for aam-backend client in realm '$realm'."
+    return 1
+  fi
 
   # get the service account user
   serviceAccountUserId=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/service-account-user" \
-    -H "Authorization: Bearer $token" | jq -r .id)
+    -H "Authorization: Bearer $token" | jq -r '.id // empty')
+
+  if [ -z "$serviceAccountUserId" ]; then
+    echo "ERROR: Failed to retrieve service account user for aam-backend client in realm '$realm'."
+    return 1
+  fi
 
   # get the realm-management client UUID
   realmMgmtClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=realm-management" \
-    -H "Authorization: Bearer $token" | jq -r '.[0].id')
+    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
+
+  if [ -z "$realmMgmtClientUuid" ]; then
+    echo "ERROR: Failed to retrieve realm-management client in realm '$realm'."
+    return 1
+  fi
 
   # get the manage-realm role from realm-management client
   manageRealmRole=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$realmMgmtClientUuid/roles/manage-realm" \
@@ -264,6 +290,11 @@ setEnv SENTRY_SERVER_NAME "$instance.$DOMAIN" "$path/config/aam-backend-service/
 
 # create aam-backend Keycloak client for permission checks
 createKeycloakBackendClient "$instance"
+
+# ensure key exists before setting (older .env templates may lack it)
+if ! grep -q '^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=' "$path/.env"; then
+  echo "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=" >> "$path/.env"
+fi
 setEnv REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET "$clientSecret" "$path/.env"
 
 setEnv COMPOSE_PROFILES "full-stack" "$path/.env"

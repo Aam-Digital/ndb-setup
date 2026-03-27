@@ -223,8 +223,14 @@ migrate_instance() {
       setEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$clientSecret" "$envFile"
       echo "  Set REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET in .env"
     else
-      echo "  WARNING: Could not retrieve client secret"
+      echo "  ERROR: Client created/fetched but secret could not be retrieved."
+      echo "  Skipping restart for $instance to avoid broken permission-check config."
+      return 1
     fi
+  else
+    echo "  ERROR: Failed to create or get Keycloak backend client for $instance."
+    echo "  Skipping restart for this instance to avoid broken permission-check config."
+    return 1
   fi
 
   # 3. Ensure application.env has replication-backend basic auth vars

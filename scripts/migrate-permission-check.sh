@@ -50,6 +50,16 @@ setEnv() {
   sed -i "s|^$key=.*|$key=$value|g" "$file"
 }
 
+# Create a timestamped backup of a file (once per run, skip if backup already exists)
+backupFile() {
+  local file="$1"
+  local backup="$file.bak-$(date +%Y%m%d%H%M%S)"
+  if [ -f "$file" ]; then
+    cp "$file" "$backup"
+    echo "  backup: $(basename "$backup")"
+  fi
+}
+
 # Append a variable to a file if it does not already exist
 ensureEnv() {
   local key="$1"
@@ -193,6 +203,15 @@ migrate_instance() {
   fi
 
   echo "[$instance] migrating..."
+
+  # backup files before any modification
+  backupFile "$envFile"
+  backupFile "$instanceDir/docker-compose.yml"
+  [ -f "$appEnvFile" ] && backupFile "$appEnvFile"
+
+  # 0. Update docker-compose.yml from shared ndb-setup template
+  cp "$baseDirectory/ndb-setup/docker-compose.yml" "$instanceDir/docker-compose.yml"
+  echo "  Updated docker-compose.yml from ndb-setup template"
 
   # 1. Add Keycloak vars to .env (for replication-backend)
   ensureEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID" "aam-backend" "$envFile"

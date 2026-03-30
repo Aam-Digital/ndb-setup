@@ -222,6 +222,19 @@ createKeycloakBackendClient() {
     -d "[$manageRealmRole]"
 
   echo "Assigned manage-realm role to aam-backend service account."
+
+  # ensure the "roles" client scope is assigned (required for role claims in the access token)
+  local rolesScopeUuid
+  rolesScopeUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/client-scopes" \
+    -H "Authorization: Bearer $token" | jq -r '.[] | select(.name == "roles") | .id // empty')
+
+  if [ -n "$rolesScopeUuid" ]; then
+    curl -s -X PUT "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/default-client-scopes/$rolesScopeUuid" \
+      -H "Authorization: Bearer $token"
+    echo "Ensured 'roles' client scope on aam-backend client."
+  else
+    echo "WARNING: Could not find 'roles' client scope in realm '$realm'."
+  fi
 }
 
 ##############################

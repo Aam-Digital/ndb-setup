@@ -47,10 +47,13 @@ setEnv() {
   local key="$1"
   local value="$2"
   local file="$3"
-  sed -i "s|^$key=.*|$key=$value|g" "$file"
+  # escape sed special characters in value (\, &, |)
+  local escaped
+  escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
+  sed -i "s|^$key=.*|$key=$escaped|g" "$file"
 }
 
-# Create a timestamped backup of a file (once per run, skip if backup already exists)
+# Create a timestamped backup of a file
 backupFile() {
   local file="$1"
   local backup="$file.bak-$(date +%Y%m%d%H%M%S)"
@@ -268,6 +271,10 @@ if [ -n "${1:-}" ]; then
   migrate_instance "$path"
 else
   # all instances
+  if [ -z "${PREFIX:-}" ]; then
+    echo "ERROR: PREFIX is not set. Aborting to avoid operating on all directories."
+    exit 1
+  fi
   cd "$baseDirectory"
   for D in ${PREFIX}*; do
     if [ -d "$D" ]; then

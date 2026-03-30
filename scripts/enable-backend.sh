@@ -104,9 +104,12 @@ setEnv() {
     local key="$1"
     local value="$2"
     local path="$3"
+    # escape sed special characters in value (\, &, |)
+    local escaped
+    escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
 
-    sed -i "s|^$key=.*|$key=$value|g" "$path" # linux
-    # gsed -i "s|^$key=.*|$key=$value|g" "$path" # macos
+    sed -i "s|^$key=.*|$key=$escaped|g" "$path" # linux
+    # gsed -i "s|^$key=.*|$key=$escaped|g" "$path" # macos
 }
 
 # Funktion zum Abrufen der Umgebungsvariablen
@@ -290,7 +293,14 @@ setEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$path/config/aam-backend-service/applic
 setEnv SENTRY_SERVER_NAME "$instance.$DOMAIN" "$path/config/aam-backend-service/application.env"
 
 # create aam-backend Keycloak client for permission checks
-createKeycloakBackendClient "$instance"
+if ! createKeycloakBackendClient "$instance"; then
+  echo "ERROR: Failed to create/get Keycloak backend client for '$instance'. Aborting."
+  exit 1
+fi
+if [ -z "$clientSecret" ]; then
+  echo "ERROR: Keycloak client created but secret could not be retrieved for '$instance'. Aborting."
+  exit 1
+fi
 
 # ensure key exists before setting (older .env templates may lack it)
 if ! grep -q '^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=' "$path/.env"; then

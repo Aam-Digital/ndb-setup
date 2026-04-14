@@ -14,6 +14,9 @@ For a single instance a server with **2GB RAM**, a **single CPU** and **20GB dis
 With more data and/or more deployments more RAM and CPU power might be necessary or the sync could start to become very slow.
 The required disc space scales with the amount of data and especially images and attachments that are saved in the application.
 
+A Keycloak server is required for user management and login.
+See below to run the Keycloak included here in this setup sample.
+
 To monitor the hardware usage [this repo](https://github.com/Aam-Digital/monitoring/blob/main/docker-compose.yml) contains a Prometheus setup.
 This can be connected with [Grafana](https://grafana.com/) to create a system dashboard and trigger alerts on critical performance.
 

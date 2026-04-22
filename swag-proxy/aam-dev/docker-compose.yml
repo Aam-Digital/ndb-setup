@@ -23,6 +23,8 @@ services:
       - ./config/nginx/proxy-confs/instance.net.subdomain.conf:/config/nginx/proxy-confs/instance.net.subdomain.conf
       - ./config/nginx/proxy-confs/aam-dev.subdomain.conf:/config/nginx/proxy-confs/aam-dev.subdomain.conf
       - ./config/nginx/proxy-confs/keycloak.dev.subdomain.conf:/config/nginx/proxy-confs/keycloak.dev.subdomain.conf
+      - ./config/nginx/proxy-confs/prometheus.subdomain.conf:/config/nginx/proxy-confs/prometheus.subdomain.conf
+      - ./config/nginx/proxy-confs/cadvisor.subdomain.conf:/config/nginx/proxy-confs/cadvisor.subdomain.conf
       - ./config/nginx/proxy.conf:/config/nginx/proxy.conf
       - /var/docker/volumes/swag-proxy/etc:/config/etc
       - /var/docker/volumes/swag-proxy/fail2ban:/config/fail2ban

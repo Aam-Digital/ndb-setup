@@ -17,7 +17,6 @@ services:
     user: "1000:1000"
     networks:
       - internal_aam
-      - external_web
     volumes:
       - ./couchdb/data:/opt/couchdb/data
       - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini
@@ -34,7 +33,6 @@ services:
     user: "1000:1000"
     networks:
       - internal_aam
-      - external_web
     volumes:
       - ./couchdb/data:/opt/couchdb/data
       - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini

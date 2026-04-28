@@ -27,6 +27,8 @@ bws config server-base https://vault.bitwarden.eu
 
 SENTRY_DSN_REPLICATION_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "359ea1c0-798e-4e17-ae44-b2e20153051d" | jq -r .value)
 
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
 for D in "$baseDirectory/${PREFIX}"*; do
     if [ -d "${D}" ]; then
         env_file="$D/.env"
@@ -44,9 +46,9 @@ for D in "$baseDirectory/${PREFIX}"*; do
         elif grep -q 'SENTRY_DSN_REPLICATION_BACKEND' "$compose_file"; then
             echo "  ... [$D] docker-compose.yml already up to date"
         elif grep -q 'SENTRY_DSN: \${SENTRY_DSN}' "$compose_file"; then
-            cp "$compose_file" "$compose_file.bak"
+            cp "$compose_file" "$compose_file.$TIMESTAMP.bak"
             sed -i 's|SENTRY_DSN: \${SENTRY_DSN}$|SENTRY_DSN: ${SENTRY_DSN_REPLICATION_BACKEND}|g' "$compose_file"
-            echo "[$D] updated docker-compose.yml: SENTRY_DSN -> SENTRY_DSN_REPLICATION_BACKEND (backup: $compose_file.bak)"
+            echo "[$D] updated docker-compose.yml: SENTRY_DSN -> SENTRY_DSN_REPLICATION_BACKEND (backup: $compose_file.$TIMESTAMP.bak)"
         else
             echo "[$D] WARNING: docker-compose.yml does not reference SENTRY_DSN_REPLICATION_BACKEND and no known old pattern found — manual review needed"
         fi
@@ -64,7 +66,7 @@ for D in "$baseDirectory/${PREFIX}"*; do
         fi
 
         # Backup before editing
-        cp "$env_file" "$env_file.bak"
+        cp "$env_file" "$env_file.$TIMESTAMP.bak"
 
         # Insert the new variable directly after the SENTRY_DSN= line if present,
         # otherwise append it to the end of the file.
@@ -74,6 +76,6 @@ for D in "$baseDirectory/${PREFIX}"*; do
             printf '\nSENTRY_DSN_REPLICATION_BACKEND=%s\n' "$SENTRY_DSN_REPLICATION_BACKEND" >> "$env_file"
         fi
 
-        echo "[$D] added SENTRY_DSN_REPLICATION_BACKEND= (backup: $env_file.bak)"
+        echo "[$D] added SENTRY_DSN_REPLICATION_BACKEND= (backup: $env_file.$TIMESTAMP.bak)"
     fi
 done

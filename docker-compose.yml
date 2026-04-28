@@ -64,6 +64,10 @@ services:
       SENTRY_ENABLED: ${SENTRY_ENABLED}
       SENTRY_INSTANCE_NAME: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}
+      KEYCLOAK_ADMIN_BASE_URL: https://${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${INSTANCE_NAME}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID:-aam-backend}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET}
       PORT: 5984
     restart: unless-stopped
     profiles:
@@ -79,6 +83,7 @@ services:
       - external_web
     depends_on:
       - couchdb-with-permissions
+      - replication-backend
       - aam-backend-service-db
       - rabbitmq
     volumes:

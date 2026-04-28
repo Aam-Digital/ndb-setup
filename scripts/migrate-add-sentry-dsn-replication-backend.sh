@@ -2,7 +2,6 @@
 
 # Migration: add SENTRY_DSN_REPLICATION_BACKEND to existing .env files and
 # update docker-compose.yml to use the new variable instead of SENTRY_DSN.
-# Only processes instances that already have TEMPLATE_VERSION=2.
 #
 # Can be run from any directory.
 
@@ -51,12 +50,6 @@ for D in "$baseDirectory/${PREFIX}"*; do
             echo "[$D] updated docker-compose.yml: SENTRY_DSN -> SENTRY_DSN_REPLICATION_BACKEND (backup: $compose_file.$TIMESTAMP.bak)"
         else
             echo "[$D] WARNING: docker-compose.yml does not reference SENTRY_DSN_REPLICATION_BACKEND and no known old pattern found — manual review needed"
-        fi
-
-        # Only migrate instances already on TEMPLATE_VERSION=2
-        if ! grep -q '^TEMPLATE_VERSION=2$' "$env_file"; then
-            echo "  ... [$D] TEMPLATE_VERSION!=2, skipping"
-            continue
         fi
 
         # Skip if already present (regardless of value)

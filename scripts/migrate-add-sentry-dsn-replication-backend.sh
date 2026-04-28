@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Migration: add SENTRY_DSN_REPLICATION_BACKEND to existing .env files
-# (only for instances that already have TEMPLATE_VERSION=2 but are missing
-# the SENTRY_DSN_REPLICATION_BACKEND variable).
+# Migration: add SENTRY_DSN_REPLICATION_BACKEND to existing .env files and
+# update docker-compose.yml to use the new variable instead of SENTRY_DSN.
+# Only processes instances that already have TEMPLATE_VERSION=2.
 #
 # Can be run from any directory.
 
@@ -33,29 +33,33 @@ for D in "$baseDirectory/${PREFIX}"*; do
         compose_file="$D/docker-compose.yml"
 
         if [ ! -f "$env_file" ]; then
-            echo "[$D] no .env file, skipping"
+            echo "  ... [$D] no .env file, skipping"
             continue
         fi
 
-        # Warn if the docker-compose.yml does not yet reference the new variable
-        # (outdated compose file — env var would have no effect).
-        if [ -f "$compose_file" ]; then
-            if ! grep -q 'SENTRY_DSN_REPLICATION_BACKEND' "$compose_file"; then
-                echo "[$D] WARNING: docker-compose.yml does not reference SENTRY_DSN_REPLICATION_BACKEND (outdated compose file)"
-            fi
-        else
+        # Migrate docker-compose.yml: replace `SENTRY_DSN: ${SENTRY_DSN}` with
+        # `SENTRY_DSN: ${SENTRY_DSN_REPLICATION_BACKEND}` if not already updated.
+        if [ ! -f "$compose_file" ]; then
             echo "[$D] WARNING: no docker-compose.yml found"
+        elif grep -q 'SENTRY_DSN_REPLICATION_BACKEND' "$compose_file"; then
+            echo "  ... [$D] docker-compose.yml already up to date"
+        elif grep -q 'SENTRY_DSN: \${SENTRY_DSN}' "$compose_file"; then
+            cp "$compose_file" "$compose_file.bak"
+            sed -i 's|SENTRY_DSN: \${SENTRY_DSN}$|SENTRY_DSN: ${SENTRY_DSN_REPLICATION_BACKEND}|g' "$compose_file"
+            echo "[$D] updated docker-compose.yml: SENTRY_DSN -> SENTRY_DSN_REPLICATION_BACKEND (backup: $compose_file.bak)"
+        else
+            echo "[$D] WARNING: docker-compose.yml does not reference SENTRY_DSN_REPLICATION_BACKEND and no known old pattern found — manual review needed"
         fi
 
         # Only migrate instances already on TEMPLATE_VERSION=2
         if ! grep -q '^TEMPLATE_VERSION=2$' "$env_file"; then
-            echo "[$D] TEMPLATE_VERSION!=2, skipping"
+            echo "  ... [$D] TEMPLATE_VERSION!=2, skipping"
             continue
         fi
 
         # Skip if already present (regardless of value)
         if grep -q '^SENTRY_DSN_REPLICATION_BACKEND=' "$env_file"; then
-            echo "[$D] SENTRY_DSN_REPLICATION_BACKEND already present, skipping"
+            echo "  ... [$D] SENTRY_DSN_REPLICATION_BACKEND already present, skipping"
             continue
         fi
 

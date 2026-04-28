@@ -4,13 +4,13 @@
 # (only for instances that already have TEMPLATE_VERSION=2 but are missing
 # the SENTRY_DSN_REPLICATION_BACKEND variable).
 #
-# Run from the parent directory containing all instance folders
-# (i.e. the directory that also contains the ndb-setup checkout).
+# Can be run from any directory.
 
 set -u
 
 # Load PREFIX, BWS_ACCESS_TOKEN (and other setup.env vars).
-source "ndb-setup/setup.env"
+baseDirectory="/var/docker"
+source "$baseDirectory/ndb-setup/setup.env"
 
 if [ -z "${PREFIX:-}" ]; then
     echo "ERROR: PREFIX is not set in ndb-setup/setup.env"
@@ -27,7 +27,7 @@ bws config server-base https://vault.bitwarden.eu
 
 SENTRY_DSN_REPLICATION_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "359ea1c0-798e-4e17-ae44-b2e20153051d" | jq -r .value)
 
-for D in "${PREFIX}"*; do
+for D in "$baseDirectory/${PREFIX}"*; do
     if [ -d "${D}" ]; then
         env_file="$D/.env"
         compose_file="$D/docker-compose.yml"

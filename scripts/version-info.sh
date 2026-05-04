@@ -48,8 +48,8 @@ getComposeProfiles() {
 }
 
 {
-echo -e "instance-name \t deployment-type \t app-version \t backend-version \t export-api \t skilllab-api \t notification-api \t change-detection"
-echo -e "------------- \t --------------- \t ----------- \t --------------- \t ---------- \t ------------ \t ---------------- \t ----------------"
+echo -e "instance-name \t deployment-type \t app-version \t replication-backend \t backend-version \t export-api \t skilllab-api \t notification-api \t change-detection"
+echo -e "------------- \t --------------- \t ----------- \t ------------------- \t --------------- \t ---------- \t ------------ \t ---------------- \t ----------------"
 
 cd "$baseDirectory" || exit
 for D in *; do
@@ -60,6 +60,7 @@ for D in *; do
                 echo -e -n "$instance_name \t"
                 echo -e -n "$(getVar .env COMPOSE_PROFILES) \t"
                 echo -e -n "$(getVar .env APP_VERSION) \t"
+                echo -e -n "$(getVar .env AAM_REPLICATION_BACKEND_VERSION) \t"
                 echo -e -n "$(getVar .env AAM_BACKEND_SERVICE_VERSION) \t"
                 echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_EXPORTAPI_ENABLED)\t"
                 echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_SKILLAPI_MODE)\t"

@@ -1,0 +1,193 @@
+#!/bin/bash
+# Shared utility functions for ndb-setup scripts.
+# Source this file in any script that needs these helpers:
+#   source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+
+##############################
+# Environment helpers
+##############################
+
+# Get a variable value from a .env file
+getVar() {
+  local file="$1"
+  local var="$2"
+  grep "^$var=" "$file" 2>/dev/null | cut -d '=' -f2- || echo ""
+}
+
+# Set (replace) a variable in a file (key must already exist)
+setEnv() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  # escape sed special characters in value (\, &, |)
+  local escaped
+  escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
+  sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+}
+
+# Append a variable to a file if it does not already exist
+ensureEnv() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    echo "$key=$value" >> "$file"
+    echo "  + added $key to $(basename "$file")"
+  fi
+}
+
+# Create a timestamped backup of a file
+backupFile() {
+  local file="$1"
+  local backup="$file.bak-$(date +%Y%m%d%H%M%S)"
+  if [ -f "$file" ]; then
+    cp "$file" "$backup"
+    echo "  backup: $(basename "$backup")"
+  fi
+}
+
+##############################
+# Password generation
+##############################
+
+_common_chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
+
+generate_password() {
+  password=""
+  for _ in {1..24} ; do
+    password="$password${_common_chars:RANDOM%${#_common_chars}:1}"
+  done
+}
+
+##############################
+# Keycloak helpers
+##############################
+
+# Obtain a Keycloak admin access token.
+# Requires: KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD
+# Sets: token (global)
+getKeycloakToken() {
+  local raw
+  raw=$(curl -s -L "https://$KEYCLOAK_HOST/realms/master/protocol/openid-connect/token" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    --data-urlencode username="$KEYCLOAK_USER" \
+    --data-urlencode password="$KEYCLOAK_PASSWORD" \
+    --data-urlencode grant_type=password \
+    --data-urlencode client_id=admin-cli)
+  token=${raw#*\"access_token\":\"}
+  token=${token%%\"*}
+
+  if [ -z "$token" ] || [ "$token" = "$raw" ]; then
+    echo "ERROR: Failed to get Keycloak admin token." >&2
+    token=""
+    return 1
+  fi
+}
+
+# Creates the aam-backend Keycloak client (if it doesn't exist) and assigns manage-realm role.
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+# Sets: clientSecret (global)
+createKeycloakBackendClient() {
+  local realm="$1"
+  clientSecret=""
+
+  if ! getKeycloakToken; then
+    return 1
+  fi
+
+  # check if aam-backend client already exists
+  local existing existingUuid
+  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=aam-backend" \
+    -H "Authorization: Bearer $token")
+  existingUuid=$(echo "$existing" | jq -r '.[0].id // empty')
+
+  if [ -n "$existingUuid" ]; then
+    echo "  aam-backend client already exists: $existingUuid"
+    clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$existingUuid/client-secret" \
+      -H "Authorization: Bearer $token" | jq -r '.value // empty')
+
+    # ensure service account has manage-realm role (idempotent)
+    _assignManageRealmRole "$realm" "$existingUuid"
+    return 0
+  fi
+
+  # create the aam-backend client (confidential, service account enabled)
+  local clientResponse location clientUuid
+  clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/clients" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "clientId": "aam-backend",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect"
+    }')
+
+  # extract client UUID from Location header
+  location=$(echo "$clientResponse" | grep -i "^location:")
+  clientUuid=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
+
+  if [ -z "$clientUuid" ]; then
+    echo "  ERROR: Failed to create aam-backend client in realm '$realm'."
+    return 1
+  fi
+
+  echo "  Created aam-backend client: $clientUuid"
+
+  clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/client-secret" \
+    -H "Authorization: Bearer $token" | jq -r '.value // empty')
+
+  if [ -z "$clientSecret" ]; then
+    echo "  ERROR: Failed to retrieve client secret for aam-backend in realm '$realm'."
+    return 1
+  fi
+
+  _assignManageRealmRole "$realm" "$clientUuid"
+}
+
+# Internal: assign manage-realm role to the service account of a client
+_assignManageRealmRole() {
+  local realm="$1"
+  local aamBackendClientUuid="$2"
+
+  local serviceAccountUserId
+  serviceAccountUserId=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$aamBackendClientUuid/service-account-user" \
+    -H "Authorization: Bearer $token" | jq -r '.id // empty')
+
+  if [ -z "$serviceAccountUserId" ]; then
+    echo "  WARNING: Could not get service account user for aam-backend client."
+    return 1
+  fi
+
+  local realmMgmtClientUuid
+  realmMgmtClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=realm-management" \
+    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
+
+  local manageRealmRole
+  manageRealmRole=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$realmMgmtClientUuid/roles/manage-realm" \
+    -H "Authorization: Bearer $token")
+
+  curl -s -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "[$manageRealmRole]"
+
+  echo "  Ensured manage-realm role on aam-backend service account."
+
+  # ensure the "roles" client scope is assigned (required for role claims in the access token)
+  local rolesScopeUuid
+  rolesScopeUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/client-scopes" \
+    -H "Authorization: Bearer $token" | jq -r '.[] | select(.name == "roles") | .id // empty')
+
+  if [ -n "$rolesScopeUuid" ]; then
+    curl -s -X PUT "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$aamBackendClientUuid/default-client-scopes/$rolesScopeUuid" \
+      -H "Authorization: Bearer $token"
+    echo "  Ensured 'roles' client scope on aam-backend client."
+  else
+    echo "  WARNING: Could not find 'roles' client scope in realm '$realm'."
+  fi
+}

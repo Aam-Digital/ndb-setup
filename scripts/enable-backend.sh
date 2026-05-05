@@ -19,6 +19,7 @@
 
 baseDirectory="/var/docker"
 source "$baseDirectory/ndb-setup/setup.env"
+source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 # check if BWS_ACCESS_TOKEN is set
 if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
@@ -54,8 +55,6 @@ SENTRY_DSN_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "a858a580-9643-4330-8
 KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
 KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
 KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
-
-chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 
 isBackendEnabled=0
 isBackendConfigCreated=0
@@ -97,143 +96,6 @@ replicationBackendEnabledCheck() {
     isReplicationBackendEnabled=0
   else
     isReplicationBackendEnabled=1
-  fi
-}
-
-setEnv() {
-    local key="$1"
-    local value="$2"
-    local path="$3"
-    # escape sed special characters in value (\, &, |)
-    local escaped
-    escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
-
-    sed -i "s|^$key=.*|$key=$escaped|g" "$path" # linux
-    # gsed -i "s|^$key=.*|$key=$escaped|g" "$path" # macos
-}
-
-# Funktion zum Abrufen der Umgebungsvariablen
-getVar() {
-    local file="$1"
-    local var="$2"
-    local value
-
-    # grep sucht die Zeile mit der Variable, cut extrahiert den Wert
-    value=$(grep "^$var=" "$file" | cut -d '=' -f2-)
-
-    # Falls die Variable nicht existiert oder leer ist, eine Meldung ausgeben
-    if [ -z "$value" ]; then
-      value="n/a"
-    fi
-
-    echo "$value"
-}
-
-generate_password() {
-  password=""
-  for _ in {1..24} ; do
-    password="$password${chars:RANDOM%${#chars}:1}"
-  done
-}
-
-getKeycloakToken() {
-  token=$(curl -s -L "https://$KEYCLOAK_HOST/realms/master/protocol/openid-connect/token" -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode username="$KEYCLOAK_USER" --data-urlencode password="$KEYCLOAK_PASSWORD" --data-urlencode grant_type=password --data-urlencode client_id=admin-cli)
-  token=${token#*\"access_token\":\"}
-  token=${token%%\"*}
-}
-
-createKeycloakBackendClient() {
-  local realm="$1"
-  clientSecret=""
-
-  getKeycloakToken
-
-  # check if aam-backend client already exists (idempotent)
-  local existing
-  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=aam-backend" \
-    -H "Authorization: Bearer $token")
-  clientUuid=$(echo "$existing" | jq -r '.[0].id // empty')
-
-  if [ -z "$clientUuid" ]; then
-    # create the aam-backend client (confidential, service account enabled)
-    clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/clients" \
-      -H "Authorization: Bearer $token" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "clientId": "aam-backend",
-        "enabled": true,
-        "clientAuthenticatorType": "client-secret",
-        "serviceAccountsEnabled": true,
-        "publicClient": false,
-        "standardFlowEnabled": false,
-        "directAccessGrantsEnabled": false,
-        "protocol": "openid-connect"
-      }')
-
-    # extract client UUID from Location header
-    location=$(echo "$clientResponse" | grep -i "^location:")
-    clientUuid=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
-
-    if [ -z "$clientUuid" ]; then
-      echo "ERROR: Failed to create aam-backend client in Keycloak realm '$realm'."
-      return 1
-    fi
-
-    echo "Created aam-backend client: $clientUuid"
-  else
-    echo "aam-backend client already exists: $clientUuid"
-  fi
-
-  # get client secret
-  clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/client-secret" \
-    -H "Authorization: Bearer $token" | jq -r '.value // empty')
-
-  if [ -z "$clientSecret" ]; then
-    echo "ERROR: Failed to retrieve client secret for aam-backend client in realm '$realm'."
-    return 1
-  fi
-
-  # get the service account user
-  serviceAccountUserId=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/service-account-user" \
-    -H "Authorization: Bearer $token" | jq -r '.id // empty')
-
-  if [ -z "$serviceAccountUserId" ]; then
-    echo "ERROR: Failed to retrieve service account user for aam-backend client in realm '$realm'."
-    return 1
-  fi
-
-  # get the realm-management client UUID
-  realmMgmtClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=realm-management" \
-    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
-
-  if [ -z "$realmMgmtClientUuid" ]; then
-    echo "ERROR: Failed to retrieve realm-management client in realm '$realm'."
-    return 1
-  fi
-
-  # get the manage-realm role from realm-management client
-  manageRealmRole=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$realmMgmtClientUuid/roles/manage-realm" \
-    -H "Authorization: Bearer $token")
-
-  # assign manage-realm role to the service account
-  curl -s -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d "[$manageRealmRole]"
-
-  echo "Assigned manage-realm role to aam-backend service account."
-
-  # ensure the "roles" client scope is assigned (required for role claims in the access token)
-  local rolesScopeUuid
-  rolesScopeUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/client-scopes" \
-    -H "Authorization: Bearer $token" | jq -r '.[] | select(.name == "roles") | .id // empty')
-
-  if [ -n "$rolesScopeUuid" ]; then
-    curl -s -X PUT "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/default-client-scopes/$rolesScopeUuid" \
-      -H "Authorization: Bearer $token"
-    echo "Ensured 'roles' client scope on aam-backend client."
-  else
-    echo "WARNING: Could not find 'roles' client scope in realm '$realm'."
   fi
 }
 
@@ -289,6 +151,12 @@ setEnv CRYPTO_CONFIGURATION_SECRET "$password" "$path/config/aam-backend-service
 setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://keycloak.aam-digital.com/realms/$instance" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
+
+# ensure keys exist before setting (older application.env templates may lack them)
+ensureEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "" "$path/config/aam-backend-service/application.env"
+ensureEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "" "$path/config/aam-backend-service/application.env"
+ensureEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "" "$path/config/aam-backend-service/application.env"
+
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "http://replication-backend:5984" "$path/config/aam-backend-service/application.env"
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"

@@ -18,6 +18,7 @@ set -uo pipefail
 baseDirectory="/var/docker"
 source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 
 ##############################
 # BWS secrets

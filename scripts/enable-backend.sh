@@ -20,6 +20,7 @@
 baseDirectory="/var/docker"
 source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 
 # check if BWS_ACCESS_TOKEN is set
 if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
@@ -56,82 +57,29 @@ KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b
 KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
 KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
 
-isBackendEnabled=0
-isBackendConfigCreated=0
-isReplicationBackendEnabled=0
-
-# setting backend version. Use latest available version by default.
-backendVersion=
-
-##############################
-# functions
-##############################
-
-backendEnabledCheck() {
-  composeProfiles=$(getVar "$path/.env" COMPOSE_PROFILES)
-
-  if [ "$composeProfiles" = "full-stack" ]; then
-    isBackendEnabled=1
-  else
-    isBackendEnabled=0
-  fi
-}
-
-isBackendConfigCreated() {
-  if [ ! -f "$path/config/aam-backend-service/application.env" ]; then
-    isBackendConfigCreated=0
-  else
-    isBackendConfigCreated=1
-  fi
-}
-
-setLatestBackendVersion() {
-  backendVersion=$(curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]')
-}
-
-replicationBackendEnabledCheck() {
-  composeProfiles=$(getVar "$path/.env" COMPOSE_PROFILES)
-
-  if [ "$composeProfiles" == "database-only" ]; then
-    isReplicationBackendEnabled=0
-  else
-    isReplicationBackendEnabled=1
-  fi
-}
 
 ##############################
 # script
 ##############################
 
-setLatestBackendVersion
+backendVersion=$(getLatestBackendVersion)
 echo "Latest backendVersion available: $backendVersion"
 
 # check if backend is already enabled for this instance
-backendEnabledCheck
-isBackendConfigCreated
-
-if [ "$isBackendEnabled" == 1 ]; then
+if backendEnabledCheck; then
   echo "Backend already enabled for '$instance'. Abort."
   exit 1
-else
-  echo ""
 fi
 
-if [ "$isBackendConfigCreated" == 1 ]; then
+if isBackendConfigCreated; then
   echo "Backend config already created for '$instance'. Abort."
   exit 1
-else
-  echo ""
 fi
 
-replicationBackendEnabledCheck
-
-if [ "$isReplicationBackendEnabled" == 0 ]; then
+if ! replicationBackendEnabledCheck; then
   # all functionality should be the same with a direct CouchDB without replication-backend. However, some URLs will need to be adapted for this scenario
   echo "Replication Backend is required for backend. Please enable first. Abort."
   exit 1
-else
-  echo ""
 fi
 
 (cd "$path" && docker compose down)
@@ -145,9 +93,7 @@ mkdir -p "$path/config/aam-backend-service"
 # copy latest template config (from aam-services repository)
 curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
 
-generate_password
-
-setEnv CRYPTO_CONFIGURATION_SECRET "$password" "$path/config/aam-backend-service/application.env"
+setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://keycloak.aam-digital.com/realms/$instance" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"

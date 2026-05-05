@@ -20,6 +20,8 @@
 
 baseDirectory="/var/docker"
 source "$baseDirectory/ndb-setup/setup.env"
+source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 
 # check if BWS_ACCESS_TOKEN is set
 if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
@@ -42,27 +44,8 @@ SMTP_SERVER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2c
 SMTP_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" | jq -r .value)
 
 ##############################
-# variables
-##############################
-
-chars=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
-
-##############################
 # functions
 ##############################
-
-generate_password() {
-  password=""
-  for _ in {1..24} ; do
-    password="$password${chars:RANDOM%${#chars}:1}"
-  done
-}
-
-getKeycloakToken() {
-  token=$(curl -s -L "https://$KEYCLOAK_HOST/realms/master/protocol/openid-connect/token" -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode username="$KEYCLOAK_USER" --data-urlencode password="$KEYCLOAK_PASSWORD" --data-urlencode grant_type=password --data-urlencode client_id=admin-cli)
-  token=${token#*\"access_token\":\"}
-  token=${token%%\"*}
-}
 
 getKeycloakKey() {
   keys=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$org/keys" -H "Authorization: Bearer $token")
@@ -71,32 +54,6 @@ getKeycloakKey() {
   keys=${keys#*\"algorithm\":\"RS256\",}
   publicKey=${keys#*\"publicKey\":\"}
   publicKey=${publicKey%%\"*}
-}
-
-setEnv() {
-    local key="$1"
-    local value="$2"
-    local path="$3"
-
-    sed -i "s|^$key=.*|$key=$value|g" "$path" # linux
-    # gsed -i "s|^$key=.*|$key=$value|g" "$path" # macos
-}
-
-# Funktion zum Abrufen der Umgebungsvariablen
-getVar() {
-    local file="$1"
-    local var="$2"
-    local value
-
-    # grep sucht die Zeile mit der Variable, cut extrahiert den Wert
-    value=$(grep "^$var=" "$file" | cut -d '=' -f2-)
-
-    # Falls die Variable nicht existiert oder leer ist, eine Meldung ausgeben
-    if [ -z "$value" ]; then
-      value="n/a"
-    fi
-
-    echo "$value"
 }
 
 # Function to check if the first filename exists, if not, return the second filename
@@ -183,21 +140,19 @@ if [ "$app" == 0 ]; then
   setEnv AAM_REPLICATION_BACKEND_VERSION "$replicationBackendVersion" "$path/.env"
 
   # setting backend version. Using latest available version
-  backendVersion=$(curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]')
+  backendVersion=$(getLatestBackendVersion)
   setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 
   # default couchdb user
   couchDbUser=aam-admin
   setEnv COUCHDB_USER "$couchDbUser" "$path/.env"
 
-  generate_password
-  couchDbPassword=$password
+  couchDbPassword=$(generate_password)
 
-  setEnv COUCHDB_PASSWORD "$password" "$path/.env"
+  setEnv COUCHDB_PASSWORD "$couchDbPassword" "$path/.env"
   echo "CouchDB admin user: $couchDbUser and password: $couchDbPassword"
 
-  generate_password
-  setEnv REPLICATION_BACKEND_JWT_SECRET "$password" "$path/.env"
+  setEnv REPLICATION_BACKEND_JWT_SECRET "$(generate_password)" "$path/.env"
 
   url=$org.$DOMAIN
 

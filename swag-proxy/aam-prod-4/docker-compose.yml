@@ -27,6 +27,7 @@ services:
       - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
       - ./config/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf
       - ./config/nginx/proxy.conf:/config/nginx/proxy.conf
+      - ./config/nginx/resolver.conf:/config/nginx/resolver.conf
       - /var/docker/volumes/swag-proxy/etc:/config/etc
       - /var/docker/volumes/swag-proxy/fail2ban:/config/fail2ban
       - /var/docker/volumes/swag-proxy/keys:/config/keys

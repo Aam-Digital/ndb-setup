@@ -303,16 +303,18 @@ if [ ! -f "$path/keycloak.json" ]; then
 
   # wait for DB to be ready
   (cd "$path" && docker compose up -d)
-  while [ "$status" != 200 ]; do
+  dbContainer="${org}-db-entrypoint"
+  dbLocalUrl="http://127.0.0.1:5984"
+  while [ "$status" != "200" ]; do
     sleep 4
     echo "Waiting for DB to be ready"
-    status=$(curl -s -o /dev/null  "https://$url/db/_utils/" -I -w "%{http_code}\n")
+    status=$(docker exec "$dbContainer" curl -s -o /dev/null -w "%{http_code}" -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/_up")
   done
-  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/_users"
-  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/app"
-  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/report-calculation"
-  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/notification-webhook"
-  curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/app-attachments"
+  docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/_users"
+  docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/app"
+  docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/report-calculation"
+  docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/notification-webhook"
+  docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/app-attachments"
 
   if [ -n "$4" ]; then
     userEmail="$4"
@@ -351,7 +353,7 @@ if [ ! -f "$path/keycloak.json" ]; then
     fi
 
     echo "create user document in couchdb..."
-    curl -X PUT -u "$couchDbUser:$couchDbPassword" -H 'Content-Type: application/json' -d "{\"name\": \"$userName\"}" "https://$url/db/app/User:$userName"
+    docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" -H 'Content-Type: application/json' -d "{\"name\": \"$userName\"}" "$dbLocalUrl/app/User:$userName"
   fi
 
   echo "App is connected with Keycloak"
@@ -402,15 +404,17 @@ if [ "$replicationBackend" == 0 ]; then
 
     # wait for DB to be ready
     (cd "$path" && docker compose up -d)
+    dbContainer="${org}-db-entrypoint"
+    dbLocalUrl="http://127.0.0.1:5984"
 
-    while [ "$status" != 200 ]; do
+    while [ "$status" != "200" ]; do
       sleep 4
       echo "Waiting for DB to be ready"
-      status=$(curl -s -o /dev/null  "https://$url/db/_utils/" -I -w "%{http_code}\n")
+      status=$(docker exec "$dbContainer" curl -s -o /dev/null -w "%{http_code}" -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/_up")
     done
 
-    curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/app/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
-    curl -X PUT -u "$couchDbUser:$couchDbPassword" "https://$url/db/app-attachments/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
+    docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/app/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
+    docker exec "$dbContainer" curl -s -X PUT -u "$couchDbUser:$couchDbPassword" "$dbLocalUrl/app-attachments/_security" -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }'
 
     (cd "$path" && docker compose down && docker stop "$org-db-entrypoint" && docker remove "$org-db-entrypoint")
   fi

@@ -19,10 +19,15 @@ setEnv() {
   local key="$1"
   local value="$2"
   local file="$3"
+  if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    echo "  WARNING: $key not found in $(basename "$file"), cannot update (use ensureEnv first)"
+    return 1
+  fi
   # escape sed special characters in value (\, &, |)
   local escaped
   escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
   sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+  echo "  ~ updated $key in $(basename "$file")"
 }
 
 # Append a variable to a file if it does not already exist
@@ -33,6 +38,8 @@ ensureEnv() {
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
     echo "$key=$value" >> "$file"
     echo "  + added $key to $(basename "$file")"
+  else
+    echo "  = $key already exists in $(basename "$file"), skipping"
   fi
 }
 

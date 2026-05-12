@@ -62,6 +62,28 @@ migrate_instance() {
     return
   fi
 
+  # Check if already fully migrated
+  local needsMigration=false
+  if ! grep -q "^REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID=" "$envFile" 2>/dev/null; then
+    needsMigration=true
+  elif ! grep -q "^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=" "$envFile" 2>/dev/null; then
+    needsMigration=true
+  elif [ -f "$appEnvFile" ]; then
+    for var in AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH \
+               AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME \
+               AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD; do
+      if ! grep -q "^$var=" "$appEnvFile" 2>/dev/null; then
+        needsMigration=true
+        break
+      fi
+    done
+  fi
+
+  if [ "$needsMigration" = false ]; then
+    echo "[$instance] already up-to-date, skipping"
+    return
+  fi
+
   echo "[$instance] migrating..."
 
   # backup files before any modification
@@ -89,8 +111,8 @@ migrate_instance() {
 
   # 2. Add Keycloak vars to .env (for replication-backend)
   ensureEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID" "aam-backend" "$envFile"
+  ensureEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$clientSecret" "$envFile"
   setEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$clientSecret" "$envFile"
-  echo "  Set REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET in .env"
 
   # 3. Ensure application.env has replication-backend basic auth vars
   if [ -f "$appEnvFile" ]; then

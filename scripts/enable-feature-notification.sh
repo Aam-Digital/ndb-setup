@@ -13,7 +13,9 @@
 # setup
 ##############################
 
-source "../setup.env"
+baseDirectory="/var/docker"
+source "$baseDirectory/ndb-setup/setup.env"
+source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 ##############################
 # ask for input data
@@ -30,78 +32,21 @@ fi
 # variables
 ##############################
 
-path="../../$PREFIX$instance"
-isBackendEnabled=0
-isBackendConfigCreated=0
-
-##############################
-# functions
-##############################
-
-backendEnabledCheck() {
-  composeProfiles=$(getVar "$path/.env" COMPOSE_PROFILES)
-
-  if [ "$composeProfiles" = "full-stack" ]; then
-    isBackendEnabled=1
-  else
-    isBackendEnabled=0
-  fi
-
-  isBackendConfigCreated
-}
-
-isBackendConfigCreated() {
-  if [ ! -f "$path/config/aam-backend-service/application.env" ]; then
-    isBackendConfigCreated=0
-  else
-    isBackendConfigCreated=1
-  fi
-}
-
-setEnv() {
-    local key="$1"
-    local value="$2"
-
-    sed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # linux
-    # gsed -i "s|^$key=.*|$key=$value|g" "$path/config/aam-backend-service/application.env" # macos
-}
-
-# Funktion zum Abrufen der Umgebungsvariablen
-getVar() {
-    local file="$1"
-    local var="$2"
-    local value
-
-    # grep sucht die Zeile mit der Variable, cut extrahiert den Wert
-    value=$(grep "^$var=" "$file" | cut -d '=' -f2-)
-
-    # Falls die Variable nicht existiert oder leer ist, eine Meldung ausgeben
-    if [ -z "$value" ]; then
-      value="n/a"
-    fi
-
-    echo "$value"
-}
+path="$baseDirectory/$PREFIX$instance"
 
 ##############################
 # script
 ##############################
 
 # check if backend is already enabled for this instance
-backendEnabledCheck
-
-if [ "$isBackendEnabled" == 0 ]; then
+if ! backendEnabledCheck; then
   echo "No backend found for instance '$instance'. Please run './enable-backend.sh' first."
   exit 1
-else
-  echo ""
 fi
 
-if [ "$isBackendConfigCreated" == 0 ]; then
+if ! isBackendConfigCreated; then
   echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
   exit 1
-else
-  echo ""
 fi
 
 isFeatureAlreadyEnabled=$(getVar "$path/config/aam-backend-service/application.env" FEATURES_NOTIFICATIONAPI_ENABLED)
@@ -115,6 +60,8 @@ fi
 
 (cd "$path" && docker compose down)
 
+backupFile "$path/config/aam-backend-service/application.env"
+
 if [ -n "$2" ]; then
   configCredentialBase64="$2"
 else
@@ -122,10 +69,10 @@ else
   read -r configCredentialBase64
 fi
 
-setEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredentialBase64"
-setEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN"
-setEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase"
-setEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true"
+setEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredentialBase64" "$path/config/aam-backend-service/application.env"
+setEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$path/config/aam-backend-service/application.env"
+setEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$path/config/aam-backend-service/application.env"
+setEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$path/config/aam-backend-service/application.env"
 
 (cd "$path" && docker compose up -d)
 

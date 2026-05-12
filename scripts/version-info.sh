@@ -7,29 +7,7 @@
 
 baseDirectory="/var/docker"
 source "$baseDirectory/ndb-setup/setup.env"
-
-# Funktion zum Abrufen der Umgebungsvariablen
-getVar() {
-    local file="$1"
-    local var="$2"
-    local value
-
-    # Überprüfen, ob die Datei existiert
-    if [ ! -f "$file" ]; then
-        echo "n/a"
-        return
-    fi
-
-    # grep sucht die Zeile mit der Variable, cut extrahiert den Wert
-    value=$(grep "^$var=" "$file" | cut -d '=' -f2-)
-
-    # Falls die Variable nicht existiert oder leer ist, eine Meldung ausgeben
-    if [ -z "$value" ]; then
-      value="n/a"
-    fi
-
-    echo "$value"
-}
+source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 getComposeProfiles() {
   local raw_value="$1"

@@ -53,7 +53,7 @@ for D in *; do
 
                 # migrate values from .env-old
                 compose_profiles=$(getComposeProfiles "$(getVar .env-old COMPOSE_PROFILES)")
-                keycloakUrl=https://keycloak.aam-digital.com
+                keycloakUrl=keycloak.aam-digital.com
 
                 sed -i "s/^INSTANCE_NAME=.*/INSTANCE_NAME=$instance_name/g" ".env"
                 sed -i "s/^INSTANCE_DOMAIN=.*/INSTANCE_DOMAIN=$(getVar .env-old APP_URL)/g" ".env"

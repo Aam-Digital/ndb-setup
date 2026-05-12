@@ -15,7 +15,9 @@
 # setup
 ##############################
 
-source "../setup.env"
+baseDirectory="/var/docker"
+source "$baseDirectory/ndb-setup/setup.env"
+source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 ##############################
 # ask for input data
@@ -32,52 +34,20 @@ fi
 # variables
 ##############################
 
-path="../../$PREFIX$instance"
-isBackendConfigCreated=0
+path="$baseDirectory/$PREFIX$instance"
 
-# setting backend version. Use latest available version by default.
-backendVersion=
-
-##############################
-# functions
-##############################
-
-setEnv() {
-    local key="$1"
-    local value="$2"
-    local path="$3"
-
-    sed -i "s|^$key=.*|$key=$value|g" "$path" # linux
-    # gsed -i "s|^$key=.*|$key=$value|g" "$path" # macos
-}
-
-isBackendConfigCreated() {
-  if [ ! -f "$path/config/aam-backend-service/application.env" ]; then
-    isBackendConfigCreated=0
-  else
-    isBackendConfigCreated=1
-  fi
-}
-
-setLatestBackendVersion() {
-  backendVersion=$(curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]')
-}
 
 ##############################
 # script
 ##############################
 
-setLatestBackendVersion
+backendVersion=$(getLatestBackendVersion)
 echo "Latest backendVersion available: $backendVersion"
 
 # check if backend is already enabled for this instance
-isBackendConfigCreated
-
-if [ "$isBackendConfigCreated" == 0 ]; then
+if ! isBackendConfigCreated; then
   echo "No backend config found for instance '$instance'. Please run './enable-backend.sh' first."
   exit 1
-else
-  echo ""
 fi
 
 (cd "$path" && docker compose down)

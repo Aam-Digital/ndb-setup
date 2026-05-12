@@ -4,6 +4,12 @@
 #   source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 #
 # Requires: KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD set before use.
+# Requires: jq
+
+if ! command -v jq &>/dev/null; then
+  echo "ERROR: jq is required but not installed." >&2
+  exit 1
+fi
 
 ##############################
 # Keycloak helpers
@@ -20,10 +26,9 @@ getKeycloakToken() {
     --data-urlencode password="$KEYCLOAK_PASSWORD" \
     --data-urlencode grant_type=password \
     --data-urlencode client_id=admin-cli)
-  token=${raw#*\"access_token\":\"}
-  token=${token%%\"*}
+  token=$(echo "$raw" | jq -r '.access_token // empty')
 
-  if [ -z "$token" ] || [ "$token" = "$raw" ]; then
+  if [ -z "$token" ]; then
     echo "ERROR: Failed to get Keycloak admin token." >&2
     token=""
     return 1

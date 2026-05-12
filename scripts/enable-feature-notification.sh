@@ -60,6 +60,8 @@ fi
 
 (cd "$path" && docker compose down)
 
+backupFile "$path/config/aam-backend-service/application.env"
+
 if [ -n "$2" ]; then
   configCredentialBase64="$2"
 else

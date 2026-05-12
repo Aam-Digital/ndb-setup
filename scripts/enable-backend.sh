@@ -84,6 +84,8 @@ fi
 
 (cd "$path" && docker compose down)
 
+backupFile "$path/.env"
+
 # set aam-backend-service-version to supported version
 setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 
@@ -97,11 +99,6 @@ setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$path/config/aam-back
 setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://keycloak.aam-digital.com/realms/$instance" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
-
-# ensure keys exist before setting (older application.env templates may lack them)
-ensureEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "" "$path/config/aam-backend-service/application.env"
-ensureEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "" "$path/config/aam-backend-service/application.env"
-ensureEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "" "$path/config/aam-backend-service/application.env"
 
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "http://replication-backend:5984" "$path/config/aam-backend-service/application.env"
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"

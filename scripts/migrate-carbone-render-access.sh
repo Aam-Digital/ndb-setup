@@ -235,7 +235,7 @@ migrate_instance() {
 
   # 0. Create the Keycloak render client (or fetch existing).
   # Do this before modifying local files so failures do not leave a partial migration behind.
-  local clientId="${instance}-render"
+  local clientId="carbone-${instance}"
   if ! createCarboneRenderClient "$CARBONE_REALM" "$clientId"; then
     echo "  ERROR: Failed to create or fetch Keycloak render client. Skipping."
     return 1

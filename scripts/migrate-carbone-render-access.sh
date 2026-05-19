@@ -13,6 +13,7 @@
 #   ./migrate-carbone-render-access.sh <instance>     # migrate single instance
 #
 # Requires: BWS_ACCESS_TOKEN set in environment or setup.env
+#   OR: KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD set directly in setup.env
 # Requires: the `aam-platform` realm to already exist on the central Keycloak
 
 set -uo pipefail
@@ -32,19 +33,21 @@ CARBONE_HOST="${CARBONE_HOST:-pdf.${DOMAIN}}"
 OAUTH2_PROXY_CLIENT_ID="carbone-oauth2-proxy"
 
 ##############################
-# BWS secrets
+# BWS secrets (skipped if KEYCLOAK_HOST/USER/PASSWORD are already set in setup.env)
 ##############################
 
-if [[ -z "${BWS_ACCESS_TOKEN:-}" ]]; then
-  echo "BWS_ACCESS_TOKEN is not set. Abort."
-  exit 1
+if [[ -z "${KEYCLOAK_HOST:-}" ]] || [[ -z "${KEYCLOAK_USER:-}" ]] || [[ -z "${KEYCLOAK_PASSWORD:-}" ]]; then
+  if [[ -z "${BWS_ACCESS_TOKEN:-}" ]]; then
+    echo "BWS_ACCESS_TOKEN is not set and KEYCLOAK_HOST/KEYCLOAK_USER/KEYCLOAK_PASSWORD are not all set. Abort."
+    exit 1
+  fi
+
+  bws config server-base https://vault.bitwarden.eu
+
+  KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
+  KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
+  KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
 fi
-
-bws config server-base https://vault.bitwarden.eu
-
-KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
-KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
-KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
 
 ##############################
 # Preflight: confirm `aam-platform` realm exists on the central Keycloak

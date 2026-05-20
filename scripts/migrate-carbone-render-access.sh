@@ -5,7 +5,7 @@
 # For each full-stack instance:
 # - Creates a Keycloak client `<instance>-render` in the central `aam-platform` realm
 #   (one client per tenant — see aam-cloud-infrastructure/infra/src/aam-platform/README.md)
-# - Adds AAMRENDERAPICLIENTCONFIGURATION_* + FEATURES_EXPORTAPI_ENABLED=true to application.env
+# - Adds AAM_RENDER_API_CLIENT_CONFIGURATION_* + FEATURES_EXPORT_API_ENABLED=true to application.env
 # - Restarts the instance
 #
 # Usage:
@@ -213,13 +213,13 @@ migrate_instance() {
 
   # Check if already fully migrated
   local needsMigration=false
-  for var in AAMRENDERAPICLIENTCONFIGURATION_BASEPATH \
-             AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_CLIENTID \
-             AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_CLIENTSECRET \
-             AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_TOKENENDPOINT \
-             AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_GRANTTYPE \
-             AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_SCOPE \
-             FEATURES_EXPORTAPI_ENABLED; do
+  for var in AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH \
+             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID \
+             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET \
+             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT \
+             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE \
+             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE \
+             FEATURES_EXPORT_API_ENABLED; do
     if ! grep -q "^$var=" "$appEnvFile" 2>/dev/null; then
       needsMigration=true
       break
@@ -249,15 +249,15 @@ migrate_instance() {
   backupFile "$appEnvFile"
 
   # 2. Add render API config to application.env
-  ensureEnv "AAMRENDERAPICLIENTCONFIGURATION_BASEPATH" "https://$CARBONE_HOST" "$appEnvFile"
-  ensureEnv "AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_CLIENTID" "$clientId" "$appEnvFile"
-  ensureEnv "AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_CLIENTSECRET" "$clientSecret" "$appEnvFile"
+  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH" "https://$CARBONE_HOST" "$appEnvFile"
+  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID" "$clientId" "$appEnvFile"
+  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET" "$clientSecret" "$appEnvFile"
   # always overwrite the secret in case Keycloak rotated it since the last partial migration
-  setEnv "AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_CLIENTSECRET" "$clientSecret" "$appEnvFile"
-  ensureEnv "AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_TOKENENDPOINT" "https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token" "$appEnvFile"
-  ensureEnv "AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_GRANTTYPE" "client_credentials" "$appEnvFile"
-  ensureEnv "AAMRENDERAPICLIENTCONFIGURATION_AUTHCONFIG_SCOPE" "openid" "$appEnvFile"
-  ensureEnv "FEATURES_EXPORTAPI_ENABLED" "true" "$appEnvFile"
+  setEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET" "$clientSecret" "$appEnvFile"
+  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT" "https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token" "$appEnvFile"
+  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE" "client_credentials" "$appEnvFile"
+  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE" "openid" "$appEnvFile"
+  ensureEnv "FEATURES_EXPORT_API_ENABLED" "true" "$appEnvFile"
 
   # 3. Restart so aam-backend-service picks up the new config
   echo "  Restarting..."

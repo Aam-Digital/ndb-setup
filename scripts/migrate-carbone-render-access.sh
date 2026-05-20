@@ -12,9 +12,16 @@
 #   ./migrate-carbone-render-access.sh                # migrate all instances
 #   ./migrate-carbone-render-access.sh <instance>     # migrate single instance
 #
-# Requires: BWS_ACCESS_TOKEN set in environment or setup.env
-#   OR: KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD set directly in setup.env
-# Requires: the `aam-platform` realm to already exist on the central Keycloak
+# Requires: CARBONE_HOST and KEYCLOAK_HOST set in setup.env (environment-specific):
+#
+#   Environment  KEYCLOAK_HOST                  CARBONE_HOST
+#   -----------  -----------------------------  --------------------------------
+#   Staging      keycloak.aam-digital.net        pdf.dev-cluster.aam-digital.net
+#   Production   keycloak.aam-digital.com        pdf.aam-digital.app
+#
+# KEYCLOAK_HOST may also be fetched automatically via BWS_ACCESS_TOKEN instead of
+# setting it directly in setup.env (KEYCLOAK_USER/KEYCLOAK_PASSWORD are also needed then).
+# Requires: the `aam-platform` realm to already exist on the central Keycloak.
 
 set -uo pipefail
 
@@ -28,7 +35,16 @@ source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 ##############################
 
 CARBONE_REALM="aam-platform"
-CARBONE_HOST="${CARBONE_HOST:-pdf.${DOMAIN}}"
+
+# CARBONE_HOST must be set in setup.env. It is the public hostname of the Carbone
+# deployment for this environment — NOT derived from the instance's own DOMAIN.
+if [[ -z "${CARBONE_HOST:-}" ]]; then
+  echo "ERROR: CARBONE_HOST is not set in setup.env."
+  echo "  Staging:    CARBONE_HOST=pdf.dev-cluster.aam-digital.net"
+  echo "  Production: CARBONE_HOST=pdf.aam-digital.app"
+  exit 1
+fi
+
 # oauth2-proxy client ID — render clients must include this in their token audience.
 OAUTH2_PROXY_CLIENT_ID="carbone-oauth2-proxy"
 

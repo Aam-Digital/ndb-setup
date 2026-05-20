@@ -10,7 +10,11 @@
 # ./enable-backend.sh <instance> (optional) <password>
 # example: ./enable-backend.sh qm
 #
-# Attention: on macos, see setEnv function and enable the macos line instead the linux line
+# Requires: CARBONE_HOST set in setup.env (environment-specific):
+#   Environment  KEYCLOAK_HOST                  CARBONE_HOST
+#   -----------  -----------------------------  --------------------------------
+#   Staging      keycloak.aam-digital.net        pdf.dev-cluster.aam-digital.net
+#   Production   keycloak.aam-digital.com        pdf.aam-digital.app
 #
 
 ##############################
@@ -107,7 +111,13 @@ setEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCH
 setEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHPASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
 setEnv SQSCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SQSCLIENTCONFIGURATION_BASICAUTHPASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
-setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH "https://pdf.aam-digital.dev" "$path/config/aam-backend-service/application.env"
+if [[ -z "${CARBONE_HOST:-}" ]]; then
+  echo "ERROR: CARBONE_HOST is not set in setup.env."
+  echo "  Staging:    CARBONE_HOST=pdf.dev-cluster.aam-digital.net"
+  echo "  Production: CARBONE_HOST=pdf.aam-digital.app"
+  exit 1
+fi
+setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH "https://$CARBONE_HOST" "$path/config/aam-backend-service/application.env"
 setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID "$RENDER_API_CLIENT_ID_DEV" "$path/config/aam-backend-service/application.env"
 setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET "$RENDER_API_CLIENT_SECRET_DEV" "$path/config/aam-backend-service/application.env"
 setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT "https://auth.aam-digital.dev/realms/aam-digital/protocol/openid-connect/token" "$path/config/aam-backend-service/application.env"

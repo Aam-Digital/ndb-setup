@@ -55,7 +55,7 @@ services:
     depends_on:
       - couchdb-with-permissions
     environment:
-      DATABASE_URL: http://couchdb-with-permissions:5984
+      DATABASE_URL: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
       DATABASE_NAME: app
       DATABASE_USER: ${COUCHDB_USER}
       DATABASE_PASSWORD: ${COUCHDB_PASSWORD}
@@ -89,6 +89,11 @@ services:
       - rabbitmq
     volumes:
       - ./storage/aam-backend-service/data:/aam-backend-service/bin/data
+    environment:
+      # Override values from application.env that need per-instance interpolation.
+      # Using container_name avoids alias collisions on the shared external_web network.
+      COUCHDBCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
+      AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-db-entrypoint:5984
     env_file:
       - ./config/aam-backend-service/application.env
     restart: unless-stopped
@@ -135,7 +140,7 @@ services:
     volumes:
       - ./storage/sqs:/data
     environment:
-      SQS_COUCHDB_URL: http://couchdb-with-permissions:5984
+      SQS_COUCHDB_URL: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
     profiles:
       - full-stack
 

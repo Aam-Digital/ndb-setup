@@ -227,20 +227,25 @@ migrate_instance() {
     return
   fi
 
-  # Check if already fully migrated
+  # Check if already fully migrated.
+  # Dynamic vars (BASE_PATH, CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT) only need a non-empty value.
+  # Static vars are validated against their expected values so an empty or stale value triggers re-migration.
   local needsMigration=false
   for var in AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH \
              AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID \
              AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET \
-             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT \
-             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE \
-             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE \
-             FEATURES_EXPORT_API_ENABLED; do
-    if ! grep -q "^$var=" "$appEnvFile" 2>/dev/null; then
+             AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT; do
+    if ! grep -qE "^$var=.+" "$appEnvFile" 2>/dev/null; then
       needsMigration=true
       break
     fi
   done
+  # Static vars: validate exact expected values
+  if [ "$needsMigration" = false ]; then
+    grep -q "^AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE=client_credentials$" "$appEnvFile" 2>/dev/null || needsMigration=true
+    grep -q "^AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE=openid$"                 "$appEnvFile" 2>/dev/null || needsMigration=true
+    grep -q "^FEATURES_EXPORT_API_ENABLED=true$"                                             "$appEnvFile" 2>/dev/null || needsMigration=true
+  fi
 
   # Also migrate if the token endpoint still points to the old shared aam-digital realm
   # (instances set up with enable-backend.sh have this value and need updating).

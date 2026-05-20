@@ -226,6 +226,12 @@ migrate_instance() {
     fi
   done
 
+  # Also migrate if the token endpoint still points to the old shared aam-digital realm
+  # (instances set up with enable-backend.sh have this value and need updating).
+  if grep -q "^AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT=.*/realms/aam-digital/" "$appEnvFile" 2>/dev/null; then
+    needsMigration=true
+  fi
+
   if [ "$needsMigration" = false ]; then
     echo "[$instance] already up-to-date, skipping"
     return
@@ -248,15 +254,20 @@ migrate_instance() {
   # 1. Backup application.env
   backupFile "$appEnvFile"
 
-  # 2. Add render API config to application.env
+  # 2. Set render API config in application.env (ensureEnv adds the key if absent, setEnv overwrites any stale value)
+  local tokenEndpoint="https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token"
   ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH" "https://$CARBONE_HOST" "$appEnvFile"
+  setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH" "https://$CARBONE_HOST" "$appEnvFile"
   ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID" "$clientId" "$appEnvFile"
+  setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID" "$clientId" "$appEnvFile"
   ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET" "$clientSecret" "$appEnvFile"
-  # always overwrite the secret in case Keycloak rotated it since the last partial migration
-  setEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET" "$clientSecret" "$appEnvFile"
-  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT" "https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token" "$appEnvFile"
+  setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET" "$clientSecret" "$appEnvFile"
+  ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT" "$tokenEndpoint" "$appEnvFile"
+  setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT" "$tokenEndpoint" "$appEnvFile"
   ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE" "client_credentials" "$appEnvFile"
+  setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE" "client_credentials" "$appEnvFile"
   ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE" "openid" "$appEnvFile"
+  setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE" "openid" "$appEnvFile"
   ensureEnv "FEATURES_EXPORT_API_ENABLED" "true" "$appEnvFile"
 
   # 3. Restart so aam-backend-service picks up the new config

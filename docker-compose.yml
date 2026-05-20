@@ -93,7 +93,7 @@ services:
       # Override values from application.env that need per-instance interpolation.
       # Using container_name avoids alias collisions on the shared external_web network.
       COUCHDBCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
-      AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME}-db-entrypoint:5984
+      AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-db-entrypoint:5984
     env_file:
       - ./config/aam-backend-service/application.env
     restart: unless-stopped

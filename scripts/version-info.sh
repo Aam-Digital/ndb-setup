@@ -38,12 +38,12 @@ for D in *; do
                 echo -e -n "$instance_name \t"
                 echo -e -n "$(getVar .env COMPOSE_PROFILES) \t"
                 echo -e -n "$(getVar .env APP_VERSION) \t"
-                echo -e -n "$(getVar .env AAM_REPLICATION_BACKEND_VERSION) \t"
-                echo -e -n "$(getVar .env AAM_BACKEND_SERVICE_VERSION) \t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_EXPORTAPI_ENABLED)\t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_SKILLAPI_MODE)\t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_NOTIFICATIONAPI_ENABLED)\t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env DATABASECHANGEDETECTION_ENABLED)\t"
+                echo -e -n "$(getVar .env AAM_REPLICATION_BACKEND_VERSION -) \t"
+                echo -e -n "$(getVar .env AAM_BACKEND_SERVICE_VERSION -) \t"
+                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_EXPORTAPI_ENABLED -)\t"
+                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_SKILLAPI_MODE -)\t"
+                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_NOTIFICATIONAPI_ENABLED -)\t"
+                echo -e -n "$(getVar config/aam-backend-service/application.env DATABASECHANGEDETECTION_ENABLED -)\t"
                 echo "" # new row
 
                 cd ..

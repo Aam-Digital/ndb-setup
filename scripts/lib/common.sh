@@ -11,7 +11,15 @@
 getVar() {
   local file="$1"
   local var="$2"
-  grep "^$var=" "$file" 2>/dev/null | cut -d '=' -f2- || echo ""
+  local fallback="${3:-}"
+  local value
+
+  value=$(grep "^$var=" "$file" 2>/dev/null | cut -d '=' -f2-) || true
+  if [[ -z "$value" ]]; then
+    echo "$fallback"
+  else
+    echo "$value"
+  fi
 }
 
 # Set (replace) a variable in a file (key must already exist)

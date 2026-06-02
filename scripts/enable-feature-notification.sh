@@ -77,3 +77,6 @@ setEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$path/config/aam-backend-servi
 (cd "$path" && docker compose up -d)
 
 echo "Feature enabled."
+
+# Enable email notifications by default
+"$baseDirectory/ndb-setup/scripts/enable-feature-notification-email.sh" "$instance"

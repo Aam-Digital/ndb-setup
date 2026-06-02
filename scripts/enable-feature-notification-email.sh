@@ -57,28 +57,28 @@ fi
 echo ""
 echo "Configuring email notifications for '$instance'..."
 
-if [[ -n "${BWS_ACCESS_TOKEN}" ]]; then
+# Load SMTP credentials from setup.env if set, otherwise fetch from BWS
+if [[ -z "${SMTP_SERVER:-}" || -z "${SMTP_PASSWORD:-}" ]]; then
+  if [[ -z "${BWS_ACCESS_TOKEN:-}" ]]; then
+    echo "ERROR: SMTP_SERVER/SMTP_PASSWORD are not set in setup.env and BWS_ACCESS_TOKEN is not set. Abort."
+    exit 1
+  fi
   echo "Loading SMTP credentials from Bitwarden Secrets Manager..."
   bws config server-base https://vault.bitwarden.eu
-  smtpHost=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2ce00cf6760" | jq -r .value)
-  smtpPassword=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" | jq -r .value)
-  smtpPort="587"
-  smtpUsername="accounts@aam-digital.com"
-  emailFrom="accounts@aam-digital.com"
-  subjectPrefix="Aam Digital"
-else
-  echo "BWS_ACCESS_TOKEN not set. Please provide SMTP server details manually:"
-  read -r -p "SMTP host: " smtpHost
-  read -r -p "SMTP port [587]: " smtpPort
-  smtpPort="${smtpPort:-587}"
-  read -r -p "SMTP username: " smtpUsername
-  read -r -s -p "SMTP password: " smtpPassword
-  echo ""
-  read -r -p "From address (e.g. noreply@$instance.$DOMAIN): " emailFrom
-  emailFrom="${emailFrom:-noreply@$instance.$DOMAIN}"
-  read -r -p "Subject prefix [Aam Digital]: " subjectPrefix
-  subjectPrefix="${subjectPrefix:-Aam Digital}"
+  SMTP_SERVER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2ce00cf6760" 2>&1 | jq -r '.value // empty')
+  SMTP_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" 2>&1 | jq -r '.value // empty')
+  if [[ -z "$SMTP_SERVER" || -z "$SMTP_PASSWORD" ]]; then
+    echo "ERROR: Failed to load SMTP credentials from Bitwarden. The BWS_ACCESS_TOKEN may not have access to these secrets (they require the production service account token)."
+    exit 1
+  fi
 fi
+
+smtpHost="$SMTP_SERVER"
+smtpPassword="$SMTP_PASSWORD"
+smtpPort="465"
+smtpUsername="accounts@aam-digital.com"
+emailFrom="accounts@aam-digital.com"
+subjectPrefix="Aam Digital"
 
 (cd "$path" && docker compose down)
 
@@ -90,7 +90,7 @@ setEnv "SPRING_MAIL_PORT" "$smtpPort" "$appEnv"
 setEnv "SPRING_MAIL_USERNAME" "$smtpUsername" "$appEnv"
 setEnv "SPRING_MAIL_PASSWORD" "$smtpPassword" "$appEnv"
 setEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH" "true" "$appEnv"
-setEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE" "true" "$appEnv"
+setEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE" "true" "$appEnv"
 setEnv "NOTIFICATION_EMAIL_FROM" "$emailFrom" "$appEnv"
 setEnv "NOTIFICATION_EMAIL_SUBJECTPREFIX" "$subjectPrefix" "$appEnv"
 

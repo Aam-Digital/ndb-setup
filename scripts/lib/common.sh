@@ -38,6 +38,22 @@ setEnv() {
   echo "  ~ updated $key in $(basename "$file")"
 }
 
+# Set a variable in a file, appending it if it does not already exist
+upsertEnv() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  local escaped
+  escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
+  if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    echo "$key=$value" >> "$file"
+    echo "  + added $key to $(basename "$file")"
+  else
+    sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+    echo "  ~ updated $key in $(basename "$file")"
+  fi
+}
+
 # Append a variable to a file if it does not already exist
 ensureEnv() {
   local key="$1"

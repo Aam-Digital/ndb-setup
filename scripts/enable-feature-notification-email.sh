@@ -84,15 +84,15 @@ subjectPrefix="Aam Digital"
 
 backupFile "$appEnv"
 
-setEnv "FEATURES_NOTIFICATIONAPI_EMAIL_ENABLED" "true" "$appEnv"
-setEnv "SPRING_MAIL_HOST" "$smtpHost" "$appEnv"
-setEnv "SPRING_MAIL_PORT" "$smtpPort" "$appEnv"
-setEnv "SPRING_MAIL_USERNAME" "$smtpUsername" "$appEnv"
-setEnv "SPRING_MAIL_PASSWORD" "$smtpPassword" "$appEnv"
-setEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH" "true" "$appEnv"
-setEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE" "true" "$appEnv"
-setEnv "NOTIFICATION_EMAIL_FROM" "$emailFrom" "$appEnv"
-setEnv "NOTIFICATION_EMAIL_SUBJECTPREFIX" "$subjectPrefix" "$appEnv"
+upsertEnv "FEATURES_NOTIFICATIONAPI_EMAIL_ENABLED" "true" "$appEnv"
+upsertEnv "SPRING_MAIL_HOST" "$smtpHost" "$appEnv"
+upsertEnv "SPRING_MAIL_PORT" "$smtpPort" "$appEnv"
+upsertEnv "SPRING_MAIL_USERNAME" "$smtpUsername" "$appEnv"
+upsertEnv "SPRING_MAIL_PASSWORD" "$smtpPassword" "$appEnv"
+upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH" "true" "$appEnv"
+upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE" "true" "$appEnv"
+upsertEnv "NOTIFICATION_EMAIL_FROM" "$emailFrom" "$appEnv"
+upsertEnv "NOTIFICATION_EMAIL_SUBJECTPREFIX" "$subjectPrefix" "$appEnv"
 
 (cd "$path" && docker compose up -d)
 

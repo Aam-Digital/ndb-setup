@@ -35,7 +35,7 @@ getKeycloakToken() {
   fi
 }
 
-# Creates the aam-backend Keycloak client (if it doesn't exist) and assigns manage-realm role.
+# Creates the aam-backend Keycloak client (if it doesn't exist) and assigns required realm-management roles.
 # Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
 # Sets: clientSecret (global)
 createKeycloakBackendClient() {
@@ -57,7 +57,7 @@ createKeycloakBackendClient() {
     clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$existingUuid/client-secret" \
       -H "Authorization: Bearer $token" | jq -r '.value // empty')
 
-    # ensure service account has manage-realm role (idempotent)
+    # ensure service account has required realm-management roles (idempotent)
     _assignManageRealmRole "$realm" "$existingUuid"
     return 0
   fi
@@ -100,7 +100,7 @@ createKeycloakBackendClient() {
   _assignManageRealmRole "$realm" "$clientUuid"
 }
 
-# Internal: assign manage-realm role to the service account of a client
+# Internal: assign required realm-management roles to the service account of a client
 _assignManageRealmRole() {
   local realm="$1"
   local aamBackendClientUuid="$2"
@@ -118,16 +118,35 @@ _assignManageRealmRole() {
   realmMgmtClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=realm-management" \
     -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
 
-  local manageRealmRole
-  manageRealmRole=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$realmMgmtClientUuid/roles/manage-realm" \
-    -H "Authorization: Bearer $token")
+  if [ -z "$realmMgmtClientUuid" ]; then
+    echo "  WARNING: Could not find realm-management client in realm '$realm'."
+    return 1
+  fi
 
-  curl -s -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d "[$manageRealmRole]"
+  local rolesToAssign=("manage-realm" "query-users" "view-users" "manage-users")
+  local rolePayload="[]"
+  local roleName roleResponse
 
-  echo "  Ensured manage-realm role on aam-backend service account."
+  for roleName in "${rolesToAssign[@]}"; do
+    roleResponse=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$realmMgmtClientUuid/roles/$roleName" \
+      -H "Authorization: Bearer $token")
+
+    if [ "$(echo "$roleResponse" | jq -r '.name // empty')" = "$roleName" ]; then
+      rolePayload=$(echo "$rolePayload" | jq --argjson role "$roleResponse" '. + [$role]')
+    else
+      echo "  WARNING: Could not resolve realm-management role '$roleName' in realm '$realm'."
+    fi
+  done
+
+  if [ "$(echo "$rolePayload" | jq 'length')" -gt 0 ]; then
+    curl -s -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid" \
+      -H "Authorization: Bearer $token" \
+      -H "Content-Type: application/json" \
+      -d "$rolePayload"
+    echo "  Ensured realm-management roles on aam-backend service account: manage-realm, query-users, view-users, manage-users."
+  else
+    echo "  WARNING: No realm-management roles could be assigned to aam-backend service account."
+  fi
 
   # ensure the "roles" client scope is assigned (required for role claims in the access token)
   local rolesScopeUuid

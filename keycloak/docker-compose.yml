@@ -2,7 +2,9 @@ name: i-keycloak-dev
 
 services:
   keycloak:
-    image: ghcr.io/aam-digital/aam-keycloak:23.0.7
+    # NOTE: the aam-keycloak:26.x image must be built/published for Keycloak 26
+    # (bundles the aam-theme) before deploying this.
+    image: ghcr.io/aam-digital/aam-keycloak:26.0.7
     environment:
       # For all available options see https://www.keycloak.org/server/all-config
       KEYCLOAK_ADMIN: admin
@@ -10,7 +12,9 @@ services:
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${DB_PASSWORD:?No DB password set}
-      KC_PROXY: edge
+      # KC_PROXY was removed in Keycloak 26; use KC_PROXY_HEADERS instead.
+      # Our reverse proxy (nginx/swag) sends X-Forwarded-* headers.
+      KC_PROXY_HEADERS: xforwarded
       KC_HOSTNAME: ${KEYCLOAK_URL:?No Keycloak URL set}
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme

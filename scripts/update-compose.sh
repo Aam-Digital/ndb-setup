@@ -5,7 +5,8 @@
 # Instances get a *copy* of docker-compose.yml at setup time, so structural
 # changes to the canonical file (new service, changed volume, etc.) do not
 # propagate automatically. This script previews the diff for each instance,
-# asks for confirmation, backs up the old file and copies the new one.
+# asks for confirmation, backs up the old file, copies the new one and
+# redeploys the instance ('docker compose up -d').
 #
 # Can be run from any directory.
 
@@ -13,21 +14,19 @@ set -euo pipefail
 
 baseDirectory="/var/docker"
 source "$baseDirectory/ndb-setup/setup.env"
+source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 CANONICAL="$baseDirectory/ndb-setup/docker-compose.yml"
-REDEPLOY=0
 ASSUME_YES=0
 
 usage() {
-    echo "Usage: $0 [--redeploy] [--yes]"
-    echo "  --redeploy  run 'docker compose up -d' after updating an instance"
-    echo "  --yes       skip per-instance confirmation (still skips unchanged)"
+    echo "Usage: $0 [--yes]"
+    echo "  --yes  skip per-instance confirmation (still skips unchanged)"
     exit 1
 }
 
 for arg in "$@"; do
     case "$arg" in
-        --redeploy) REDEPLOY=1 ;;
         --yes)      ASSUME_YES=1 ;;
         -h|--help)  usage ;;
         *) echo "Unknown option: $arg"; usage ;;
@@ -74,21 +73,15 @@ for D in "$baseDirectory/${PREFIX}"*; do
         esac
     fi
 
-    backup="$target.bak.$(date +%Y%m%d%H%M%S)"
-    cp "$target" "$backup"
+    backupFile "$target"
     cp "$CANONICAL" "$target"
-    echo "[$instance] updated (backup: $backup)"
-    updated=$((updated + 1))
+    echo "[$instance] updated"
 
-    if [ "$REDEPLOY" -eq 1 ]; then
-        echo "[$instance] redeploying..."
-        (cd "$D" && docker compose up -d)
-        echo "[$instance] redeployed"
-    fi
+    echo "[$instance] redeploying..."
+    (cd "$D" && docker compose up -d)
+    echo "[$instance] redeployed"
+    updated=$((updated + 1))
 done
 
 echo
 echo "Done. $updated updated, $skipped skipped."
-if [ "$updated" -gt 0 ] && [ "$REDEPLOY" -eq 0 ]; then
-    echo "Note: run 'docker compose up -d' in the updated instances (or re-run with --redeploy) to apply."
-fi

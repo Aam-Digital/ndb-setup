@@ -79,7 +79,11 @@ update_instance() {
     setEnv "$VAR" "$NEW_VERSION" "$envFile"
 
     echo "[$instance] redeploying..."
-    (cd "$D" && docker compose pull && docker compose up -d)
+    if ! (cd "$D" && docker compose pull && docker compose up -d); then
+        echo "[$instance] redeploy failed, restoring $VAR=$OLD_VERSION"
+        setEnv "$VAR" "$OLD_VERSION" "$envFile"
+        return 1
+    fi
     echo "[$instance] redeployed"
     updated=$((updated + 1))
 }

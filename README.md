@@ -111,6 +111,10 @@ After the upgrade:
 - **`sub`**: restored automatically. The migration adds the `basic` client scope to existing clients
   (which carries the `sub` mapper), so the `app` client keeps emitting `sub` with no manual change.
   For freshly created realms, the explicit `sub` mapper in `client_config.json` provides it.
+  > ⚠️ **Exception:** if the realm **already has** a client scope named `basic`, Keycloak **skips**
+  > this automatic migration — you must then add the Subject (`sub`) and `auth_time` protocol mappers
+  > to the client/scope manually. Realms created before Keycloak 25 have no `basic` scope, so the
+  > automatic path applies to them.
 - **`exact_username`**: existing values are preserved and keep working. To make it **admin-only
   editable**, the User Profile declaration from `realm_config.json` must be applied to the existing
   realm (it is not retro-applied by the migration) — via the Admin Console

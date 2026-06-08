@@ -62,6 +62,45 @@ backupFile() {
 }
 
 ##############################
+# Instance iteration
+##############################
+
+# Run a callback for one or all instances.
+# Usage: forEachInstance <callback> [instance]
+#   <callback>  name of a function; called once per instance with the absolute
+#               instance directory as its first argument
+#   [instance]  optional single instance (with or without the PREFIX); when
+#               omitted, iterates every "$baseDirectory/${PREFIX}*" directory
+# Requires: $baseDirectory and $PREFIX set (from setup.env).
+# Returns: non-zero if a named instance is missing or PREFIX is unset.
+forEachInstance() {
+  local callback="$1"
+  local single="${2:-}"
+
+  if [ -n "$single" ]; then
+    # single instance mode (tolerate the prefix being included or not)
+    local path="$baseDirectory/${PREFIX:-}${single#"${PREFIX:-}"}"
+    if [ ! -d "$path" ]; then
+      echo "Instance directory not found: $path"
+      return 1
+    fi
+    "$callback" "$path"
+    return
+  fi
+
+  # all instances
+  if [ -z "${PREFIX:-}" ]; then
+    echo "ERROR: PREFIX is not set. Aborting to avoid operating on all directories."
+    return 1
+  fi
+  local D
+  for D in "$baseDirectory/${PREFIX}"*; do
+    [ -d "$D" ] || continue
+    "$callback" "$D"
+  done
+}
+
+##############################
 # Backend / instance checks
 ##############################
 

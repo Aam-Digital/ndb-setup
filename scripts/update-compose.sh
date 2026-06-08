@@ -18,10 +18,12 @@ source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 CANONICAL="$baseDirectory/ndb-setup/docker-compose.yml"
 ASSUME_YES=0
+INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes]"
-    echo "  --yes  skip per-instance confirmation (still skips unchanged)"
+    echo "Usage: $0 [--yes] [instance]"
+    echo "  instance  update only this instance (default: all ${PREFIX}* instances)"
+    echo "  --yes     skip per-instance confirmation (still skips unchanged)"
     exit 1
 }
 
@@ -29,7 +31,8 @@ for arg in "$@"; do
     case "$arg" in
         --yes)      ASSUME_YES=1 ;;
         -h|--help)  usage ;;
-        *) echo "Unknown option: $arg"; usage ;;
+        -*) echo "Unknown option: $arg"; usage ;;
+        *)  INSTANCE="$arg" ;;
     esac
 done
 
@@ -41,21 +44,21 @@ fi
 updated=0
 skipped=0
 
-for D in "$baseDirectory/${PREFIX}"*; do
-    [ -d "$D" ] || continue
-    target="$D/docker-compose.yml"
-    instance="${D##*/}"
+update_instance() {
+    local D="$1"
+    local target="$D/docker-compose.yml"
+    local instance="${D##*/}"
 
     if [ ! -f "$target" ]; then
         echo "[$instance] no docker-compose.yml, skipping"
         skipped=$((skipped + 1))
-        continue
+        return
     fi
 
     if diff -q "$target" "$CANONICAL" >/dev/null 2>&1; then
         echo "[$instance] already up to date"
         skipped=$((skipped + 1))
-        continue
+        return
     fi
 
     echo
@@ -69,7 +72,7 @@ for D in "$baseDirectory/${PREFIX}"*; do
         read -r -p "Apply this change to [$instance]? [y/N] " reply < /dev/tty
         case "$reply" in
             [yY]|[yY][eE][sS]) ;;
-            *) echo "[$instance] skipped"; skipped=$((skipped + 1)); continue ;;
+            *) echo "[$instance] skipped"; skipped=$((skipped + 1)); return ;;
         esac
     fi
 
@@ -81,7 +84,9 @@ for D in "$baseDirectory/${PREFIX}"*; do
     (cd "$D" && docker compose up -d)
     echo "[$instance] redeployed"
     updated=$((updated + 1))
-done
+}
+
+forEachInstance update_instance "$INSTANCE"
 
 echo
 echo "Done. $updated updated, $skipped skipped."

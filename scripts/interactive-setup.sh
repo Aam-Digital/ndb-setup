@@ -123,7 +123,8 @@ if [ "$app" == 0 ]; then
   mkdir "$path"
   cp $baseDirectory/ndb-setup/.env.template "$path/.env"
   cp $baseDirectory/ndb-setup/couchdb.ini "$path/couchdb.ini"
-  cp $baseDirectory/ndb-setup/config.json "$path/config.json"
+  jq --arg email "${WEBMASTER_EMAIL:-webmaster@example.com}" '.webmaster_email = $email' \
+    "$baseDirectory/ndb-setup/config.json" > "$path/config.json"
   cp $baseDirectory/ndb-setup/docker-compose.yml "$path/docker-compose.yml"
   cp $baseDirectory/ndb-setup/firebase-config.json "$path/firebase-config.json"
   mkdir -p "$path/couchdb/data"

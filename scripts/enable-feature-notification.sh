@@ -71,6 +71,8 @@ fi
 
 setEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredentialBase64" "$path/config/aam-backend-service/application.env"
 setEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$path/config/aam-backend-service/application.env"
+# base URL used for email "manage settings" + notification action links (NotificationConfiguration uses application.base-url)
+setEnv "APPLICATION_BASEURL" "https://$instance.$DOMAIN" "$path/config/aam-backend-service/application.env"
 setEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$path/config/aam-backend-service/application.env"
 setEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$path/config/aam-backend-service/application.env"
 

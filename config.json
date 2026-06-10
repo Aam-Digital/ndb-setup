@@ -2,5 +2,5 @@
   "session_type": "synced",
   "demo_mode": false,
   "authenticator": "keycloak",
-  "webmaster_email": "webmaster@example.com"
+  "webmaster_email": ""
 }

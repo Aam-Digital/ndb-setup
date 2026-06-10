@@ -100,6 +100,36 @@ createKeycloakBackendClient() {
   _assignManageRealmRole "$realm" "$clientUuid"
 }
 
+# Returns 0 if the aam-backend service account has the given (effective) realm-management role, else 1.
+# Use this to verify role assignment actually stuck: createKeycloakBackendClient returns 0 even when
+# _assignManageRealmRole only printed warnings, so its exit code is not proof the role is present.
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+serviceAccountHasRealmManagementRole() {
+  local realm="$1"
+  local roleName="$2"
+
+  if [ -z "${token:-}" ] && ! getKeycloakToken; then
+    return 1
+  fi
+
+  local aamBackendClientUuid serviceAccountUserId realmMgmtClientUuid
+  aamBackendClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=aam-backend" \
+    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
+  [ -z "$aamBackendClientUuid" ] && return 1
+
+  serviceAccountUserId=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$aamBackendClientUuid/service-account-user" \
+    -H "Authorization: Bearer $token" | jq -r '.id // empty')
+  [ -z "$serviceAccountUserId" ] && return 1
+
+  realmMgmtClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=realm-management" \
+    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
+  [ -z "$realmMgmtClientUuid" ] && return 1
+
+  # query effective (composite) role-mappings so manage-users (which contains view-users) also counts
+  curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid/composite" \
+    -H "Authorization: Bearer $token" | jq -e --arg r "$roleName" 'any(.[]; .name == $r)' >/dev/null
+}
+
 # Internal: assign required realm-management roles to the service account of a client
 _assignManageRealmRole() {
   local realm="$1"

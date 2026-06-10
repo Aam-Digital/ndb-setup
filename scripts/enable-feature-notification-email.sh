@@ -175,9 +175,9 @@ if [ -z "$existingMailHost" ]; then
 
   smtpHost="$SMTP_SERVER"
   smtpPassword="$SMTP_PASSWORD"
-  smtpPort="465"
+  smtpPort="587"
   smtpUsername="accounts@aam-digital.com"
-  emailFrom="accounts@aam-digital.com"
+  emailFrom='"Aam Digital <accounts@aam-digital.com>"'
   subjectPrefix="Aam Digital"
 
   upsertEnv "SPRING_MAIL_HOST" "$smtpHost" "$appEnv"
@@ -185,7 +185,9 @@ if [ -z "$existingMailHost" ]; then
   upsertEnv "SPRING_MAIL_USERNAME" "$smtpUsername" "$appEnv"
   upsertEnv "SPRING_MAIL_PASSWORD" "$smtpPassword" "$appEnv"
   upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH" "true" "$appEnv"
-  upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE" "true" "$appEnv"
+  # Port 587 uses STARTTLS (explicit TLS upgrade); SSL_ENABLE is for port 465 (implicit SSL) — keep it off.
+  upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE" "true" "$appEnv"
+  upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE" "" "$appEnv"
   upsertEnv "NOTIFICATION_EMAIL_FROM" "$emailFrom" "$appEnv"
   upsertEnv "NOTIFICATION_EMAIL_SUBJECTPREFIX" "$subjectPrefix" "$appEnv"
 else

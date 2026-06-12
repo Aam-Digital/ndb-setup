@@ -89,11 +89,13 @@ services:
       - rabbitmq
     volumes:
       - ./storage/aam-backend-service/data:/aam-backend-service/bin/data
+      - ./config/aam-backend-service/templates:/opt/app/templates:ro
     environment:
       # Override values from application.env that need per-instance interpolation.
       # Using container_name avoids alias collisions on the shared external_web network.
       COUCHDBCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
       AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-db-entrypoint:5984
+      APPLICATION_BASEURL: ${INSTANCE_NAME:?INSTANCE_NAME is not set}.${INSTANCE_DOMAIN:?INSTANCE_DOMAIN is not set}
     env_file:
       - ./config/aam-backend-service/application.env
     restart: unless-stopped

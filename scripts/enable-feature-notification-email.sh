@@ -201,12 +201,6 @@ upsertEnv "KEYCLOAK_REALM" "$keycloakRealm" "$appEnv"
 upsertEnv "KEYCLOAK_CLIENTID" "$keycloakClientId" "$appEnv"
 upsertEnv "KEYCLOAK_CLIENTSECRET" "$keycloakClientSecret" "$appEnv"
 
-# Ensure the app base URL is set (used for email "manage settings" + notification action links).
-# Only set when empty so any custom value is preserved.
-if [ -z "$(getVar "$appEnv" APPLICATION_BASEURL)" ]; then
-  upsertEnv "APPLICATION_BASEURL" "https://$instance.$DOMAIN" "$appEnv"
-fi
-
 (cd "$path" && docker compose up -d)
 
 if [ "$keycloakRolesEnsured" == "true" ]; then

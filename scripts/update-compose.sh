@@ -21,16 +21,20 @@ ASSUME_YES=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes] [instance]"
-    echo "  instance  update only this instance (default: all ${PREFIX}* instances)"
-    echo "  --yes     skip per-instance confirmation (still skips unchanged)"
+    echo "Usage: $0 [--yes] [--overwrite-icons] [instance]"
+    echo "  instance          update only this instance (default: all ${PREFIX}* instances)"
+    echo "  --yes             skip per-instance confirmation (still skips unchanged)"
+    echo "  --overwrite-icons enable custom icons mount in docker-compose.yml"
     exit 1
 }
 
+OVERWRITE_ICONS=0
+
 for arg in "$@"; do
     case "$arg" in
-        --yes)      ASSUME_YES=1 ;;
-        -h|--help)  usage ;;
+        --yes)             ASSUME_YES=1 ;;
+        --overwrite-icons) OVERWRITE_ICONS=1 ;;
+        -h|--help)         usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)  INSTANCE="$arg" ;;
     esac
@@ -78,6 +82,12 @@ update_instance() {
 
     backupFile "$target"
     cp "$CANONICAL" "$target"
+    
+    # Process optional features
+    if [ "$OVERWRITE_ICONS" -eq 1 ]; then
+        sed -i 's|# - ./assets/icons:/usr/share/nginx/html/assets/icons|      - ./assets/icons:/usr/share/nginx/html/assets/icons|' "$target"
+    fi
+    
     echo "[$instance] updated"
 
     echo "[$instance] redeploying..."

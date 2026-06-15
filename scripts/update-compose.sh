@@ -31,12 +31,18 @@ usage() {
 OVERWRITE_ICONS=0
 
 for arg in "$@"; do
+for arg in "$@"; do
     case "$arg" in
-        --yes)             ASSUME_YES=1 ;;
-        --overwrite-icons) OVERWRITE_ICONS=1 ;;
-        -h|--help)         usage ;;
+        --yes)      ASSUME_YES=1 ;;
+        -h|--help)  usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
-        *)  INSTANCE="$arg" ;;
+        *)
+            if [ -n "$INSTANCE" ]; then
+                echo "Only one instance argument is allowed."
+                usage
+            fi
+            INSTANCE="$arg"
+            ;;
     esac
 done
 

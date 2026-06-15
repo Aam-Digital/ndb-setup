@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # This script will enable email notifications for a customer instance.
 # It requires the notification feature to already be enabled (run enable-feature-notification.sh first).
@@ -19,7 +20,7 @@ source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 # ask for input data
 ##############################
 
-if [ -n "$1" ]; then
+if [ -n "${1:-}" ]; then
   instance="$1"
 else
   echo "What is the name of the instance?"
@@ -44,6 +45,12 @@ fi
 
 if ! isBackendConfigCreated; then
   echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
+  exit 1
+fi
+
+isNotificationEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_ENABLED)
+if [ "$isNotificationEnabled" != "true" ]; then
+  echo "Notification feature is not enabled for instance '$instance'. Please run './enable-feature-notification.sh' first."
   exit 1
 fi
 
@@ -80,10 +87,12 @@ keycloakClientSecret=$(getVar "$path/.env" REPLICATION_BACKEND_KEYCLOAK_CLIENT_S
 # values from setup.env, otherwise load from BWS. Without them we can neither patch nor verify the role.
 if [[ -z "${KEYCLOAK_HOST:-}" || -z "${KEYCLOAK_USER:-}" || -z "${KEYCLOAK_PASSWORD:-}" ]] && [[ -n "${BWS_ACCESS_TOKEN:-}" ]]; then
   echo "Loading Keycloak admin credentials from Bitwarden Secrets Manager..."
-  bws config server-base https://vault.bitwarden.eu
-  KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
-  KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
-  KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
+  # Best-effort under `set -e`: a failed lookup must not abort the script — an empty value below
+  # simply leaves adminCredsAvailable=false and we continue with a warning.
+  bws config server-base https://vault.bitwarden.eu || true
+  KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value) || true
+  KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value) || true
+  KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value) || true
 fi
 
 adminCredsAvailable=false
@@ -94,27 +103,23 @@ if [[ -n "${KEYCLOAK_HOST:-}" && -n "${KEYCLOAK_USER:-}" && -n "${KEYCLOAK_PASSW
   if serviceAccountHasRealmManagementRole "$instance" "view-users"; then
     roleAlreadyPresent=true
   fi
-if ! backendEnabledCheck; then
-  echo "No backend found for instance '$instance'. Please run './enable-backend.sh' first."
-  exit 1
 fi
 
-if ! isBackendConfigCreated; then
-  echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
-  exit 1
-fi
-
-isNotificationEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_ENABLED)
-if [ "$isNotificationEnabled" != "true" ]; then
-  echo "Notification feature is not enabled for instance '$instance'. Please run './enable-feature-notification.sh' first."
-  exit 1
-fi
-
-isEmailAlreadyEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_EMAIL_ENABLED)
-
-if [ "$isEmailAlreadyEnabled" == "true" ]; then
-  echo "Email notifications already enabled for instance '$instance'. Abort."
-  exit 1
+# Already configured (email enabled + Keycloak admin client set): exit early unless there is still a
+# role to repair. The only reason to continue here is a missing 'view-users' role that we CAN fix.
+if [ "$isEmailAlreadyEnabled" == "true" ] && [ -n "$existingKeycloakServerUrl" ]; then
+  if [ "$roleAlreadyPresent" == "true" ]; then
+    echo "Email notifications already fully configured for instance '$instance' (incl. view-users role). Nothing to do."
+    exit 0
+  fi
+  if [ "$adminCredsAvailable" != "true" ]; then
+    echo "Email is configured for instance '$instance', but Keycloak admin credentials are unavailable, so the"
+    echo "'view-users' role on the aam-backend service account could not be verified or repaired."
+    echo "If recipient lookups fail with 'HTTP 403 Forbidden', re-run with KEYCLOAK_HOST/USER/PASSWORD in setup.env"
+    echo "(or a BWS_ACCESS_TOKEN that can read the Keycloak secrets)."
+    exit 0
+  fi
+  # else: role missing but admin creds are available -> fall through to (re)assign and verify it.
 fi
 
 echo ""
@@ -157,8 +162,6 @@ if [ -z "$keycloakClientSecret" ]; then
   exit 1
 fi
 
-(cd "$path" && docker compose down)
-
 backupFile "$appEnv"
 
 # Configure SMTP only when not already set, so re-runs/repairs keep existing (possibly customized) mail settings.
@@ -170,9 +173,11 @@ if [ -z "$existingMailHost" ]; then
       exit 1
     fi
     echo "Loading SMTP credentials from Bitwarden Secrets Manager..."
-    bws config server-base https://vault.bitwarden.eu
-    SMTP_SERVER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2ce00cf6760" 2>&1 | jq -r '.value // empty')
-    SMTP_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" 2>&1 | jq -r '.value // empty')
+    # Best-effort under `set -e`: tolerate lookup failures here so the explicit emptiness check
+    # below can report a clear error instead of the script aborting silently.
+    bws config server-base https://vault.bitwarden.eu || true
+    SMTP_SERVER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2ce00cf6760" 2>&1 | jq -r '.value // empty') || true
+    SMTP_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" 2>&1 | jq -r '.value // empty') || true
     if [[ -z "$SMTP_SERVER" || -z "$SMTP_PASSWORD" ]]; then
       echo "ERROR: Failed to load SMTP credentials from Bitwarden. The BWS_ACCESS_TOKEN may not have access to these secrets (they require the production service account token)."
       exit 1
@@ -207,7 +212,10 @@ upsertEnv "KEYCLOAK_REALM" "$keycloakRealm" "$appEnv"
 upsertEnv "KEYCLOAK_CLIENTID" "$keycloakClientId" "$appEnv"
 upsertEnv "KEYCLOAK_CLIENTSECRET" "$keycloakClientSecret" "$appEnv"
 
-(cd "$path" && docker compose up -d)
+# Restart only at the very end, once all env writes have succeeded. Combined with `set -euo pipefail`,
+# a failure during the file I/O above aborts before this line, so the instance is never taken down with
+# a partially written application.env — it keeps running on its previous, working config.
+(cd "$path" && docker compose down && docker compose up -d)
 
 if [ "$keycloakRolesEnsured" == "true" ]; then
   echo "Email notifications enabled."

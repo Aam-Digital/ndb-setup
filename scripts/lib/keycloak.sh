@@ -58,7 +58,10 @@ createKeycloakBackendClient() {
       -H "Authorization: Bearer $token" | jq -r '.value // empty')
 
     # ensure service account has required realm-management roles (idempotent)
-    _assignManageRealmRole "$realm" "$existingUuid"
+    if ! _assignManageRealmRole "$realm" "$existingUuid"; then
+      echo "  ERROR: Failed to ensure realm-management roles for existing aam-backend client in realm '$realm'."
+      return 1
+    fi
     return 0
   fi
 
@@ -169,10 +172,13 @@ _assignManageRealmRole() {
   done
 
   if [ "$(echo "$rolePayload" | jq 'length')" -gt 0 ]; then
-    curl -s -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid" \
+    if ! curl -fsS -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid" \
       -H "Authorization: Bearer $token" \
       -H "Content-Type: application/json" \
-      -d "$rolePayload"
+      -d "$rolePayload"; then
+      echo "  ERROR: Failed to assign realm-management roles to aam-backend service account in realm '$realm'."
+      return 1
+    fi
     echo "  Ensured realm-management roles on aam-backend service account: manage-realm, query-users, view-users, manage-users."
   else
     echo "  WARNING: No realm-management roles could be assigned to aam-backend service account."

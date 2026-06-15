@@ -31,7 +31,6 @@ usage() {
 OVERWRITE_ICONS=0
 
 for arg in "$@"; do
-for arg in "$@"; do
     case "$arg" in
         --yes)      ASSUME_YES=1 ;;
         -h|--help)  usage ;;
@@ -87,17 +86,25 @@ update_instance() {
     fi
 
     backupFile "$target"
+    # Remember the backup just made so a failed redeploy can roll back config + runtime.
+    local previous="$BACKUP_FILE"
+
     cp "$CANONICAL" "$target"
-    
+
     # Process optional features
     if [ "$OVERWRITE_ICONS" -eq 1 ]; then
         sed -i 's|# - ./assets/icons:/usr/share/nginx/html/assets/icons|      - ./assets/icons:/usr/share/nginx/html/assets/icons|' "$target"
     fi
-    
+
     echo "[$instance] updated"
 
     echo "[$instance] redeploying..."
-    (cd "$D" && docker compose up -d)
+    if ! (cd "$D" && docker compose up -d); then
+        echo "[$instance] redeploy failed, rolling back docker-compose.yml and redeploying previous config"
+        cp "$previous" "$target"
+        (cd "$D" && docker compose up -d) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed"
+        return 1
+    fi
     echo "[$instance] redeployed"
     updated=$((updated + 1))
 }

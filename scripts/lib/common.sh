@@ -67,12 +67,16 @@ ensureEnv() {
   fi
 }
 
-# Create a timestamped backup of a file
+# Create a timestamped backup of a file.
+# Sets the global BACKUP_FILE to the backup path (empty if the source file did not exist) so callers can
+# restore from it, e.g. to roll back a failed redeploy.
 backupFile() {
   local file="$1"
   local backup="$file.bak-$(date +%Y%m%d%H%M%S)"
+  BACKUP_FILE=""
   if [ -f "$file" ]; then
     cp "$file" "$backup"
+    BACKUP_FILE="$backup"
     echo "  backup: $(basename "$backup")"
   fi
 }

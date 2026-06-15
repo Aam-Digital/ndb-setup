@@ -94,21 +94,27 @@ if [[ -n "${KEYCLOAK_HOST:-}" && -n "${KEYCLOAK_USER:-}" && -n "${KEYCLOAK_PASSW
   if serviceAccountHasRealmManagementRole "$instance" "view-users"; then
     roleAlreadyPresent=true
   fi
+if ! backendEnabledCheck; then
+  echo "No backend found for instance '$instance'. Please run './enable-backend.sh' first."
+  exit 1
 fi
 
-# Idempotent fast path: fully configured AND the role is already present -> nothing to do.
-if [ "$isEmailAlreadyEnabled" == "true" ] && [ -n "$existingKeycloakServerUrl" ] && [ "$roleAlreadyPresent" == "true" ]; then
-  echo "Email notifications already fully configured for instance '$instance' (incl. view-users role). Nothing to do."
-  exit 0
+if ! isBackendConfigCreated; then
+  echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
+  exit 1
 fi
 
-# Config is already complete but we cannot reach Keycloak to verify/patch the role -> nothing more to write.
-if [ "$isEmailAlreadyEnabled" == "true" ] && [ -n "$existingKeycloakServerUrl" ] && [ "$adminCredsAvailable" != "true" ]; then
-  echo "Email is configured for instance '$instance', but Keycloak admin credentials are unavailable, so the"
-  echo "'view-users' role on the aam-backend service account could not be verified or repaired."
-  echo "If recipient lookups fail with 'HTTP 403 Forbidden', re-run with KEYCLOAK_HOST/USER/PASSWORD in setup.env"
-  echo "(or a BWS_ACCESS_TOKEN that can read the Keycloak secrets)."
-  exit 0
+isNotificationEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_ENABLED)
+if [ "$isNotificationEnabled" != "true" ]; then
+  echo "Notification feature is not enabled for instance '$instance'. Please run './enable-feature-notification.sh' first."
+  exit 1
+fi
+
+isEmailAlreadyEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_EMAIL_ENABLED)
+
+if [ "$isEmailAlreadyEnabled" == "true" ]; then
+  echo "Email notifications already enabled for instance '$instance'. Abort."
+  exit 1
 fi
 
 echo ""

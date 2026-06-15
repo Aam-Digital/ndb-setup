@@ -40,6 +40,13 @@ services:
     environment:
       COUCHDB_USER: ${COUCHDB_USER:?COUCHDB_USER is not set}
       COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?COUCHDB_PASSWORD is not set}
+    healthcheck:
+      # /_up is CouchDB's unauthenticated readiness endpoint; curl ships in the couchdb:3 image
+      test: ["CMD", "curl", "-f", "http://localhost:5984/_up"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
     profiles:
       - with-permissions
@@ -53,7 +60,8 @@ services:
       - internal_aam
       - external_web
     depends_on:
-      - couchdb-with-permissions
+      couchdb-with-permissions:
+        condition: service_healthy
     environment:
       DATABASE_URL: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
       DATABASE_NAME: app
@@ -83,10 +91,17 @@ services:
       - internal_aam
       - external_web
     depends_on:
-      - couchdb-with-permissions
-      - replication-backend
-      - aam-backend-service-db
-      - rabbitmq
+      # wait until CouchDB and RabbitMQ actually accept connections, not just that the containers started -
+      # otherwise the listener containers race broker readiness on boot and flood Sentry with
+      # "Failed to check/redeclare auto-delete queue(s)." errors
+      couchdb-with-permissions:
+        condition: service_healthy
+      replication-backend:
+        condition: service_started
+      aam-backend-service-db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     volumes:
       - ./storage/aam-backend-service/data:/aam-backend-service/bin/data
     environment:
@@ -121,6 +136,13 @@ services:
     container_name: ${INSTANCE_NAME}-rabbitmq
     networks:
       - internal_aam
+    healthcheck:
+      # verifies the AMQP listener is actually accepting connections, not just that the process started
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
     volumes:
       - ./storage/rabbitmq/data:/var/lib/rabbitmq/
@@ -135,7 +157,8 @@ services:
     networks:
       - internal_aam
     depends_on:
-      - couchdb-with-permissions
+      couchdb-with-permissions:
+        condition: service_healthy
     restart: unless-stopped
     volumes:
       - ./storage/sqs:/data

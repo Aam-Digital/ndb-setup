@@ -75,6 +75,16 @@ if [ "$(getVar "$appEnv" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH)" == 
   basePathNeedsCleanup=true
 fi
 
+# NOTIFICATION_EMAIL_FROM now holds the bare sender address only; the display name shown in front of it
+# and NOTIFICATION_EMAIL_SUBJECTPREFIX moved to the backend's email-branding.properties template file.
+# Flag instances that still carry a legacy "Name <addr>" from value or a NOTIFICATION_EMAIL_SUBJECTPREFIX
+# so we do not early-exit as "nothing to do" and instead migrate/remove them below.
+emailBrandingNeedsMigration=false
+if [[ "$(getVar "$appEnv" NOTIFICATION_EMAIL_FROM)" == *"<"* ]] \
+  || [ -n "$(getVar "$appEnv" NOTIFICATION_EMAIL_SUBJECTPREFIX)" ]; then
+  emailBrandingNeedsMigration=true
+fi
+
 # Derive the Keycloak admin client config required for the email handler. The handler uses Keycloak to
 # resolve recipient email addresses, reusing the aam-backend service-account client created by
 # enable-backend.sh. That service account must hold the realm-management "view-users" role; instances
@@ -128,14 +138,14 @@ fi
 # Already configured (email enabled + Keycloak admin client set): exit early unless there is still
 # something to repair — a missing 'view-users' role we CAN fix, or a placeholder client ID to normalize.
 if [ "$isEmailAlreadyEnabled" == "true" ] && [ -n "$existingKeycloakServerUrl" ]; then
-  if [ "$roleAlreadyPresent" == "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ]; then
+  if [ "$roleAlreadyPresent" == "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ] && [ "$emailBrandingNeedsMigration" != "true" ]; then
     echo "Email notifications already fully configured for instance '$instance' (incl. view-users role). Nothing to do."
     exit 0
   fi
-  # A placeholder client ID or a stale BASEPATH are plain env edits that need no Keycloak admin access — fall
-  # through to fix them even when admin creds are unavailable. Only exit here when the sole outstanding issue
-  # is the unverifiable role.
-  if [ "$adminCredsAvailable" != "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ]; then
+  # A placeholder client ID, a stale BASEPATH or legacy email branding vars are plain env edits that need no
+  # Keycloak admin access — fall through to fix them even when admin creds are unavailable. Only exit here when
+  # the sole outstanding issue is the unverifiable role.
+  if [ "$adminCredsAvailable" != "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ] && [ "$emailBrandingNeedsMigration" != "true" ]; then
     echo "Email is configured for instance '$instance', but Keycloak admin credentials are unavailable, so the"
     echo "'view-users' role on the aam-backend service account could not be verified or repaired."
     echo "If recipient lookups fail with 'HTTP 403 Forbidden', re-run with KEYCLOAK_HOST/USER/PASSWORD in setup.env"
@@ -211,8 +221,9 @@ if [ -z "$existingMailHost" ]; then
   smtpPassword="$SMTP_PASSWORD"
   smtpPort="587"
   smtpUsername="accounts@aam-digital.com"
-  emailFrom='"Aam Digital <accounts@aam-digital.com>"'
-  subjectPrefix="Aam Digital"
+  # Bare sender address only — the "Aam Digital" display name and subject prefix are managed in the
+  # backend's email-branding.properties template file, not here.
+  emailFrom="accounts@aam-digital.com"
 
   upsertEnv "SPRING_MAIL_HOST" "$smtpHost" "$appEnv"
   upsertEnv "SPRING_MAIL_PORT" "$smtpPort" "$appEnv"
@@ -223,10 +234,21 @@ if [ -z "$existingMailHost" ]; then
   upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE" "true" "$appEnv"
   upsertEnv "SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE" "" "$appEnv"
   upsertEnv "NOTIFICATION_EMAIL_FROM" "$emailFrom" "$appEnv"
-  upsertEnv "NOTIFICATION_EMAIL_SUBJECTPREFIX" "$subjectPrefix" "$appEnv"
 else
   echo "  SMTP already configured (SPRING_MAIL_HOST set) — keeping existing mail settings."
 fi
+
+# NOTIFICATION_EMAIL_FROM now holds the bare sender address only; the display name and subject prefix moved
+# to the backend's email-branding.properties template file. Strip a legacy "Name <addr>" value down to the
+# bare address (otherwise the backend renders the name twice), and drop the now-unused subject prefix var.
+currentEmailFrom=$(getVar "$appEnv" NOTIFICATION_EMAIL_FROM)
+if [[ "$currentEmailFrom" == *"<"* ]]; then
+  bareEmailFrom="${currentEmailFrom##*<}"   # drop everything up to and including '<'
+  bareEmailFrom="${bareEmailFrom%%>*}"      # drop the closing '>' and anything after it
+  bareEmailFrom=$(printf '%s' "$bareEmailFrom" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  setEnv "NOTIFICATION_EMAIL_FROM" "$bareEmailFrom" "$appEnv"
+fi
+removeEnv "NOTIFICATION_EMAIL_SUBJECTPREFIX" "$appEnv"
 
 # BASEPATH is now defined (and overridden) by docker-compose, so drop the stale local default.
 removeEnvIfValue "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH" "http://replication-backend:5984" "$appEnv"

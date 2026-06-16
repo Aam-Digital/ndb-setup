@@ -5,8 +5,12 @@ set -euo pipefail
 # It requires the notification feature to already be enabled (run enable-feature-notification.sh first).
 
 # how to use
-# ./enable-feature-notification-email.sh <instance>
+# ./enable-feature-notification-email.sh <instance> [subject-prefix]
+# ./enable-feature-notification-email.sh --all [subject-prefix]
 # example: ./enable-feature-notification-email.sh qm
+# example: ./enable-feature-notification-email.sh qm "My Company"
+# example: ./enable-feature-notification-email.sh --all
+# example: ./enable-feature-notification-email.sh --all "My Company"
 
 ##############################
 # setup
@@ -20,11 +24,23 @@ source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 # ask for input data
 ##############################
 
-if [ -n "${1:-}" ]; then
-  instance="$1"
+# Handle --all flag for running on all instances
+if [ "${1:-}" = "--all" ]; then
+  runAllInstances=true
+  subjectPrefix="${2:-Aam Digital}"
+  shift 2
 else
-  echo "What is the name of the instance?"
-  read -r instance
+  runAllInstances=false
+  if [ -n "${1:-}" ]; then
+    instance="$1"
+    subjectPrefix="${2:-Aam Digital}"
+    shift 2
+  else
+    echo "What is the name of the instance?"
+    read -r instance
+    subjectPrefix="${1:-Aam Digital}"
+    shift
+  fi
 fi
 
 ##############################
@@ -212,7 +228,6 @@ if [ -z "$existingMailHost" ]; then
   smtpPort="587"
   smtpUsername="accounts@aam-digital.com"
   emailFrom='"Aam Digital <accounts@aam-digital.com>"'
-  subjectPrefix="Aam Digital"
 
   upsertEnv "SPRING_MAIL_HOST" "$smtpHost" "$appEnv"
   upsertEnv "SPRING_MAIL_PORT" "$smtpPort" "$appEnv"

@@ -56,7 +56,24 @@ fi
 
 isEmailAlreadyEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_EMAIL_ENABLED)
 existingKeycloakServerUrl=$(getVar "$appEnv" KEYCLOAK_SERVERURL)
+existingKeycloakClientId=$(getVar "$appEnv" KEYCLOAK_CLIENTID)
 existingMailHost=$(getVar "$appEnv" SPRING_MAIL_HOST)
+
+# Some instances still carry a placeholder (e.g. NOT_USED) for the aam-services Keycloak client ID. If
+# email is already enabled but KEYCLOAK_CLIENTID holds such a value, the email handler authenticates with
+# a bogus client — flag it so we do not early-exit as "nothing to do" and instead repair it below.
+clientIdNeedsRepair=false
+if [ "$isEmailAlreadyEnabled" == "true" ] && isPlaceholderValue "$existingKeycloakClientId"; then
+  clientIdNeedsRepair=true
+fi
+
+# AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH is now defined (and overridden) by docker-compose. If
+# an already-configured instance still carries the stale local default, flag it so we do not early-exit as
+# "nothing to do" and instead clean it up below.
+basePathNeedsCleanup=false
+if [ "$(getVar "$appEnv" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH)" == "http://replication-backend:5984" ]; then
+  basePathNeedsCleanup=true
+fi
 
 # Derive the Keycloak admin client config required for the email handler. The handler uses Keycloak to
 # resolve recipient email addresses, reusing the aam-backend service-account client created by
@@ -80,6 +97,9 @@ else
   fi
 fi
 keycloakRealm="$instance"
+# Normalize the replication-backend client ID in .env: older/hand-edited instances may still have it as a
+# placeholder (e.g. NOT_USED), which must not be propagated into application.env's KEYCLOAK_CLIENTID below.
+ensureRealValue "REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID" "aam-backend" "$path/.env"
 keycloakClientId=$(getVar "$path/.env" REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID "aam-backend")
 keycloakClientSecret=$(getVar "$path/.env" REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET)
 
@@ -105,26 +125,29 @@ if [[ -n "${KEYCLOAK_HOST:-}" && -n "${KEYCLOAK_USER:-}" && -n "${KEYCLOAK_PASSW
   fi
 fi
 
-# Already configured (email enabled + Keycloak admin client set): exit early unless there is still a
-# role to repair. The only reason to continue here is a missing 'view-users' role that we CAN fix.
+# Already configured (email enabled + Keycloak admin client set): exit early unless there is still
+# something to repair — a missing 'view-users' role we CAN fix, or a placeholder client ID to normalize.
 if [ "$isEmailAlreadyEnabled" == "true" ] && [ -n "$existingKeycloakServerUrl" ]; then
-  if [ "$roleAlreadyPresent" == "true" ]; then
+  if [ "$roleAlreadyPresent" == "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ]; then
     echo "Email notifications already fully configured for instance '$instance' (incl. view-users role). Nothing to do."
     exit 0
   fi
-  if [ "$adminCredsAvailable" != "true" ]; then
+  # A placeholder client ID or a stale BASEPATH are plain env edits that need no Keycloak admin access — fall
+  # through to fix them even when admin creds are unavailable. Only exit here when the sole outstanding issue
+  # is the unverifiable role.
+  if [ "$adminCredsAvailable" != "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ]; then
     echo "Email is configured for instance '$instance', but Keycloak admin credentials are unavailable, so the"
     echo "'view-users' role on the aam-backend service account could not be verified or repaired."
     echo "If recipient lookups fail with 'HTTP 403 Forbidden', re-run with KEYCLOAK_HOST/USER/PASSWORD in setup.env"
     echo "(or a BWS_ACCESS_TOKEN that can read the Keycloak secrets)."
     exit 0
   fi
-  # else: role missing but admin creds are available -> fall through to (re)assign and verify it.
+  # else: role missing (admin creds available) and/or client ID needs repair -> fall through to fix it.
 fi
 
 echo ""
 if [ "$isEmailAlreadyEnabled" == "true" ]; then
-  echo "Email is enabled but needs repair (missing Keycloak admin config and/or 'view-users' role) — repairing '$instance'..."
+  echo "Email is enabled but needs repair (placeholder Keycloak client ID, stale BASEPATH, missing admin config and/or 'view-users' role) — repairing '$instance'..."
 else
   echo "Configuring email notifications for '$instance'..."
 fi
@@ -204,6 +227,9 @@ if [ -z "$existingMailHost" ]; then
 else
   echo "  SMTP already configured (SPRING_MAIL_HOST set) — keeping existing mail settings."
 fi
+
+# BASEPATH is now defined (and overridden) by docker-compose, so drop the stale local default.
+removeEnvIfValue "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH" "http://replication-backend:5984" "$appEnv"
 
 # Enable email and configure the Keycloak admin client (this is what makes the email handler bean exist).
 upsertEnv "FEATURES_NOTIFICATIONAPI_EMAIL_ENABLED" "true" "$appEnv"

@@ -104,7 +104,9 @@ setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://keycloak.aam
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
 
-setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "http://replication-backend:5984" "$path/config/aam-backend-service/application.env"
+# BASEPATH is defined (and overridden) by docker-compose — remove any value the template ships so it
+# is not duplicated as dead config in application.env.
+removeEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "$path/config/aam-backend-service/application.env"
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
 setEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
@@ -135,6 +137,9 @@ if [ -z "$clientSecret" ]; then
   echo "ERROR: Keycloak client created but secret could not be retrieved for '$instance'. Aborting."
   exit 1
 fi
+
+# ensure the client ID is set (and correct an existing placeholder like NOT_USED)
+ensureRealValue REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID "aam-backend" "$path/.env"
 
 # ensure key exists before setting (older .env templates may lack it)
 if ! grep -q '^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=' "$path/.env"; then

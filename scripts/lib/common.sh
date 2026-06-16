@@ -140,6 +140,25 @@ backupFile() {
 }
 
 ##############################
+# Bitwarden Secrets Manager helpers
+##############################
+
+# Look up a Bitwarden Secrets Manager secret by its key/name and print its value to stdout.
+# bws's `secret get` only accepts a UUID, so this lists the accessible secrets and filters by key.
+# The key must be unique among the secrets the token can read; if several match, the first wins.
+# Requires: BWS_ACCESS_TOKEN set and `bws config server-base` already pointed at the right vault.
+# Returns: non-zero (and prints nothing) if no secret with that key is found.
+getBwsSecretByKey() {
+  local key="$1"
+  local value
+  value=$(bws secret list -t "$BWS_ACCESS_TOKEN" 2>/dev/null | jq -r --arg k "$key" 'map(select(.key == $k)) | .[0].value // empty')
+  if [[ -z "$value" ]]; then
+    return 1
+  fi
+  printf '%s' "$value"
+}
+
+##############################
 # Docker compose helpers
 ##############################
 

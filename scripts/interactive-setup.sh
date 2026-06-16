@@ -401,8 +401,13 @@ if [ "$aamBackendService" == 0 ]; then
   fi
 
   if [ "$withAamBackendService" == "y" ] || [ "$withAamBackendService" == "Y" ]; then
-    $baseDirectory/ndb-setup/scripts/enable-backend.sh "$org"
+    $baseDirectory/ndb-setup/scripts/enable-backend.sh "$org" --skip-restart
     aamBackendService=1
+
+    # Enabling the backend also enables (push + email) notifications by default. The enable script loads the
+    # Firebase credentials from BWS, so this runs non-interactively. --skip-restart is passed because this
+    # script restarts the stack once at the very end, after all enable-* scripts have written their config.
+    $baseDirectory/ndb-setup/scripts/enable-feature-notification.sh "$org" --skip-restart
   fi
 fi
 
@@ -451,6 +456,8 @@ if [ "$app" == 0 ]; then
   fi
 fi
 
-(cd "$path" && docker compose up -d)
+# Single restart for the whole instance, after every enable-* script (run with --skip-restart) has written
+# its config. `down && up -d` (not just `up -d`) forces recreation so changed env_file/config is picked up.
+(cd "$path" && docker compose down && docker compose up -d)
 
 echo "DONE app is now available under https://$url"

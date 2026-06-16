@@ -17,6 +17,23 @@ source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 ##############################
+# parse flags
+##############################
+
+# --skip-restart: do not restart docker at the end; the caller is responsible for bringing the stack up once
+# after all config is written (e.g. enable-feature-notification.sh, which restarts once for both steps, or
+# interactive-setup.sh). Run standalone the script restarts itself. Flags are stripped so positional args stay intact.
+skipRestart=false
+positionalArgs=()
+for arg in "$@"; do
+  case "$arg" in
+    --skip-restart) skipRestart=true ;;
+    *) positionalArgs+=("$arg") ;;
+  esac
+done
+set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+
+##############################
 # ask for input data
 ##############################
 
@@ -263,7 +280,10 @@ upsertEnv "KEYCLOAK_CLIENTSECRET" "$keycloakClientSecret" "$appEnv"
 # Restart only at the very end, once all env writes have succeeded. Combined with `set -euo pipefail`,
 # a failure during the file I/O above aborts before this line, so the instance is never taken down with
 # a partially written application.env — it keeps running on its previous, working config.
-(cd "$path" && docker compose down && docker compose up -d)
+# Skipped with --skip-restart when a caller restarts the stack itself after this step.
+if [ "$skipRestart" != "true" ]; then
+  (cd "$path" && docker compose down && docker compose up -d)
+fi
 
 if [ "$keycloakRolesEnsured" == "true" ]; then
   echo "Email notifications enabled."

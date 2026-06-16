@@ -36,6 +36,23 @@ fi
 bws config server-base https://vault.bitwarden.eu
 
 ##############################
+# parse flags
+##############################
+
+# --skip-restart: do not restart docker at the end; the caller (e.g. interactive-setup.sh) is responsible
+# for bringing the stack up once, after all enable-* scripts have written their config. Run standalone
+# (without the flag) the script restarts itself. Flags are stripped here so positional args stay intact.
+skipRestart=false
+positionalArgs=()
+for arg in "$@"; do
+  case "$arg" in
+    --skip-restart) skipRestart=true ;;
+    *) positionalArgs+=("$arg") ;;
+  esac
+done
+set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+
+##############################
 # ask for input data
 ##############################
 
@@ -149,6 +166,8 @@ setEnv REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET "$clientSecret" "$path/.env"
 
 setEnv COMPOSE_PROFILES "full-stack" "$path/.env"
 
-(cd "$path" && docker compose up -d)
+if [ "$skipRestart" != "true" ]; then
+  (cd "$path" && docker compose up -d)
+fi
 
 echo "Backend enabled."

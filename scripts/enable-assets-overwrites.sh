@@ -62,21 +62,8 @@ if [ -d "$instancePath/assets" ]; then
 fi
 cp -r "$baseConfigPath/assets" "$instancePath/assets"
 
-# add one volume mount to docker-compose.yml for each sub-folder in assets
-for subfolder in "$instancePath"/assets/*; do
-  subfolderName=$(basename "$subfolder")
-
-  # for the assets/base-configs folder, mount every subfolder and top-level file separately
-  if [ "$subfolderName" == "base-configs" ] && [ -d "$subfolder" ]; then
-    echo "Processing base-configs folder with special handling..."
-    for item in "$subfolder"/*; do
-      itemName=$(basename "$item")
-      ensureAssetVolumeMount "$instancePath/docker-compose.yml" "base-configs/$itemName"
-    done
-  else
-    ensureAssetVolumeMount "$instancePath/docker-compose.yml" "$subfolderName"
-  fi
-done
+# add one volume mount to docker-compose.yml for each asset present in the assets folder
+ensureAssetVolumeMountsFromDir "$instancePath/docker-compose.yml" "$instancePath/assets"
 
 # restart docker if a third arg ($3) is "y" or "true"
 if [ "$3" == "y" ] || [ "$3" == "true" ]; then

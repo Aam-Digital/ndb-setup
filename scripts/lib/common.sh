@@ -99,13 +99,34 @@ ensureAssetVolumeMount() {
   fi
 }
 
-# Print the asset item-names (e.g. "icons", "base-configs/demo") whose volume mounts are
-# currently *active* (uncommented) in a docker-compose.yml, one per line.
-# Top-level file mounts (config.json etc.) are not under ./assets/ and are excluded.
-listActiveAssetMounts() {
+# Mount every asset present in an instance's assets/ directory into its docker-compose.yml
+# (idempotent, via ensureAssetVolumeMount). The filesystem is the source of truth: whatever
+# sub-folders/files exist under assets/ get a volume mount.
+# The assets/base-configs folder is special-cased — each of its top-level entries is mounted
+# individually so base-configs can be overridden per item.
+# Arguments:
+#   $1 - composeFile: path to the docker-compose.yml
+#   $2 - assetsDir:   path to the instance's assets/ directory (no-op if it does not exist)
+ensureAssetVolumeMountsFromDir() {
   local composeFile="$1"
-  grep -E "^[[:space:]]*- \./assets/.+:/usr/share/nginx/html/assets/" "$composeFile" \
-    | sed -E "s#^[[:space:]]*- \./assets/(.+):/usr/share/nginx/html/assets/.+#\1#"
+  local assetsDir="$2"
+  [ -d "$assetsDir" ] || return 0
+
+  local subfolder subfolderName item itemName
+  for subfolder in "$assetsDir"/*; do
+    [ -e "$subfolder" ] || continue   # skip if the glob did not match anything
+    subfolderName=$(basename "$subfolder")
+
+    if [ "$subfolderName" == "base-configs" ] && [ -d "$subfolder" ]; then
+      for item in "$subfolder"/*; do
+        [ -e "$item" ] || continue
+        itemName=$(basename "$item")
+        ensureAssetVolumeMount "$composeFile" "base-configs/$itemName"
+      done
+    else
+      ensureAssetVolumeMount "$composeFile" "$subfolderName"
+    fi
+  done
 }
 
 ##############################

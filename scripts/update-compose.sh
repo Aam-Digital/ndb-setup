@@ -8,9 +8,9 @@
 # asks for confirmation, backs up the old file, copies the new one and
 # redeploys the instance ('docker compose up -d').
 #
-# Instance-local asset mounts enabled via enable-assets-overwrites.sh (the icons
-# placeholder, base-configs/* mounts, ...) are detected before the copy and
-# re-applied afterwards, so updating does not silently disable them.
+# The wholesale copy drops any instance-local asset volume mounts, so afterwards a
+# mount is re-created for every asset present in the instance's assets/ folder (the
+# same logic enable-assets-overwrites.sh uses), so updating does not disable them.
 #
 # Can be run from any directory.
 
@@ -22,22 +22,19 @@ source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 CANONICAL="$baseDirectory/ndb-setup/docker-compose.yml"
 ASSUME_YES=0
-OVERWRITE_ICONS=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes] [--overwrite-icons] [instance]"
-    echo "  instance          update only this instance (default: all ${PREFIX}* instances)"
-    echo "  --yes             skip per-instance confirmation (still skips unchanged)"
-    echo "  --overwrite-icons force-enable the custom icons mount (already-enabled mounts are kept regardless)"
+    echo "Usage: $0 [--yes] [instance]"
+    echo "  instance  update only this instance (default: all ${PREFIX}* instances)"
+    echo "  --yes     skip per-instance confirmation (still skips unchanged)"
     exit 1
 }
 
 for arg in "$@"; do
     case "$arg" in
-        --yes)             ASSUME_YES=1 ;;
-        --overwrite-icons) OVERWRITE_ICONS=1 ;;
-        -h|--help)         usage ;;
+        --yes)      ASSUME_YES=1 ;;
+        -h|--help)  usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)
             if [ -n "$INSTANCE" ]; then
@@ -89,28 +86,15 @@ update_instance() {
         esac
     fi
 
-    # Capture the asset mounts currently enabled in the instance so they survive the
-    # wholesale copy below (the canonical file ships them commented out / not at all).
-    local activeAssetMounts
-    activeAssetMounts=$(listActiveAssetMounts "$target")
-
     backupFile "$target"
     # Remember the backup just made so a failed redeploy can roll back config + runtime.
     local previous="$BACKUP_FILE"
 
     cp "$CANONICAL" "$target"
 
-    # Re-apply previously enabled asset mounts (icons, base-configs/*, ...) onto the fresh file.
-    local itemName
-    while IFS= read -r itemName; do
-        [ -n "$itemName" ] || continue
-        ensureAssetVolumeMount "$target" "$itemName"
-    done <<< "$activeAssetMounts"
-
-    # --overwrite-icons forces the icons mount on even if it wasn't enabled before.
-    if [ "$OVERWRITE_ICONS" -eq 1 ]; then
-        ensureAssetVolumeMount "$target" "icons"
-    fi
+    # The wholesale copy drops any asset volume mounts, so re-create one for every asset
+    # present in the instance's assets/ folder (the filesystem is the source of truth).
+    ensureAssetVolumeMountsFromDir "$target" "$D/assets"
 
     echo "[$instance] updated"
 

@@ -32,8 +32,9 @@ OVERWRITE_ICONS=0
 
 for arg in "$@"; do
     case "$arg" in
-        --yes)      ASSUME_YES=1 ;;
-        -h|--help)  usage ;;
+        --yes)            ASSUME_YES=1 ;;
+        --overwrite-icons) OVERWRITE_ICONS=1 ;;
+        -h|--help)        usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)
             if [ -n "$INSTANCE" ]; then
@@ -93,7 +94,7 @@ update_instance() {
 
     # Process optional features
     if [ "$OVERWRITE_ICONS" -eq 1 ]; then
-        sed -i 's|# - ./assets/icons:/usr/share/nginx/html/assets/icons|      - ./assets/icons:/usr/share/nginx/html/assets/icons|' "$target"
+        sed -i 's|      # - ./assets/icons:/usr/share/nginx/html/assets/icons  # optional: uncomment to enable custom icons mount|      - ./assets/icons:/usr/share/nginx/html/assets/icons|' "$target"
     fi
 
     echo "[$instance] updated"

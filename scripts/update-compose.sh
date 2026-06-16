@@ -8,6 +8,10 @@
 # asks for confirmation, backs up the old file, copies the new one and
 # redeploys the instance ('docker compose up -d').
 #
+# The wholesale copy drops any instance-local asset volume mounts, so afterwards a
+# mount is re-created for every asset present in the instance's assets/ folder (the
+# same logic enable-assets-overwrites.sh uses), so updating does not disable them.
+#
 # Can be run from any directory.
 
 set -euo pipefail
@@ -21,20 +25,16 @@ ASSUME_YES=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes] [--overwrite-icons] [instance]"
-    echo "  instance          update only this instance (default: all ${PREFIX}* instances)"
-    echo "  --yes             skip per-instance confirmation (still skips unchanged)"
-    echo "  --overwrite-icons enable custom icons mount in docker-compose.yml"
+    echo "Usage: $0 [--yes] [instance]"
+    echo "  instance  update only this instance (default: all ${PREFIX}* instances)"
+    echo "  --yes     skip per-instance confirmation (still skips unchanged)"
     exit 1
 }
 
-OVERWRITE_ICONS=0
-
 for arg in "$@"; do
     case "$arg" in
-        --yes)            ASSUME_YES=1 ;;
-        --overwrite-icons) OVERWRITE_ICONS=1 ;;
-        -h|--help)        usage ;;
+        --yes)      ASSUME_YES=1 ;;
+        -h|--help)  usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)
             if [ -n "$INSTANCE" ]; then
@@ -92,10 +92,9 @@ update_instance() {
 
     cp "$CANONICAL" "$target"
 
-    # Process optional features
-    if [ "$OVERWRITE_ICONS" -eq 1 ]; then
-        sed -i 's|      # - ./assets/icons:/usr/share/nginx/html/assets/icons  # optional: uncomment to enable custom icons mount|      - ./assets/icons:/usr/share/nginx/html/assets/icons|' "$target"
-    fi
+    # The wholesale copy drops any asset volume mounts, so re-create one for every asset
+    # present in the instance's assets/ folder (the filesystem is the source of truth).
+    ensureAssetVolumeMountsFromDir "$target" "$D/assets"
 
     echo "[$instance] updated"
 

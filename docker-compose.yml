@@ -9,7 +9,6 @@ services:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
       - ./firebase-config.json:/usr/share/nginx/html/assets/firebase-config.json
-      # - ./assets/icons:/usr/share/nginx/html/assets/icons  # optional: uncomment to enable custom icons mount
     restart: unless-stopped
 
   couchdb-only:

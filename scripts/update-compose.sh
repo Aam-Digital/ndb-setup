@@ -8,6 +8,10 @@
 # asks for confirmation, backs up the old file, copies the new one and
 # redeploys the instance ('docker compose up -d').
 #
+# Instance-local asset mounts enabled via enable-assets-overwrites.sh (the icons
+# placeholder, base-configs/* mounts, ...) are detected before the copy and
+# re-applied afterwards, so updating does not silently disable them.
+#
 # Can be run from any directory.
 
 set -euo pipefail
@@ -18,21 +22,30 @@ source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 CANONICAL="$baseDirectory/ndb-setup/docker-compose.yml"
 ASSUME_YES=0
+OVERWRITE_ICONS=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes] [instance]"
-    echo "  instance  update only this instance (default: all ${PREFIX}* instances)"
-    echo "  --yes     skip per-instance confirmation (still skips unchanged)"
+    echo "Usage: $0 [--yes] [--overwrite-icons] [instance]"
+    echo "  instance          update only this instance (default: all ${PREFIX}* instances)"
+    echo "  --yes             skip per-instance confirmation (still skips unchanged)"
+    echo "  --overwrite-icons force-enable the custom icons mount (already-enabled mounts are kept regardless)"
     exit 1
 }
 
 for arg in "$@"; do
     case "$arg" in
-        --yes)      ASSUME_YES=1 ;;
-        -h|--help)  usage ;;
+        --yes)             ASSUME_YES=1 ;;
+        --overwrite-icons) OVERWRITE_ICONS=1 ;;
+        -h|--help)         usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
-        *)  INSTANCE="$arg" ;;
+        *)
+            if [ -n "$INSTANCE" ]; then
+                echo "Only one instance argument is allowed."
+                usage
+            fi
+            INSTANCE="$arg"
+            ;;
     esac
 done
 
@@ -76,12 +89,38 @@ update_instance() {
         esac
     fi
 
+    # Capture the asset mounts currently enabled in the instance so they survive the
+    # wholesale copy below (the canonical file ships them commented out / not at all).
+    local activeAssetMounts
+    activeAssetMounts=$(listActiveAssetMounts "$target")
+
     backupFile "$target"
+    # Remember the backup just made so a failed redeploy can roll back config + runtime.
+    local previous="$BACKUP_FILE"
+
     cp "$CANONICAL" "$target"
+
+    # Re-apply previously enabled asset mounts (icons, base-configs/*, ...) onto the fresh file.
+    local itemName
+    while IFS= read -r itemName; do
+        [ -n "$itemName" ] || continue
+        ensureAssetVolumeMount "$target" "$itemName"
+    done <<< "$activeAssetMounts"
+
+    # --overwrite-icons forces the icons mount on even if it wasn't enabled before.
+    if [ "$OVERWRITE_ICONS" -eq 1 ]; then
+        ensureAssetVolumeMount "$target" "icons"
+    fi
+
     echo "[$instance] updated"
 
     echo "[$instance] redeploying..."
-    (cd "$D" && docker compose up -d)
+    if ! (cd "$D" && docker compose up -d); then
+        echo "[$instance] redeploy failed, rolling back docker-compose.yml and redeploying previous config"
+        cp "$previous" "$target"
+        (cd "$D" && docker compose up -d) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed"
+        return 1
+    fi
     echo "[$instance] redeployed"
     updated=$((updated + 1))
 }

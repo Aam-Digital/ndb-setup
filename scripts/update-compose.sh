@@ -8,6 +8,10 @@
 # asks for confirmation, backs up the old file, copies the new one and
 # redeploys the instance ('docker compose up -d').
 #
+# The wholesale copy drops any instance-local asset volume mounts, so afterwards a
+# mount is re-created for every asset present in the instance's assets/ folder (the
+# same logic enable-assets-overwrites.sh uses), so updating does not disable them.
+#
 # Can be run from any directory.
 
 set -euo pipefail
@@ -32,7 +36,13 @@ for arg in "$@"; do
         --yes)      ASSUME_YES=1 ;;
         -h|--help)  usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
-        *)  INSTANCE="$arg" ;;
+        *)
+            if [ -n "$INSTANCE" ]; then
+                echo "Only one instance argument is allowed."
+                usage
+            fi
+            INSTANCE="$arg"
+            ;;
     esac
 done
 
@@ -77,11 +87,24 @@ update_instance() {
     fi
 
     backupFile "$target"
+    # Remember the backup just made so a failed redeploy can roll back config + runtime.
+    local previous="$BACKUP_FILE"
+
     cp "$CANONICAL" "$target"
+
+    # The wholesale copy drops any asset volume mounts, so re-create one for every asset
+    # present in the instance's assets/ folder (the filesystem is the source of truth).
+    ensureAssetVolumeMountsFromDir "$target" "$D/assets"
+
     echo "[$instance] updated"
 
     echo "[$instance] redeploying..."
-    (cd "$D" && docker compose up -d)
+    if ! (cd "$D" && docker compose up -d); then
+        echo "[$instance] redeploy failed, rolling back docker-compose.yml and redeploying previous config"
+        cp "$previous" "$target"
+        (cd "$D" && docker compose up -d) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed"
+        return 1
+    fi
     echo "[$instance] redeployed"
     updated=$((updated + 1))
 }

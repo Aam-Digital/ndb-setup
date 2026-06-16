@@ -327,6 +327,18 @@ if [ "$app" == 0 ]; then
     if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/assets" ]; then
       $baseDirectory/ndb-setup/scripts/enable-assets-overwrites.sh "$org" "$baseConfig"
     fi
+
+    # Apply a config overlay shipped by the baseConfig. The baseConfig's `config/` folder mirrors the
+    # instance `config/` tree 1:1 and is copied verbatim, so e.g. a custom notification email template at
+    # `config/aam-backend-service/templates/notification/create-notification-email-template.html` lands at
+    # the path docker-compose mounts into the aam-backend-service container (/opt/app/templates).
+    # Note: this only adds files (e.g. templates/); the per-instance application.env is generated later by
+    # enable-backend.sh, so the two never collide.
+    if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/config" ]; then
+      echo "Applying config overlay from baseConfig '$baseConfig'..."
+      mkdir -p "$path/config"
+      cp -r "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/config/." "$path/config/"
+    fi
   fi
 fi
 

@@ -80,8 +80,10 @@ update_instance() {
 
     echo "[$instance] redeploying..."
     if ! (cd "$D" && docker compose pull && docker compose up -d); then
-        echo "[$instance] redeploy failed, restoring $VAR=$OLD_VERSION"
+        echo "[$instance] redeploy failed, rolling back to $VAR=$OLD_VERSION"
         setEnv "$VAR" "$OLD_VERSION" "$envFile"
+        # Restore the previous runtime too, not just the config on disk.
+        (cd "$D" && docker compose up -d) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed"
         return 1
     fi
     echo "[$instance] redeployed"

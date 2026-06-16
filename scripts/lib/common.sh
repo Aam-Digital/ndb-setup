@@ -38,6 +38,22 @@ setEnv() {
   echo "  ~ updated $key in $(basename "$file")"
 }
 
+# Set a variable in a file, appending it if it does not already exist
+upsertEnv() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  local escaped
+  escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
+  if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    echo "$key=$value" >> "$file"
+    echo "  + added $key to $(basename "$file")"
+  else
+    sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+    echo "  ~ updated $key in $(basename "$file")"
+  fi
+}
+
 # Append a variable to a file if it does not already exist
 ensureEnv() {
   local key="$1"
@@ -48,6 +64,64 @@ ensureEnv() {
     echo "  + added $key to $(basename "$file")"
   else
     echo "  = $key already exists in $(basename "$file"), skipping"
+  fi
+}
+
+# Recognize "unset" placeholder values that older/hand-edited instances may still carry instead of a
+# real value (e.g. a Keycloak client ID left as NOT_USED on systems provisioned before it was needed).
+# These must be treated like an empty value so callers replace them with the correct one.
+# Returns 0 (true) if the value is empty or a known placeholder, 1 (false) otherwise.
+isPlaceholderValue() {
+  local value="$1"
+  # strip surrounding quotes for the comparison (values in .env are sometimes quoted)
+  value="${value#\"}"; value="${value%\"}"
+  value="${value#\'}"; value="${value%\'}"
+  case "${value,,}" in
+    "" | not_used | notused | not-used | "not used" | changeme | change_me | placeholder | todo | tbd | none | unset | "n/a" | na)
+      return 0 ;;
+    *)
+      return 1 ;;
+  esac
+}
+
+# Ensure a key is set to $value, but only overwrite when the current value is missing or a placeholder
+# (see isPlaceholderValue). An existing real value is preserved. Use this for fields that have a known
+# correct value (e.g. the fixed "aam-backend" Keycloak client ID) which some instances still hold as
+# NOT_USED — unlike ensureEnv (which keeps any existing value) or setEnv/upsertEnv (which always overwrite).
+ensureRealValue() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  local current
+  current=$(getVar "$file" "$key")
+  if isPlaceholderValue "$current"; then
+    if [ -n "$current" ]; then
+      echo "  ! $key is a placeholder ('$current') in $(basename "$file") — replacing with '$value'"
+    fi
+    upsertEnv "$key" "$value" "$file"
+  else
+    echo "  = $key already set to '$current' in $(basename "$file"), keeping it"
+  fi
+}
+
+# Remove a variable from a file. No-op if the key is absent.
+removeEnv() {
+  local key="$1"
+  local file="$2"
+  if grep -q "^$key=" "$file" 2>/dev/null; then
+    sed -i "/^$key=/d" "$file"
+    echo "  - removed $key from $(basename "$file")"
+  fi
+}
+
+# Remove a variable from a file only when it currently holds exactly $value. Use to drop config that is
+# now provided/overridden elsewhere (e.g. by docker-compose) while preserving any custom override.
+removeEnvIfValue() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  if [ "$(getVar "$file" "$key")" == "$value" ]; then
+    removeEnv "$key" "$file"
   fi
 }
 

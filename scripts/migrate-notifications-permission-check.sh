@@ -29,11 +29,14 @@ if [[ -z "${BWS_ACCESS_TOKEN:-}" ]]; then
   exit 1
 fi
 
-bws config server-base https://vault.bitwarden.eu
-
-KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
-KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
-KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
+if [[ -z "${KEYCLOAK_HOST:-}" || -z "${KEYCLOAK_USER:-}" || -z "${KEYCLOAK_PASSWORD:-}" ]]; then
+  bws config server-base https://vault.bitwarden.eu
+  KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
+  KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
+  KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
+else
+  echo "Using KEYCLOAK_HOST/USER/PASSWORD from environment (setup.env)."
+fi
 
 ##############################
 # migrate one instance
@@ -66,17 +69,24 @@ migrate_instance() {
   local needsMigration=false
   if ! grep -q "^REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID=" "$envFile" 2>/dev/null; then
     needsMigration=true
+  elif isPlaceholderValue "$(getVar "$envFile" REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID)"; then
+    # present but set to a placeholder (e.g. NOT_USED) — must be normalized to aam-backend
+    needsMigration=true
   elif ! grep -q "^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=" "$envFile" 2>/dev/null; then
     needsMigration=true
   elif [ -f "$appEnvFile" ]; then
-    for var in AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH \
-               AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME \
+    # BASICAUTH vars must be present; BASEPATH must be ABSENT (it is now defined/overridden by
+    # docker-compose, so a leftover local default needs cleaning up).
+    for var in AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME \
                AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD; do
       if ! grep -q "^$var=" "$appEnvFile" 2>/dev/null; then
         needsMigration=true
         break
       fi
     done
+    if [ "$(getVar "$appEnvFile" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH)" == "http://replication-backend:5984" ]; then
+      needsMigration=true
+    fi
   fi
 
   if [ "$needsMigration" = false ]; then
@@ -109,8 +119,9 @@ migrate_instance() {
   cp "$baseDirectory/ndb-setup/docker-compose.yml" "$instanceDir/docker-compose.yml"
   echo "  Updated docker-compose.yml from ndb-setup template"
 
-  # 2. Add Keycloak vars to .env (for replication-backend)
-  ensureEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID" "aam-backend" "$envFile"
+  # 2. Add Keycloak vars to .env (for replication-backend). Use ensureRealValue so an existing
+  #    placeholder (e.g. NOT_USED) is corrected to aam-backend rather than left in place.
+  ensureRealValue "REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID" "aam-backend" "$envFile"
   ensureEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$clientSecret" "$envFile"
   setEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$clientSecret" "$envFile"
 
@@ -120,7 +131,8 @@ migrate_instance() {
     couchUser=$(getVar "$envFile" COUCHDB_USER)
     couchPass=$(getVar "$envFile" COUCHDB_PASSWORD)
 
-    ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH" "http://replication-backend:5984" "$appEnvFile"
+    # BASEPATH is now defined (and overridden) by docker-compose, so drop the stale local default.
+    removeEnvIfValue "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH" "http://replication-backend:5984" "$appEnvFile"
     ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME" "$couchUser" "$appEnvFile"
     ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD" "$couchPass" "$appEnvFile"
   else

@@ -118,6 +118,11 @@ if [ -n "${BWS_ACCESS_TOKEN}" ]; then
   if [[ -z "$firebaseConfigJson" ]]; then
     echo "WARNING: Could not load firebase-config.json from Bitwarden (secret '$BWS_SECRET_FIREBASE_CONFIG_JSON'); leaving existing file in place."
   else
+    if ! printf '%s' "$firebaseConfigJson" | jq empty 2>/dev/null; then
+      echo "ERROR: Retrieved firebase-config.json is not valid JSON. Abort."
+      exit 1
+    fi
+
     backupFile "$path/firebase-config.json"
     printf '%s' "$firebaseConfigJson" > "$path/firebase-config.json"
     echo "  ~ wrote firebase-config.json (frontend web push config)"

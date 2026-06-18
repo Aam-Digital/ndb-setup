@@ -2,8 +2,8 @@ name: i-keycloak-dev
 
 services:
   keycloak:
-    # NOTE: the aam-keycloak:26.4.7-0 image must be built/published for Keycloak 26
-    # (bundles the aam-theme) before deploying this. See aam-cloud-infrastructure.
+    # The aam-keycloak image (bundles the aam-theme + 2FA/metrics/third-party
+    # providers) is built and published from Aam-Digital/keycloak-aam.
     image: ghcr.io/aam-digital/aam-keycloak:26.4.7-0
     environment:
       # For all available options see https://www.keycloak.org/server/all-config

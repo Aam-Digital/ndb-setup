@@ -155,7 +155,7 @@ services:
 
   # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
   sqs:
-    image: ghcr.io/aam-digital/aam-sqs-linux:latest
+    image: ghcr.io/aam-digital/sqs-aam:latest
     container_name: ${INSTANCE_NAME}-sqs
     networks:
       - internal_aam

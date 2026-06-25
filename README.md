@@ -52,6 +52,36 @@ Check the documentation in the comments at the top of each file for usage instru
 
 
 -----
+
+## Admin CLI (migrations, statistics, CouchDB operations)
+
+Admin operations such as running config migrations, checking for conflicts, and collecting statistics are performed locally using the **ndb-core CLI** — no deployed admin service is required.
+
+### Workflow
+
+1. On the server, run the credential collector script to gather CouchDB passwords for all instances:
+
+   ```bash
+   ./scripts/collect-credentials.sh [INSTANCES_DIR]
+   # output: credentials.json in the current directory
+   ```
+
+2. Copy `credentials.json` to your local ndb-core checkout (it is git-ignored there).
+
+3. Run CLI commands from your ndb-core checkout:
+
+   ```bash
+   npm run cli -- check                                        # verify connectivity
+   npm run cli -- migrate list                                 # list available migrations
+   npm run cli -- migrate run latest-config-formats --dry-run # preview changes
+   npm run cli -- migrate run latest-config-formats           # apply with confirmation
+   npm run cli -- statistics --format csv > stats.csv         # export statistics
+   ```
+
+See [cli/README.md](https://github.com/Aam-Digital/ndb-core/blob/master/cli/README.md) in the ndb-core repository for the full command reference.
+
+
+-----
 # Deploying under a domain name using swag-proxy
 In order to make the application's docker container accessible under a public URL, you need to expose it using a tool of your choice.
 The system works well with the [swag-proxy](https://docs.linuxserver.io/general/swag/). This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).

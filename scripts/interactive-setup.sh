@@ -293,7 +293,8 @@ if [ ! -f "$path/keycloak.json" ]; then
     echo "create roles..."
     curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$roles" "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm"
     echo "verify email..."
-    curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app&redirect_uri="
+    # no redirect_uri: Keycloak falls back to the "app" client's baseUrl (set above) for the "back to application" link
+    curl -X PUT -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app"
 
     echo "enable 2fa for user..."
     roleId=$(curl -X GET "https://$KEYCLOAK_HOST/admin/realms/$org/roles" -H "Authorization: Bearer $token" | jq -r '.[] | select(.name=="no-email-2fa") | .id')
@@ -326,6 +327,18 @@ if [ "$app" == 0 ]; then
 
     if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/assets" ]; then
       $baseDirectory/ndb-setup/scripts/enable-assets-overwrites.sh "$org" "$baseConfig"
+    fi
+
+    # Apply a config overlay shipped by the baseConfig. The baseConfig's `config/` folder mirrors the
+    # instance `config/` tree 1:1 and is copied verbatim, so e.g. a custom notification email template at
+    # `config/aam-backend-service/templates/notification/create-notification-email-template.html` lands at
+    # the path docker-compose mounts into the aam-backend-service container (/opt/app/templates).
+    # Note: this only adds files (e.g. templates/); the per-instance application.env is generated later by
+    # enable-backend.sh, so the two never collide.
+    if [ -d "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/config" ]; then
+      echo "Applying config overlay from baseConfig '$baseConfig'..."
+      mkdir -p "$path/config"
+      cp -r "$baseDirectory/ndb-setup/baseConfigs/$baseConfig/config/." "$path/config/"
     fi
   fi
 fi
@@ -389,8 +402,13 @@ if [ "$aamBackendService" == 0 ]; then
   fi
 
   if [ "$withAamBackendService" == "y" ] || [ "$withAamBackendService" == "Y" ]; then
-    $baseDirectory/ndb-setup/scripts/enable-backend.sh "$org"
+    $baseDirectory/ndb-setup/scripts/enable-backend.sh "$org" --skip-restart
     aamBackendService=1
+
+    # Enabling the backend also enables (push + email) notifications by default. The enable script loads the
+    # Firebase credentials from BWS, so this runs non-interactively. --skip-restart is passed because this
+    # script restarts the stack once at the very end, after all enable-* scripts have written their config.
+    $baseDirectory/ndb-setup/scripts/enable-feature-notification.sh "$org" --skip-restart
   fi
 fi
 
@@ -439,6 +457,8 @@ if [ "$app" == 0 ]; then
   fi
 fi
 
-(cd "$path" && docker compose up -d)
+# Single restart for the whole instance, after every enable-* script (run with --skip-restart) has written
+# its config. `down && up -d` (not just `up -d`) forces recreation so changed env_file/config is picked up.
+(cd "$path" && docker compose down && docker compose up -d)
 
 echo "DONE app is now available under https://$url"

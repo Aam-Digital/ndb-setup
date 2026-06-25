@@ -36,6 +36,23 @@ fi
 bws config server-base https://vault.bitwarden.eu
 
 ##############################
+# parse flags
+##############################
+
+# --skip-restart: do not restart docker at the end; the caller (e.g. interactive-setup.sh) is responsible
+# for bringing the stack up once, after all enable-* scripts have written their config. Run standalone
+# (without the flag) the script restarts itself. Flags are stripped here so positional args stay intact.
+skipRestart=false
+positionalArgs=()
+for arg in "$@"; do
+  case "$arg" in
+    --skip-restart) skipRestart=true ;;
+    *) positionalArgs+=("$arg") ;;
+  esac
+done
+set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+
+##############################
 # ask for input data
 ##############################
 
@@ -100,11 +117,13 @@ mkdir -p "$path/config/aam-backend-service"
 curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
 
 setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$path/config/aam-backend-service/application.env"
-setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://keycloak.aam-digital.com/realms/$instance" "$path/config/aam-backend-service/application.env"
+setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$instance" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
 
-setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "http://replication-backend:5984" "$path/config/aam-backend-service/application.env"
+# BASEPATH is defined (and overridden) by docker-compose — remove any value the template ships so it
+# is not duplicated as dead config in application.env.
+removeEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "$path/config/aam-backend-service/application.env"
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
 setEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
@@ -136,6 +155,9 @@ if [ -z "$clientSecret" ]; then
   exit 1
 fi
 
+# ensure the client ID is set (and correct an existing placeholder like NOT_USED)
+ensureRealValue REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID "aam-backend" "$path/.env"
+
 # ensure key exists before setting (older .env templates may lack it)
 if ! grep -q '^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=' "$path/.env"; then
   echo "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=" >> "$path/.env"
@@ -144,6 +166,8 @@ setEnv REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET "$clientSecret" "$path/.env"
 
 setEnv COMPOSE_PROFILES "full-stack" "$path/.env"
 
-(cd "$path" && docker compose up -d)
+if [ "$skipRestart" != "true" ]; then
+  (cd "$path" && docker compose up -d)
+fi
 
 echo "Backend enabled."

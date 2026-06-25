@@ -12,9 +12,13 @@ services:
       KC_DB_URL_HOST: postgres
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${DB_PASSWORD:?No DB password set}
-      # KC_PROXY was removed in Keycloak 26; use KC_PROXY_HEADERS instead.
+      # KC_PROXY (v1) is deprecated in Keycloak 26; use KC_PROXY_HEADERS instead.
       # Our reverse proxy (nginx/swag) sends X-Forwarded-* headers.
       KC_PROXY_HEADERS: xforwarded
+      # Keycloak 26 in production mode refuses to start without TLS keys unless
+      # HTTP is explicitly enabled. TLS is terminated at the reverse proxy, so
+      # Keycloak serves plain HTTP behind it. (KC23 implied this via KC_PROXY=edge.)
+      KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: ${KEYCLOAK_URL:?No Keycloak URL set}
     volumes:
       - ./aam-theme:/opt/keycloak/themes/aam-theme

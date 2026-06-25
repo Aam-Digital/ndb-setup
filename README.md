@@ -116,6 +116,40 @@ Once done, applications can be connected with Keycloak through the `interactive_
 `keycloak/realm_config.json` provides a sample configuration that the interactive setup script uses (replacing some placeholders automatically).
 You can create a custom realm_config.json in each baseConfig folder to overwrite this.
 
+## Upgrading Keycloak (23 → 26)
+
+Keycloak 25+ no longer adds the `sub` claim to access tokens by default, and from this version the
+templates declare `exact_username` as an admin-only User Profile attribute. The upgrade is supported
+as an in-place upgrade of the existing Keycloak Postgres database.
+
+> **⚠️ Back up first — the upgrade is irreversible.**
+> On the first start of the Keycloak 26 container the Postgres schema is migrated automatically
+> (there is no downgrade). Before upgrading any instance:
+> 1. Stop the Keycloak container.
+> 2. Snapshot / `pg_dump` the Keycloak Postgres volume.
+> 3. Start the new version — the migration runs by itself, no manual step.
+>
+> Rollback = restore the snapshot and pin the previous image tag.
+
+Steps:
+1. Back up the Keycloak Postgres data (above).
+2. Bump the image tag to the Keycloak 26 build of `aam-keycloak` (see `keycloak/docker-compose.yml`,
+   and `charts/aam-keycloak/values.yaml` for Helm deployments).
+3. Start Keycloak — the database migrates automatically on boot.
+
+After the upgrade:
+- **`sub`**: restored automatically. The migration adds the `basic` client scope to existing clients
+  (which carries the `sub` mapper), so the `app` client keeps emitting `sub` with no manual change.
+  For freshly created realms, the explicit `sub` mapper in `client_config.json` provides it.
+  > ⚠️ **Exception:** if the realm **already has** a client scope named `basic`, Keycloak **skips**
+  > this automatic migration — you must then add the Subject (`sub`) and `auth_time` protocol mappers
+  > to the client/scope manually. Realms created before Keycloak 25 have no `basic` scope, so the
+  > automatic path applies to them.
+- **`exact_username`**: existing values are preserved and keep working. To make it **admin-only
+  editable**, the User Profile declaration from `realm_config.json` must be applied to the existing
+  realm (it is not retro-applied by the migration) — via the Admin Console
+  (*Realm settings → User profile*) or by re-importing the realm configuration.
+
 ## 2-Factor-Auth
 Keycloak supports a second login factor through the methods described below:
 - Authenticator App

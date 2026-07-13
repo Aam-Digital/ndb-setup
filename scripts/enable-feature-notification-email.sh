@@ -14,9 +14,11 @@ set -euo pipefail
 
 scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
-source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"
+ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
+
+source "$ndbSetupDir/setup.env"
+source "$scriptDir/lib/common.sh"
+source "$scriptDir/lib/secrets.sh"
 
 ##############################
 # parse flags
@@ -47,7 +49,10 @@ else
 fi
 resolveInstancePath "$instanceArg" || exit 1
 instance=$(getVar "$path/.env" INSTANCE_NAME)
-[ -n "$instance" ] || instance="${instanceArg#"$PREFIX"}"
+if [ -z "$instance" ]; then
+  instance="$(basename "$path")"
+  instance="${instance#"$PREFIX"}"
+fi
 
 ##############################
 # variables
@@ -147,7 +152,7 @@ adminCredsAvailable=false
 roleAlreadyPresent=false
 if [[ -n "${KEYCLOAK_HOST:-}" && -n "${KEYCLOAK_USER:-}" && -n "${KEYCLOAK_PASSWORD:-}" ]]; then
   adminCredsAvailable=true
-  source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
+  source "$scriptDir/lib/keycloak.sh"
   if serviceAccountHasRealmManagementRole "$instance" "view-users"; then
     roleAlreadyPresent=true
   fi

@@ -92,7 +92,7 @@ echo "  ~ wrote JWT signing key into couchdb.ini"
 ##############################
 
 echo "Starting CouchDB for '$org'..."
-couchdbInitStart
+couchdbInitStart || exit 1
 
 # create the required databases (201 = created, 412 = already exists; anything else is a real failure)
 for db in _users app report-calculation notification-webhook app-attachments; do

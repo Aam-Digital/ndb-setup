@@ -139,7 +139,7 @@ userDocId="User:$userName"
 encodedUserDocId=$(jq -rn --arg v "$userDocId" '$v|@uri')
 
 echo "ensure user document in CouchDB..."
-couchdbInitStart
+couchdbInitStart || exit 1
 if [ "$(couchdbCurl -o /dev/null -w '%{http_code}' "$DB_LOCAL_URL/app/$encodedUserDocId")" = "200" ]; then
   echo "  = $userDocId document already exists, keeping it"
 else

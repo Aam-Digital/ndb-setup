@@ -48,6 +48,10 @@ fi
 # always ensure org is lowercase to avoid problems with keycloak realms being case sensitive
 org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 
+if ! isValidOrgName "$org"; then
+  echo "Error: The organisation name must be non-empty and contain only lowercase letters, digits, and hyphens (not starting/ending with a hyphen). Please try another one."
+  exit 1
+fi
 if grep -Fxq "$org" "$scriptDir/blacklist.txt"; then
   echo "Error: The organisation name '$org' is blacklisted. Please try another one."
   exit 1
@@ -70,7 +74,10 @@ url=$org.$DOMAIN
 # new-vs-existing instance
 ##############################
 
-app=$(docker ps | grep -ic "$org-app")
+# authoritative check: the instance directory exists once create-instance.sh has run for it, regardless
+# of whether its containers currently happen to be running (docker ps would miss stopped instances)
+app=0
+[ -d "$path" ] && app=1
 
 if [ "$app" != 0 ]; then
   if [ "$startedWithArgs" = true ]; then
@@ -129,6 +136,11 @@ fi
 withPermissions=false
 { [ "$withReplicationBackend" == "y" ] || [ "$withReplicationBackend" == "Y" ]; } && withPermissions=true
 
+# whether the permission backend (replication-backend) is (or will be) active for this instance,
+# either freshly enabled above or already deployed for an existing instance
+permissionBackendActive=false
+{ [ "$withPermissions" = true ] || [ "$replicationBackend" != 0 ]; } && permissionBackendActive=true
+
 ##############################
 # create a new instance
 ##############################
@@ -167,12 +179,18 @@ if [ "$aamBackendService" == 0 ]; then
   fi
 
   if [ "$withAamBackendService" == "y" ] || [ "$withAamBackendService" == "Y" ]; then
-    "$scriptDir/enable-backend.sh" "$org" --skip-restart
+    # enable-backend.sh requires the permission backend (replication-backend) and aborts without it;
+    # reject the combination here instead of discovering it after create-couchdb.sh/keycloak have already run
+    if [ "$permissionBackendActive" != true ]; then
+      echo "ERROR: aam-backend-services requires the permission backend (replication-backend), which is not enabled for '$org'. Skipping backend setup — enable the permission backend first, then rerun enable-backend.sh."
+    else
+      "$scriptDir/enable-backend.sh" "$org" --skip-restart
 
-    # Enabling the backend also enables (push + email) notifications by default. The enable script loads the
-    # Firebase credentials from BWS, so this runs non-interactively. --skip-restart is passed because this
-    # script restarts the stack once at the very end, after all enable-* scripts have written their config.
-    "$scriptDir/enable-feature-notification.sh" "$org" --skip-restart
+      # Enabling the backend also enables (push + email) notifications by default. The enable script loads the
+      # Firebase credentials from BWS, so this runs non-interactively. --skip-restart is passed because this
+      # script restarts the stack once at the very end, after all enable-* scripts have written their config.
+      "$scriptDir/enable-feature-notification.sh" "$org" --skip-restart
+    fi
   fi
 fi
 

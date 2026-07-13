@@ -17,7 +17,14 @@ couchdbInitStart() {
   (cd "$path" && docker compose --profile database-only up -d couchdb-only)
 
   local status=""
+  local attempts=0
+  local maxAttempts=30
   while [ "$status" != "200" ]; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -gt "$maxAttempts" ]; then
+      echo "ERROR: CouchDB did not become ready after $((maxAttempts * 4))s. Abort." >&2
+      return 1
+    fi
     sleep 4
     echo "Waiting for DB to be ready"
     status=$(docker exec "$DB_CONTAINER" curl -s -o /dev/null -w "%{http_code}" -u "$DB_USER:$DB_PASSWORD" "$DB_LOCAL_URL/_up")

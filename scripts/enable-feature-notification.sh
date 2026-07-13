@@ -15,9 +15,11 @@
 
 scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
-source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"
+ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
+
+source "$ndbSetupDir/setup.env"
+source "$scriptDir/lib/common.sh"
+source "$scriptDir/lib/secrets.sh"
 
 # FIREBASE_CONFIG_JSON / FIREBASE_CREDENTIAL_BASE64 are resolved via getConfig/requireConfig
 # (setup.env/environment, falling back to Bitwarden Secrets Manager - see lib/secrets.sh). They hold
@@ -54,7 +56,10 @@ else
 fi
 resolveInstancePath "$instanceArg" || exit 1
 instance=$(getVar "$path/.env" INSTANCE_NAME)
-[ -n "$instance" ] || instance="${instanceArg#"$PREFIX"}"
+if [ -z "$instance" ]; then
+  instance="$(basename "$path")"
+  instance="${instance#"$PREFIX"}"
+fi
 
 ##############################
 # variables
@@ -118,7 +123,8 @@ fi
 
 # Enable email notifications by default. Always pass --skip-restart: the email step writes its config but does
 # not restart, so the single restart below applies both the notification and email config in one cycle.
-"$baseDirectory/ndb-setup/scripts/enable-feature-notification-email.sh" "$instance" --skip-restart
+# Pass $path (not $instance) so a custom instance location (outside the standard layout) is preserved.
+"$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart
 
 # Restart once, here, after both this script and the email step have written their config — unless the caller
 # asked to skip it (interactive-setup restarts the stack itself after all enable-* scripts have run).

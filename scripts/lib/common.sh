@@ -223,6 +223,19 @@ ensureAssetVolumeMountsFromDir() {
 }
 
 ##############################
+# Organisation name validation
+##############################
+
+# Validate an organisation name against the naming contract shared by directory names, DNS labels,
+# Docker container/network names, and Keycloak realm names: non-empty, lowercase letters/digits/hyphens
+# only, must not start or end with a hyphen.
+# Returns 0 (true) if valid, 1 (false) otherwise.
+isValidOrgName() {
+  local name="$1"
+  [[ "$name" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]
+}
+
+##############################
 # Instance path resolution
 ##############################
 

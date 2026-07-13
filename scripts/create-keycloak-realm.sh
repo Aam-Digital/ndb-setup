@@ -118,7 +118,7 @@ else
   clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$org/clients" \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
-    -d "$(jq '.baseUrl = "https://'"$url"'"' "$ndbSetupDir/keycloak/client_config.json")")
+    -d "$(jq --arg url "https://$url" '.baseUrl = $url' "$ndbSetupDir/keycloak/client_config.json")")
   location=$(echo "$clientResponse" | grep -i "^location:")
   client=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
   if [ -z "$client" ]; then
@@ -128,8 +128,11 @@ else
 fi
 
 # download the app's keycloak.json (frontend adapter config)
-curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" \
-  -H "Authorization: Bearer $token" > "$path/keycloak.json"
+if ! curl -s -f -L "https://$KEYCLOAK_HOST/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" \
+  -H "Authorization: Bearer $token" > "$path/keycloak.json"; then
+  echo "ERROR: failed to download keycloak.json. Abort."
+  exit 1
+fi
 
 # persist the realm signing key so create-couchdb.sh can configure JWT auth without any Keycloak access
 if ! getKeycloakRealmKey "$org"; then

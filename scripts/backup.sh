@@ -12,7 +12,7 @@ passphrase=$BACKUP_PASSPHRASE
 targetFile=$backupRoot/`date +%Y%m%d`
 echo "Creating backup $targetFile ($(date '+%Y-%m-%d %H:%M:%S')) ..."
 
-tar zcf $targetFile.tar.gz /var/docker
+tar zcf "$targetFile.tar.gz" "$baseDirectory"
 gpg -c --batch --passphrase "$passphrase" $targetFile.tar.gz
 chown root:root $targetFile.tar.gz.gpg
 

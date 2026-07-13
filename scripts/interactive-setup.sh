@@ -134,16 +134,17 @@ withPermissions=false
 ##############################
 
 if [ "$app" == 0 ]; then
-  "$scriptDir/create-instance.sh" "$org" "$baseConfig"
-  "$scriptDir/create-keycloak-realm.sh" "$org" "$locale" "$baseConfig"
+  # each step is a prerequisite for the next, so abort the whole setup if any of them fails
+  "$scriptDir/create-instance.sh" "$org" "$baseConfig" || exit 1
+  "$scriptDir/create-keycloak-realm.sh" "$org" "$locale" "$baseConfig" || exit 1
 
   if [ "$withPermissions" = true ]; then
-    "$scriptDir/create-couchdb.sh" "$org" --with-permissions
+    "$scriptDir/create-couchdb.sh" "$org" --with-permissions || exit 1
   else
-    "$scriptDir/create-couchdb.sh" "$org"
+    "$scriptDir/create-couchdb.sh" "$org" || exit 1
   fi
 
-  "$scriptDir/create-initial-user.sh" "$org" "$userEmail" "$userName"
+  "$scriptDir/create-initial-user.sh" "$org" "$userEmail" "$userName" || exit 1
 fi
 
 # switch on the permission backend profile

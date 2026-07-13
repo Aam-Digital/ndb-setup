@@ -69,7 +69,7 @@ mkdir -p "$path"
 mkdir -p "$path/couchdb/data"
 
 # copy template files, but never overwrite an existing (possibly customized) file
-for f in .env couchdb.ini config.json docker-compose.yml firebase-config.json; do
+for f in couchdb.ini config.json docker-compose.yml firebase-config.json; do
   if [ ! -f "$path/$f" ]; then
     cp "$ndbSetupDir/$f" "$path/$f"
     echo "  + copied $f"
@@ -78,13 +78,21 @@ for f in .env couchdb.ini config.json docker-compose.yml firebase-config.json; d
   fi
 done
 
+# the instance .env is generated from .env.template (note the different source name)
+if [ ! -f "$path/.env" ]; then
+  cp "$ndbSetupDir/.env.template" "$path/.env"
+  echo "  + copied .env (from .env.template)"
+else
+  echo "  = .env already exists, keeping it"
+fi
+
 ##############################
 # base .env values
 ##############################
 
-# deterministic identity values (safe to (re)write)
-setEnv INSTANCE_NAME "$org" "$path/.env"
-setEnv INSTANCE_DOMAIN "$DOMAIN" "$path/.env"
+# deterministic identity values (upsert so they are written even into a partial .env)
+upsertEnv INSTANCE_NAME "$org" "$path/.env"
+upsertEnv INSTANCE_DOMAIN "$DOMAIN" "$path/.env"
 
 # write-once values: keep whatever an existing instance already has (see ensureRealValue)
 ensureRealValue COUCHDB_USER "aam-admin" "$path/.env"

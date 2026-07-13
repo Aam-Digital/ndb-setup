@@ -94,9 +94,13 @@ echo "  ~ wrote JWT signing key into couchdb.ini"
 echo "Starting CouchDB for '$org'..."
 couchdbInitStart
 
-# create the required databases (PUT is a no-op / 412 for already-existing databases)
+# create the required databases (201 = created, 412 = already exists; anything else is a real failure)
 for db in _users app report-calculation notification-webhook app-attachments; do
-  couchdbCurl -X PUT "$DB_LOCAL_URL/$db" >/dev/null
+  status=$(couchdbCurl -X PUT "$DB_LOCAL_URL/$db" -o /dev/null -w "%{http_code}")
+  if [ "$status" != "201" ] && [ "$status" != "412" ]; then
+    echo "ERROR: failed to create database '$db' (HTTP $status). Abort."
+    exit 1
+  fi
   echo "  ensured database '$db'"
 done
 

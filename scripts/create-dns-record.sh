@@ -54,13 +54,19 @@ if [ -n "$existingId" ]; then
 fi
 
 echo "Creating DNS CNAME record for '$org'..."
-curl -X "POST" "https://dns.hetzner.com/api/v1/records" \
+body=$(jq -n \
+  --arg value "$DNS_SERVER_NAME.aam-digital.net." \
+  --arg name "$org" \
+  --arg zone_id "$DNS_HETZNER_ZONE_ID_APP" \
+  '{value: $value, type: "CNAME", name: $name, zone_id: $zone_id}')
+
+status=$(curl -s -o /dev/null -w "%{http_code}" -X "POST" "https://dns.hetzner.com/api/v1/records" \
      -H 'Content-Type: application/json' \
      -H "Auth-API-Token: $DNS_HETZNER_API_TOKEN" \
-     -d "{
-  \"value\": \"$DNS_SERVER_NAME.aam-digital.net.\",
-  \"type\": \"CNAME\",
-  \"name\": \"$org\",
-  \"zone_id\": \"$DNS_HETZNER_ZONE_ID_APP\"
-}"
-echo
+     -d "$body")
+
+if [ "$status" != "200" ] && [ "$status" != "201" ]; then
+  echo "ERROR: failed to create DNS record for '$org' (HTTP $status)." >&2
+  exit 1
+fi
+echo "DNS record created."

@@ -30,8 +30,8 @@ fi
 
 echo "For which instance do you want to import the backup?"
 read -r org
-folder=c-$org
-cd /var/docker/$folder
+folder="${PREFIX}$org"
+cd "$baseDirectory/$folder"
 docker compose down
 mv couchdb couchdb_tmp
 mv "$unpackDir/var/docker/$folder/couchdb" ./couchdb

@@ -79,19 +79,23 @@ if ! getKeycloakToken; then
   exit 1
 fi
 
-userId=$(curl -s -H "Authorization: Bearer $token" \
-  "https://$KEYCLOAK_HOST/admin/realms/$org/users?username=$userName&exact=true" | jq -r '.[0].id // empty')
+userId=$(curl -s -G -H "Authorization: Bearer $token" \
+  --data-urlencode "username=$userName" --data-urlencode "exact=true" \
+  "https://$KEYCLOAK_HOST/admin/realms/$org/users" | jq -r '.[0].id // empty')
 
 userCreated=false
 if [ -n "$userId" ]; then
   echo "Keycloak user '$userName' already exists ($userId), reusing."
 else
   echo "Creating Keycloak user '$userName'..."
+  newUserPayload=$(jq -n --arg username "$userName" --arg email "$userEmail" --arg exactUsername "User:$userName" \
+    '{username: $username, enabled: true, email: $email, attributes: {exact_username: [$exactUsername]}, emailVerified: false, credentials: [], requiredActions: ["UPDATE_PASSWORD", "VERIFY_EMAIL"]}')
   curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-    -d "{\"username\": \"$userName\",\"enabled\": true,\"email\": \"$userEmail\",\"attributes\": {\"exact_username\": \"User:$userName\"},\"emailVerified\": false,\"credentials\": [], \"requiredActions\": [\"UPDATE_PASSWORD\", \"VERIFY_EMAIL\"]}" \
+    -d "$newUserPayload" \
     "https://$KEYCLOAK_HOST/admin/realms/$org/users"
-  userId=$(curl -s -H "Authorization: Bearer $token" \
-    "https://$KEYCLOAK_HOST/admin/realms/$org/users?username=$userName&exact=true" | jq -r '.[0].id // empty')
+  userId=$(curl -s -G -H "Authorization: Bearer $token" \
+    --data-urlencode "username=$userName" --data-urlencode "exact=true" \
+    "https://$KEYCLOAK_HOST/admin/realms/$org/users" | jq -r '.[0].id // empty')
   userCreated=true
 fi
 
@@ -131,14 +135,18 @@ fi
 # CouchDB user document
 ##############################
 
+userDocId="User:$userName"
+encodedUserDocId=$(jq -rn --arg v "$userDocId" '$v|@uri')
+
 echo "ensure user document in CouchDB..."
 couchdbInitStart
-if [ "$(couchdbCurl -o /dev/null -w '%{http_code}' "$DB_LOCAL_URL/app/User:$userName")" = "200" ]; then
-  echo "  = User:$userName document already exists, keeping it"
+if [ "$(couchdbCurl -o /dev/null -w '%{http_code}' "$DB_LOCAL_URL/app/$encodedUserDocId")" = "200" ]; then
+  echo "  = $userDocId document already exists, keeping it"
 else
-  couchdbCurl -X PUT -H 'Content-Type: application/json' -d "{\"name\": \"$userName\"}" \
-    "$DB_LOCAL_URL/app/User:$userName" >/dev/null
-  echo "  + created User:$userName document"
+  userDocPayload=$(jq -n --arg name "$userName" '{name: $name}')
+  couchdbCurl -X PUT -H 'Content-Type: application/json' -d "$userDocPayload" \
+    "$DB_LOCAL_URL/app/$encodedUserDocId" >/dev/null
+  echo "  + created $userDocId document"
 fi
 couchdbInitStop
 

@@ -8,25 +8,19 @@
 # setup.env or the environment — while interactive-setup.sh (and anyone with a token) can keep
 # relying on BWS. See setup.example.env for which values are normally BWS-provided.
 #
-# Requires: jq, and (for the BWS path) the `bws` CLI + BWS_ACCESS_TOKEN.
+# Requires: jq, and (for the BWS path) the `bws` CLI + BWS_ACCESS_TOKEN, plus common.sh sourced
+# first (for getBwsSecretByKey, which looks up secrets by name since bws only supports get-by-id).
 
-# Map a config key to its Bitwarden Secrets Manager secret UUID.
-# A case statement (rather than an associative array) keeps this working on bash 3.2 (macOS).
-_bwsSecretId() {
+# Config keys that are expected to have a same-named secret in Bitwarden Secrets Manager.
+# Lookup is by secret name (via common.sh's getBwsSecretByKey), so this is just a whitelist -
+# a case statement (rather than an associative array) keeps this working on bash 3.2 (macOS).
+_isBwsBackedKey() {
   case "$1" in
-    DNS_HETZNER_API_TOKEN)          echo "1be6f4e3-2abf-4d53-8e13-b22600ace76e" ;;
-    DNS_HETZNER_ZONE_ID_APP)        echo "f0507ee8-6a72-4dca-b1f1-b22800844dac" ;;
-    KEYCLOAK_HOST)                  echo "3db87144-76c9-4690-8f59-b22600c8c927" ;;
-    KEYCLOAK_PASSWORD)              echo "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" ;;
-    KEYCLOAK_USER)                  echo "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" ;;
-    SENTRY_DSN_APP)                 echo "b1b07d2d-05de-41c6-8ac6-b22700766968" ;;
-    SENTRY_DSN_REPLICATION_BACKEND) echo "359ea1c0-798e-4e17-ae44-b2e20153051d" ;;
-    SENTRY_DSN_BACKEND)             echo "a858a580-9643-4330-8667-b2270073d7a6" ;;
-    SENTRY_AUTH_TOKEN)              echo "b9a3e1eb-3925-4ed6-93f4-b2270073c82c" ;;
-    SMTP_SERVER)                    echo "55bf05ce-03ed-40fb-8320-b2ce00cf6760" ;;
-    SMTP_PASSWORD)                  echo "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" ;;
-    RENDER_API_CLIENT_ID_DEV)       echo "b53d7a1d-220e-4e07-b1f9-b22700711f79" ;;
-    RENDER_API_CLIENT_SECRET_DEV)   echo "83a8e38b-fc22-461f-91a0-b22700712b62" ;;
+    DNS_HETZNER_API_TOKEN | DNS_HETZNER_ZONE_ID_APP | KEYCLOAK_HOST | KEYCLOAK_PASSWORD | \
+      KEYCLOAK_USER | SENTRY_DSN_APP | SENTRY_DSN_REPLICATION_BACKEND | SENTRY_DSN_BACKEND | \
+      SENTRY_AUTH_TOKEN | SMTP_SERVER | SMTP_PASSWORD | RENDER_API_CLIENT_ID_DEV | \
+      RENDER_API_CLIENT_SECRET_DEV | FIREBASE_CONFIG_JSON | FIREBASE_CREDENTIAL_BASE64)
+      return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -42,7 +36,7 @@ _ensureBwsServer() {
 
 # getConfig KEY
 # Resolve a config value. Order: an existing env/setup.env value, then BWS (only if a token is set
-# and the key has a known secret UUID). Prints the value to stdout; returns non-zero if unresolved.
+# and the key is a known BWS-backed key). Prints the value to stdout; returns non-zero if unresolved.
 getConfig() {
   local key="$1"
 
@@ -53,12 +47,10 @@ getConfig() {
   fi
 
   # 2) Bitwarden Secrets Manager (optional)
-  local uuid
-  if [ -n "${BWS_ACCESS_TOKEN:-}" ] && uuid=$(_bwsSecretId "$key"); then
+  if [ -n "${BWS_ACCESS_TOKEN:-}" ] && _isBwsBackedKey "$key"; then
     _ensureBwsServer
     local value
-    value=$(bws secret -t "$BWS_ACCESS_TOKEN" get "$uuid" 2>/dev/null | jq -r '.value // empty')
-    if [ -n "$value" ]; then
+    if value=$(getBwsSecretByKey "$key"); then
       printf '%s' "$value"
       return 0
     fi
@@ -80,7 +72,7 @@ requireConfig() {
     return 0
   fi
   echo "ERROR: required config '$key' is not set." >&2
-  if _bwsSecretId "$key" >/dev/null; then
+  if _isBwsBackedKey "$key"; then
     echo "  Provide it in setup.env / the environment, or set BWS_ACCESS_TOKEN to load it from Bitwarden." >&2
   else
     echo "  Provide it in setup.env or the environment." >&2

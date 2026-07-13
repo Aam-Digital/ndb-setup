@@ -50,6 +50,14 @@ Have a look at `interactive_setup.sh` to see which .env files are loaded there.
 The [scripts folder](./scripts/) provides utilities to enable the backend and its specific API modules.
 Check the documentation in the comments at the top of each file for usage instructions.
 
+## Running individual setup steps
+
+`interactive-setup.sh` is an orchestrator built on standalone, idempotent step scripts. Each step (create
+the instance, set up Keycloak, set up CouchDB, create the initial user, …) can also be run on its own — by
+instance name or path — and, apart from the interactive orchestrator itself, without Bitwarden access.
+
+See **[scripts/README.md](./scripts/README.md)** for the architecture, the shared conventions (config
+resolution, name-or-path instance targeting, idempotency) and how to run or extend the scripts.
 
 -----
 

@@ -2,7 +2,8 @@
 
 # simple script for importing a backup to an instance
 
-baseDirectory="/var/docker"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 backupRoot=$BACKUP_DIR
 passphrase=$BACKUP_PASSPHRASE

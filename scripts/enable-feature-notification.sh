@@ -13,7 +13,8 @@
 # setup
 ##############################
 
-baseDirectory="/var/docker"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
@@ -46,17 +47,19 @@ set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 ##############################
 
 if [ -n "$1" ]; then
-  instance="$1"
+  instanceArg="$1"
 else
-  echo "What is the name of the instance?"
-  read -r instance
+  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
+  read -r instanceArg
 fi
+resolveInstancePath "$instanceArg" || exit 1
+instance=$(getVar "$path/.env" INSTANCE_NAME)
+[ -n "$instance" ] || instance="${instanceArg#"$PREFIX"}"
 
 ##############################
 # variables
 ##############################
 
-path="$baseDirectory/$PREFIX$instance"
 appEnv="$path/config/aam-backend-service/application.env"
 
 # Point bws at the EU vault once up front so the secret lookups below work (no-op when no token is set).

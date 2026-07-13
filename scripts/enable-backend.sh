@@ -1,14 +1,17 @@
 #!/bin/bash
 
 # This script will enable the backend for an customer instance.
-# All needed credentials are loaded/stored from/to the Bitwarden Secrets Manager
+# Credentials are resolved via getConfig: from setup.env / the environment, falling back to the
+# Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set (so it can run without BWS access).
 
 # how to use
 #
 # make sure to install the dependencies: ./install-dependencies.sh
 #
-# ./enable-backend.sh <instance> (optional) <password>
+# ./enable-backend.sh <instance>
 # example: ./enable-backend.sh qm
+#   <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
+#               instance directory (e.g. "." when run from inside it)
 #
 # Requires: CARBONE_HOST set in setup.env (environment-specific):
 #   Environment  KEYCLOAK_HOST                  CARBONE_HOST
@@ -21,19 +24,12 @@
 # setup
 ##############################
 
-baseDirectory="/var/docker"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"
 source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
-
-# check if BWS_ACCESS_TOKEN is set
-if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
-  echo "BWS_ACCESS_TOKEN is not set. Abort."
-  exit 1
-fi
-
-# set server-base to EU instance
-bws config server-base https://vault.bitwarden.eu
 
 ##############################
 # parse flags
@@ -57,26 +53,27 @@ set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 ##############################
 
 if [ -n "$1" ]; then
-  instance="$1"
+  instanceArg="$1"
 else
-  echo "What is the name of the instance?"
-  read -r instance
+  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
+  read -r instanceArg
 fi
+resolveInstancePath "$instanceArg" || exit 1
+instance=$(getVar "$path/.env" INSTANCE_NAME)
+[ -n "$instance" ] || instance="${instanceArg#"$PREFIX"}"
 
 ##############################
 # variables
 ##############################
 
-path="$baseDirectory/$PREFIX$instance"
-
-# load secrets from Bitwarden Secret Manager
-RENDER_API_CLIENT_ID_DEV=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b53d7a1d-220e-4e07-b1f9-b22700711f79" | jq -r .value)
-RENDER_API_CLIENT_SECRET_DEV=$(bws secret -t "$BWS_ACCESS_TOKEN" get "83a8e38b-fc22-461f-91a0-b22700712b62" | jq -r .value)
-SENTRY_AUTH_TOKEN=$(bws secret -t "$BWS_ACCESS_TOKEN" get "b9a3e1eb-3925-4ed6-93f4-b2270073c82c" | jq -r .value)
-SENTRY_DSN_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "a858a580-9643-4330-8667-b2270073d7a6" | jq -r .value)
-KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
-KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
-KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
+# resolve config from setup.env / environment, falling back to Bitwarden when a token is available
+requireConfig RENDER_API_CLIENT_ID_DEV
+requireConfig RENDER_API_CLIENT_SECRET_DEV
+requireConfig SENTRY_AUTH_TOKEN
+requireConfig SENTRY_DSN_BACKEND
+requireConfig KEYCLOAK_HOST
+requireConfig KEYCLOAK_PASSWORD
+requireConfig KEYCLOAK_USER
 
 
 ##############################

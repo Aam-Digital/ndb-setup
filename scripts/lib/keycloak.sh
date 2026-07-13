@@ -35,6 +35,21 @@ getKeycloakToken() {
   fi
 }
 
+# Fetch a realm's active RS256 signing key (used to configure JWT auth for CouchDB / replication-backend).
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first)
+# Sets: kid, publicKey (globals). Returns non-zero if the key could not be determined.
+getKeycloakRealmKey() {
+  local realm="$1"
+  local keys
+  keys=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/keys" -H "Authorization: Bearer $token")
+  kid=$(echo "$keys" | jq -r '.active.RS256 // empty')
+  publicKey=$(echo "$keys" | jq -r --arg kid "$kid" '.keys[] | select(.kid==$kid) | .publicKey // empty')
+  if [ -z "$kid" ] || [ -z "$publicKey" ]; then
+    echo "ERROR: Could not determine active RS256 key for realm '$realm'." >&2
+    return 1
+  fi
+}
+
 # Creates the aam-backend Keycloak client (if it doesn't exist) and assigns required realm-management roles.
 # Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
 # Sets: clientSecret (global)

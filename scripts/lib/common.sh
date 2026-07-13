@@ -223,6 +223,36 @@ ensureAssetVolumeMountsFromDir() {
 }
 
 ##############################
+# Instance path resolution
+##############################
+
+# Resolve the instance directory from either a name or a path, and set the global `path` (absolute).
+# The first argument is treated as:
+#   - a PATH to the instance directory when it is "." or contains a "/" (e.g. ".", "./c-acme",
+#     "/var/docker/c-acme") — used as-is, so scripts can run against any location without a fixed layout
+#   - otherwise an instance NAME, resolved to "$baseDirectory/$PREFIX<name>" (the standard layout)
+# For the path form the directory must already exist. For the name form it may not (callers that create
+# the instance handle that themselves). Requires baseDirectory + PREFIX for the name form.
+resolveInstancePath() {
+  local arg="$1"
+  case "$arg" in
+    . | */*)
+      path="$(cd "$arg" 2>/dev/null && pwd)"
+      if [ -z "$path" ]; then
+        echo "ERROR: instance directory not found: $arg" >&2
+        return 1
+      fi
+      ;;
+    *)
+      local name
+      name=$(echo "$arg" | tr '[:upper:]' '[:lower:]')
+      name="${name#"$PREFIX"}"   # tolerate the PREFIX being included in the name or not
+      path="$baseDirectory/$PREFIX$name"
+      ;;
+  esac
+}
+
+##############################
 # Instance iteration
 ##############################
 
@@ -230,8 +260,9 @@ ensureAssetVolumeMountsFromDir() {
 # Usage: forEachInstance <callback> [instance]
 #   <callback>  name of a function; called once per instance with the absolute
 #               instance directory as its first argument
-#   [instance]  optional single instance (with or without the PREFIX); when
-#               omitted, iterates every "$baseDirectory/${PREFIX}*" directory
+#   [instance]  optional single instance — an instance NAME (with or without the PREFIX) or a PATH to
+#               the instance directory (incl. "."); see resolveInstancePath. When omitted, iterates
+#               every "$baseDirectory/${PREFIX}*" directory.
 # Requires: $baseDirectory and $PREFIX set (from setup.env).
 # Returns: non-zero if a named instance is missing or PREFIX is unset.
 forEachInstance() {
@@ -239,13 +270,15 @@ forEachInstance() {
   local single="${2:-}"
 
   if [ -n "$single" ]; then
-    # single instance mode (tolerate the prefix being included or not)
-    local path="$baseDirectory/${PREFIX:-}${single#"${PREFIX:-}"}"
-    if [ ! -d "$path" ]; then
-      echo "Instance directory not found: $path"
+    # single instance mode: resolve a name or a path, then capture into a local so callbacks that use a
+    # global `path` are not affected by resolveInstancePath writing to the global `path`.
+    resolveInstancePath "$single" || return 1
+    local dir="$path"
+    if [ ! -d "$dir" ]; then
+      echo "Instance directory not found: $dir"
       return 1
     fi
-    "$callback" "$path"
+    "$callback" "$dir"
     return
   fi
 

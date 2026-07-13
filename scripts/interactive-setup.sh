@@ -162,7 +162,7 @@ if [ "$aamBackendService" == 0 ]; then
   if [ -n "$7" ]; then
     withAamBackendService="$7"
   else
-    echo "Do you want to add aam-backend-services (query-backend)?[y/n]"
+    echo "Do you want to add aam-backend-services (backend APIs)? [y/n]"
     read -r withAamBackendService
   fi
 

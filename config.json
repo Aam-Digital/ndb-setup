@@ -1,5 +1,6 @@
 {
   "session_type": "synced",
   "demo_mode": false,
-  "authenticator": "keycloak"
+  "authenticator": "keycloak",
+  "webmaster_email": ""
 }

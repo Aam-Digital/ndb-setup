@@ -13,16 +13,19 @@
 # setup
 ##############################
 
-baseDirectory="/var/docker"
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
+ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
 
-# Bitwarden Secrets Manager key names for the shared Firebase project (the same Firebase credentials are used
-# for every instance). Looked up by name via getBwsSecretByKey:
+source "$ndbSetupDir/setup.env"
+source "$scriptDir/lib/common.sh"
+source "$scriptDir/lib/secrets.sh"
+
+# FIREBASE_CONFIG_JSON / FIREBASE_CREDENTIAL_BASE64 are resolved via getConfig/requireConfig
+# (setup.env/environment, falling back to Bitwarden Secrets Manager - see lib/secrets.sh). They hold
+# the shared Firebase project's credentials (the same ones are used for every instance):
 #   - the frontend web config (firebase-config.json) the browser uses to register for push notifications
 #   - the backend service-account credential (base64) the aam-backend-service uses to send pushes
-BWS_SECRET_FIREBASE_CONFIG_JSON="FIREBASE_CONFIG_JSON"
-BWS_SECRET_FIREBASE_CREDENTIAL_BASE64="FIREBASE_CREDENTIAL_BASE64"
 
 ##############################
 # parse flags
@@ -46,23 +49,23 @@ set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 ##############################
 
 if [ -n "$1" ]; then
-  instance="$1"
+  instanceArg="$1"
 else
-  echo "What is the name of the instance?"
-  read -r instance
+  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
+  read -r instanceArg
+fi
+resolveInstancePath "$instanceArg" || exit 1
+instance=$(getVar "$path/.env" INSTANCE_NAME)
+if [ -z "$instance" ]; then
+  instance="$(basename "$path")"
+  instance="${instance#"$PREFIX"}"
 fi
 
 ##############################
 # variables
 ##############################
 
-path="$baseDirectory/$PREFIX$instance"
 appEnv="$path/config/aam-backend-service/application.env"
-
-# Point bws at the EU vault once up front so the secret lookups below work (no-op when no token is set).
-if [ -n "${BWS_ACCESS_TOKEN}" ]; then
-  bws config server-base https://vault.bitwarden.eu
-fi
 
 ##############################
 # script
@@ -87,21 +90,12 @@ if [ "$isFeatureAlreadyEnabled" == "true" ]; then
 fi
 
 # Resolve the backend Firebase service-account credential (base64). Prefer an explicit argument (e.g. for
-# offline/testing), otherwise load it from the Bitwarden Secrets Manager. Because the same shared Firebase
-# project is used for every instance, this is non-interactive and works during automated interactive-setup.
-if [ -n "$2" ]; then
-  configCredentialBase64="$2"
-else
-  if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
-    echo "BWS_ACCESS_TOKEN is not set and no credential argument was given. Abort."
-    exit 1
-  fi
-  configCredentialBase64=$(getBwsSecretByKey "$BWS_SECRET_FIREBASE_CREDENTIAL_BASE64")
-  if [[ -z "$configCredentialBase64" ]]; then
-    echo "ERROR: Could not load the Firebase credential from Bitwarden (secret '$BWS_SECRET_FIREBASE_CREDENTIAL_BASE64'). Abort."
-    exit 1
-  fi
-fi
+# offline/testing), otherwise load it via getConfig (setup.env/environment, then Bitwarden). Because the same
+# shared Firebase project is used for every instance, this is non-interactive and works during automated
+# interactive-setup.
+[ -n "$2" ] && FIREBASE_CREDENTIAL_BASE64="$2"
+requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./enable-feature-notification.sh <instance> <credential-base64>"
+configCredentialBase64="$FIREBASE_CREDENTIAL_BASE64"
 
 backupFile "$appEnv"
 
@@ -111,29 +105,26 @@ setEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$appEnv"
 setEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv"
 
 # Write the frontend Firebase web config the browser uses to register for push notifications. Loaded as a
-# single JSON blob from BWS (shared Firebase project) and written to the file docker-compose mounts into the
-# app container (assets/firebase-config.json), replacing the empty template copied during interactive-setup.
-if [ -n "${BWS_ACCESS_TOKEN}" ]; then
-  firebaseConfigJson=$(getBwsSecretByKey "$BWS_SECRET_FIREBASE_CONFIG_JSON")
-  if [[ -z "$firebaseConfigJson" ]]; then
-    echo "WARNING: Could not load firebase-config.json from Bitwarden (secret '$BWS_SECRET_FIREBASE_CONFIG_JSON'); leaving existing file in place."
-  else
-    if ! printf '%s' "$firebaseConfigJson" | jq empty 2>/dev/null; then
-      echo "ERROR: Retrieved firebase-config.json is not valid JSON. Abort."
-      exit 1
-    fi
-
-    backupFile "$path/firebase-config.json"
-    printf '%s' "$firebaseConfigJson" > "$path/firebase-config.json"
-    echo "  ~ wrote firebase-config.json (frontend web push config)"
+# single JSON blob (shared Firebase project) and written to the file docker-compose mounts into the app
+# container (assets/firebase-config.json), replacing the empty template copied during interactive-setup.
+# Non-fatal when unresolved: leave the existing file in place rather than aborting the whole feature enable.
+if firebaseConfigJson=$(getConfig FIREBASE_CONFIG_JSON); then
+  if ! printf '%s' "$firebaseConfigJson" | jq empty 2>/dev/null; then
+    echo "ERROR: Retrieved firebase-config.json is not valid JSON. Abort."
+    exit 1
   fi
+
+  backupFile "$path/firebase-config.json"
+  printf '%s' "$firebaseConfigJson" > "$path/firebase-config.json"
+  echo "  ~ wrote firebase-config.json (frontend web push config)"
 else
-  echo "WARNING: BWS_ACCESS_TOKEN not set; leaving existing firebase-config.json in place."
+  echo "WARNING: Could not resolve firebase-config.json (FIREBASE_CONFIG_JSON not set and not found in Bitwarden); leaving existing file in place."
 fi
 
 # Enable email notifications by default. Always pass --skip-restart: the email step writes its config but does
 # not restart, so the single restart below applies both the notification and email config in one cycle.
-"$baseDirectory/ndb-setup/scripts/enable-feature-notification-email.sh" "$instance" --skip-restart
+# Pass $path (not $instance) so a custom instance location (outside the standard layout) is preserved.
+"$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart
 
 # Restart once, here, after both this script and the email step have written their config — unless the caller
 # asked to skip it (interactive-setup restarts the stack itself after all enable-* scripts have run).

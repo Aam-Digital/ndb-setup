@@ -1,21 +1,10 @@
 #!/bin/bash
+# Print each instance's COMPOSE_PROFILES (deployment type).
 
-# Funktion zum Abrufen der Umgebungsvariablen
-getVar() {
-    local file="$1"
-    local var="$2"
-
-    # grep sucht die Zeile mit der Variable, cut extrahiert den Wert
-    local value=$(grep "^$var=" "$file" | cut -d '=' -f2-)
-
-    # Falls die Variable nicht existiert oder leer ist, eine Meldung ausgeben
-    if [ -z "$value" ]; then
-        echo "Variable $var nicht gefunden oder leer"
-        return 1
-    fi
-
-    echo "$value"
-}
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
+source "$scriptDir/setup.env"
+source "$scriptDir/scripts/lib/common.sh"
 
 getComposeProfiles() {
   local raw_value="$1"
@@ -34,12 +23,13 @@ getComposeProfiles() {
   esac
 }
 
-for D in *; do
-        if [ -d "${D}" ] && [[ $D == c-* ]]; then
-                cd "$D" || exit;
-                instance_name="${D#c-}"
+printInstanceProfiles() {
+  local dir="$1"
+  local instance_name="${dir##*/}"
+  instance_name="${instance_name#"$PREFIX"}"
+  local profiles
+  profiles=$(getVar "$dir/.env" COMPOSE_PROFILES)
+  echo "$instance_name -> $profiles -> $(getComposeProfiles "$profiles")"
+}
 
-                echo "$instance_name -> $(getVar .env COMPOSE_PROFILES) -> $(getComposeProfiles "$(getVar .env COMPOSE_PROFILES)")"
-                cd ..
-        fi
-done
+forEachInstance printInstanceProfiles

@@ -11,9 +11,12 @@
 # setup
 ##############################
 
-baseDirectory="/var/docker"
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
+ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
+
+source "$ndbSetupDir/setup.env"
+source "$scriptDir/lib/common.sh"
 
 ##############################
 # ask for input data
@@ -45,7 +48,7 @@ else
 fi
 
 # abort if no assets folder for baseConfig exists
-baseConfigPath="$baseDirectory/ndb-setup/baseConfigs/$baseConfig"
+baseConfigPath="$ndbSetupDir/baseConfigs/$baseConfig"
 if [ ! -d "$baseConfigPath/assets" ]; then
   echo "No assets folder found for baseConfig '$baseConfig'. Abort."
   exit 1

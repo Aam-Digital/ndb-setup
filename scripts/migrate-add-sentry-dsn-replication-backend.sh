@@ -8,7 +8,8 @@
 set -u
 
 # Load PREFIX, BWS_ACCESS_TOKEN (and other setup.env vars).
-baseDirectory="/var/docker"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 
 if [ -z "${PREFIX:-}" ]; then

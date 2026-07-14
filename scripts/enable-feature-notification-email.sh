@@ -12,9 +12,13 @@ set -euo pipefail
 # setup
 ##############################
 
-baseDirectory="/var/docker"
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
+ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
+
+source "$ndbSetupDir/setup.env"
+source "$scriptDir/lib/common.sh"
+source "$scriptDir/lib/secrets.sh"
 
 ##############################
 # parse flags
@@ -38,17 +42,22 @@ set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 ##############################
 
 if [ -n "${1:-}" ]; then
-  instance="$1"
+  instanceArg="$1"
 else
-  echo "What is the name of the instance?"
-  read -r instance
+  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
+  read -r instanceArg
+fi
+resolveInstancePath "$instanceArg" || exit 1
+instance=$(getVar "$path/.env" INSTANCE_NAME)
+if [ -z "$instance" ]; then
+  instance="$(basename "$path")"
+  instance="${instance#"$PREFIX"}"
 fi
 
 ##############################
 # variables
 ##############################
 
-path="$baseDirectory/$PREFIX$instance"
 appEnv="$path/config/aam-backend-service/application.env"
 
 ##############################
@@ -130,23 +139,20 @@ ensureRealValue "REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID" "aam-backend" "$path/.e
 keycloakClientId=$(getVar "$path/.env" REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID "aam-backend")
 keycloakClientSecret=$(getVar "$path/.env" REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET)
 
-# Resolve Keycloak admin credentials (needed to assign AND verify the realm-management roles). Prefer
-# values from setup.env, otherwise load from BWS. Without them we can neither patch nor verify the role.
-if [[ -z "${KEYCLOAK_HOST:-}" || -z "${KEYCLOAK_USER:-}" || -z "${KEYCLOAK_PASSWORD:-}" ]] && [[ -n "${BWS_ACCESS_TOKEN:-}" ]]; then
-  echo "Loading Keycloak admin credentials from Bitwarden Secrets Manager..."
-  # Best-effort under `set -e`: a failed lookup must not abort the script — an empty value below
-  # simply leaves adminCredsAvailable=false and we continue with a warning.
-  bws config server-base https://vault.bitwarden.eu || true
-  KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value) || true
-  KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value) || true
-  KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value) || true
+# Resolve Keycloak admin credentials (needed to assign AND verify the realm-management roles). getConfig
+# prefers setup.env / the environment and falls back to BWS when a token is set. Best-effort under
+# `set -e`: a failed lookup leaves the value empty (adminCredsAvailable=false) and we continue with a warning.
+if [[ -z "${KEYCLOAK_HOST:-}" || -z "${KEYCLOAK_USER:-}" || -z "${KEYCLOAK_PASSWORD:-}" ]]; then
+  KEYCLOAK_HOST=$(getConfig KEYCLOAK_HOST || true)
+  KEYCLOAK_USER=$(getConfig KEYCLOAK_USER || true)
+  KEYCLOAK_PASSWORD=$(getConfig KEYCLOAK_PASSWORD || true)
 fi
 
 adminCredsAvailable=false
 roleAlreadyPresent=false
 if [[ -n "${KEYCLOAK_HOST:-}" && -n "${KEYCLOAK_USER:-}" && -n "${KEYCLOAK_PASSWORD:-}" ]]; then
   adminCredsAvailable=true
-  source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
+  source "$scriptDir/lib/keycloak.sh"
   if serviceAccountHasRealmManagementRole "$instance" "view-users"; then
     roleAlreadyPresent=true
   fi
@@ -216,20 +222,15 @@ backupFile "$appEnv"
 
 # Configure SMTP only when not already set, so re-runs/repairs keep existing (possibly customized) mail settings.
 if [ -z "$existingMailHost" ]; then
-  # Load SMTP credentials from setup.env if set, otherwise fetch from BWS
+  # Resolve SMTP credentials from setup.env / the environment, falling back to BWS (via getConfig).
   if [[ -z "${SMTP_SERVER:-}" || -z "${SMTP_PASSWORD:-}" ]]; then
-    if [[ -z "${BWS_ACCESS_TOKEN:-}" ]]; then
-      echo "ERROR: SMTP_SERVER/SMTP_PASSWORD are not set in setup.env and BWS_ACCESS_TOKEN is not set. Abort."
-      exit 1
-    fi
-    echo "Loading SMTP credentials from Bitwarden Secrets Manager..."
-    # Best-effort under `set -e`: tolerate lookup failures here so the explicit emptiness check
-    # below can report a clear error instead of the script aborting silently.
-    bws config server-base https://vault.bitwarden.eu || true
-    SMTP_SERVER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "55bf05ce-03ed-40fb-8320-b2ce00cf6760" 2>&1 | jq -r '.value // empty') || true
-    SMTP_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "ec5d7f0a-62e3-46d7-a7c7-b2ce00cf8abc" 2>&1 | jq -r '.value // empty') || true
+    # Best-effort under `set -e`: tolerate lookup failures so the explicit emptiness check below can
+    # report a clear error instead of the script aborting silently.
+    SMTP_SERVER=$(getConfig SMTP_SERVER || true)
+    SMTP_PASSWORD=$(getConfig SMTP_PASSWORD || true)
     if [[ -z "$SMTP_SERVER" || -z "$SMTP_PASSWORD" ]]; then
-      echo "ERROR: Failed to load SMTP credentials from Bitwarden. The BWS_ACCESS_TOKEN may not have access to these secrets (they require the production service account token)."
+      echo "ERROR: SMTP_SERVER/SMTP_PASSWORD are not set in setup.env / the environment and could not be"
+      echo "  loaded from Bitwarden (the token may lack access; they require the production service account token). Abort."
       exit 1
     fi
   fi

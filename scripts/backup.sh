@@ -3,7 +3,8 @@
 # simple script to create encrypted backups
 # can be scheduled via cron
 
-baseDirectory="/var/docker"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 backupRoot=$BACKUP_DIR
 passphrase=$BACKUP_PASSPHRASE
@@ -11,7 +12,7 @@ passphrase=$BACKUP_PASSPHRASE
 targetFile=$backupRoot/`date +%Y%m%d`
 echo "Creating backup $targetFile ($(date '+%Y-%m-%d %H:%M:%S')) ..."
 
-tar zcf $targetFile.tar.gz /var/docker
+tar zcf "$targetFile.tar.gz" "$baseDirectory"
 gpg -c --batch --passphrase "$passphrase" $targetFile.tar.gz
 chown root:root $targetFile.tar.gz.gpg
 

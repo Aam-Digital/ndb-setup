@@ -2,7 +2,8 @@
 
 # simple script for importing a backup to an instance
 
-baseDirectory="/var/docker"
+scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 backupRoot=$BACKUP_DIR
 passphrase=$BACKUP_PASSPHRASE
@@ -29,11 +30,14 @@ fi
 
 echo "For which instance do you want to import the backup?"
 read -r org
-folder=c-$org
-cd /var/docker/$folder
+folder="${PREFIX}$org"
+cd "$baseDirectory/$folder" || exit 1
 docker compose down
 mv couchdb couchdb_tmp
-mv "$unpackDir/var/docker/$folder/couchdb" ./couchdb
+# backup.sh archives "$baseDirectory" with tar, which strips the leading "/" from the stored paths,
+# so the unpacked tree is rooted at $baseDirectory without its leading slash (not necessarily "var/docker")
+archiveRoot="${baseDirectory#/}"
+mv "$unpackDir/$archiveRoot/$folder/couchdb" ./couchdb
 docker compose up -d
 echo "backup restored for $folder and instance has been restarted"
 

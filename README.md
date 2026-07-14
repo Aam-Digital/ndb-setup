@@ -55,7 +55,7 @@ The following things can be automatically done
 3. (optional) connect with a running Keycloak
 4. (optional) migrate users from CouchDB to Keycloak
 
-To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `setup.env` file to you sentry DSN.
+To log errors with [Sentry](https://sentry.io/), simply set the variable `SENTRY_DSN` in the `setup.env` file to your Sentry DSN.
 
 ### Adjusting the script
 
@@ -226,7 +226,7 @@ For details information, check our [Report documentation](http://aam-digital.git
 (e.g. with TolaData)
 
 1. Enable the reporting backend:
-   - add `aam-backend-service` to you COMPOSE_PROFILES .env variable to activate that container in the docker compose: `COMPOSE_PROFILES=replication-backend,aam-backend-service`
+   - add `aam-backend-service` to your COMPOSE_PROFILES .env variable to activate that container in the docker compose: `COMPOSE_PROFILES=replication-backend,aam-backend-service`
    - add `AAM_BACKEND_SERVICE_URL=http://aam-backend-service:3000` to the .env file that feeds into the docker-compose.yml
 2. Set up Reporting API according to [aam-services README](https://github.com/Aam-Digital/aam-services/blob/main/README.md)
    - (re-up the docker compose and confirm the new containers are running)
@@ -256,7 +256,7 @@ crontab -e
 
 ### Restoring a backup
 
-Under `/var/docker` run the interactive script `backup-recover.sh` to load a backup for a certain client from a certain date.
+Under `/var/docker` run the interactive script `backup-restore.sh` to load a backup for a certain client from a certain date.
 
 To manually load a backup follow these steps:
 
@@ -288,7 +288,7 @@ To manually load a backup follow these steps:
    rm -rf couchdb_old ~/backups/output ~/backups/unpacked
    ```
 
-When applying a backup, do not forget to clear you browser cache before opening the application again. Otherwise the previously corrupted data will be synced from the browser to the DB that has just been backed up. To delete all local data go to `https://<instance>.aam-digital.com/support` and press `Reset Application`. All users, which have corrupted data will need to do this.
+When applying a backup, do not forget to clear your browser cache before opening the application again. Otherwise the previously corrupted data will be synced from the browser to the DB that has just been backed up. To delete all local data go to `https://<instance>.aam-digital.com/support` and press `Reset Application`. All users, which have corrupted data will need to do this.
 
 More information on CouchDB backups can be found [here](https://docs.couchdb.org/en/latest/maintenance/backups.html).
 

@@ -110,18 +110,37 @@ See [cli/README.md](https://github.com/Aam-Digital/ndb-core/blob/master/cli/READ
 
 ---
 
-## Deploying under a domain name using swag-proxy
+## Deploying under a domain name (reverse proxy)
 
-In order to make the application's docker container accessible under a public URL, you need to expose it using a tool of your choice.
-The system works well with the [swag-proxy](https://docs.linuxserver.io/general/swag/). This allows to automatically configure things so that the app is reachable under a specific domain name (including automatic setup of SSL certificates through letsencrypt).
+In order to make the application's docker container accessible under a public URL, you need to expose it using a reverse proxy that handles the public domain and SSL certificates.
 
-This setup repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/swag-proxy/aam-prod-2/docker-compose.yml) for setting up the swag-proxy. (we have multiple production instances, so as an example the aam-prod-2 config)
+This repository supports **two** proxy stacks and the instance `docker-compose.yml` works with either. Pick **one** — both bind ports 80/443 on the host, so you cannot run them at the same time on the same server:
+
+- **[swag-proxy](https://docs.linuxserver.io/general/swag/)** (`swag-proxy/`) — routing is defined in explicit per-instance nginx config files. Uses a DNS-validated **wildcard** certificate, which is convenient when hosting many instances under one domain.
+- **[nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) + acme-companion** (`nginx-proxy/`) — routing is generated automatically from `VIRTUAL_*` environment variables already set on the instance services in `docker-compose.yml`. Uses a **per-host** Let's Encrypt certificate (HTTP validation), so the instance's public hostname must resolve to this server before you start it.
+
+Both route the same way: the frontend at `/`, CouchDB / replication-backend under `/db`, and the backend API under `/api`. (The legacy `/query` alias is only configured for swag-proxy.)
+
+### Option A: swag-proxy
+
+This repository comes with a [docker compose](https://github.com/Aam-Digital/ndb-setup/blob/master/swag-proxy/aam-prod-2/docker-compose.yml) for setting up the swag-proxy. (we have multiple production instances, so as an example the aam-prod-2 config)
 
 1. Create the required network
    > docker network create external_web
 2. In `swag-proxy/<server>/docker-compose.yml` set `EMAIL` to a valid email address and adapt the DOMAINS config to match your setup.
 3. In `swag-proxy/<server>/config/dns-conf/` create a new `hetzner-cloud.ini` file from the example file and add your API token
    (required for DNS authentication of certbot when creating new SSL certificates)
+4. Start the required containers (this is only needed once on a server)
+   > cd `swag-proxy/<server>` && docker-compose up -d
+
+### Option B: nginx-proxy
+
+The instance services already carry the `VIRTUAL_HOST`, `VIRTUAL_PATH` and `LETSENCRYPT_HOST` variables that nginx-proxy reads (these are simply ignored by swag-proxy and when no proxy is used), so no per-instance proxy config is needed.
+
+1. Create the required network
+   > docker network create external_web
+2. In `nginx-proxy/.env` set `EMAIL` to a valid email address (used by Let's Encrypt for expiry warnings and account recovery).
+3. Make sure each instance's public hostname (`<INSTANCE_NAME>.<INSTANCE_DOMAIN>`) resolves to this server — acme-companion validates certificates over HTTP.
 4. Start the required containers (this is only needed once on a server)
    > cd nginx-proxy && docker-compose up -d
 

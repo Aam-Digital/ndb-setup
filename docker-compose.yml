@@ -9,6 +9,16 @@ services:
       - ./config.json:/usr/share/nginx/html/assets/config.json
       - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
       - ./firebase-config.json:/usr/share/nginx/html/assets/firebase-config.json
+    environment:
+      # nginx-proxy auto-configuration (see nginx-proxy/). Ignored by the swag-proxy
+      # and when no proxy is used, so this stays compatible with either proxy choice.
+      # Serves the frontend at "/"; /db and /api are routed to the other services below.
+      VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
+      VIRTUAL_PORT: 8080
+      VIRTUAL_PATH: /
+      # Request a Let's Encrypt certificate for this host (acme-companion).
+      # Set only here: the certificate is per-host, shared across all paths.
+      LETSENCRYPT_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
     restart: unless-stopped
 
   couchdb-only:
@@ -24,6 +34,12 @@ services:
     environment:
       COUCHDB_USER: ${COUCHDB_USER:?COUCHDB_USER is not set}
       COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?COUCHDB_PASSWORD is not set}
+      # nginx-proxy: expose CouchDB under /db (trailing-slash VIRTUAL_DEST strips the
+      # /db prefix). Inert under swag-proxy / no proxy. See the "app" service above.
+      VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
+      VIRTUAL_PORT: 5984
+      VIRTUAL_PATH: /db/
+      VIRTUAL_DEST: /
     restart: unless-stopped
     profiles:
       - database-only
@@ -79,6 +95,13 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET}
       AUDIT_ENABLED: ${REPLICATION_BACKEND_AUDIT_ENABLED:-true}
       PORT: 5984
+      # nginx-proxy: same /db routing as couchdb-only, but this container (the
+      # db-entrypoint in with-permissions/full-stack) enforces permission checks.
+      # Inert under swag-proxy / no proxy.
+      VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
+      VIRTUAL_PORT: 5984
+      VIRTUAL_PATH: /db/
+      VIRTUAL_DEST: /
     restart: unless-stopped
     profiles:
       - with-permissions
@@ -112,6 +135,13 @@ services:
       COUCHDBCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
       AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-db-entrypoint:5984
       APPLICATION_BASEURL: ${INSTANCE_NAME:?INSTANCE_NAME is not set}.${INSTANCE_DOMAIN:?INSTANCE_DOMAIN is not set}
+      # nginx-proxy: expose the backend API under /api (no VIRTUAL_DEST, so the /api
+      # prefix is preserved when proxied). Inert under swag-proxy / no proxy.
+      # Note: swag also routes the legacy /query alias here; nginx-proxy does not
+      # (a single container cannot declare two rewrite paths via these env vars).
+      VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
+      VIRTUAL_PORT: 8080
+      VIRTUAL_PATH: /api/
     env_file:
       - ./config/aam-backend-service/application.env
     restart: unless-stopped

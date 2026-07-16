@@ -262,7 +262,7 @@ Consult the [Keycloak docs](https://www.keycloak.org/docs/latest/server_admin/in
 It is possible to calculate reports for the app's data using SQL queries.
 For details information, check our [Report documentation](http://aam-digital.github.io/ndb-core/documentation/additional-documentation/how-to-guides/create-a-report.html)
 
-> This feature requires a propriatary plugin, [Structured Query Service (SQS)](https://neighbourhood.ie/products-and-services/structured-query-server)
+> This feature requires a proprietary plugin, [Structured Query Service (SQS)](https://neighbourhood.ie/products-and-services/structured-query-server)
 
 ### Set up API Integration
 

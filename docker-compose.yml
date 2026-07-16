@@ -107,7 +107,7 @@ services:
       - with-permissions
       - full-stack
 
-  # (optional) aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
+  # (optional) aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" or "full-stack-without-sqs" is set in the `.env` file
   aam-backend-service:
     image: ghcr.io/aam-digital/aam-backend-service:${AAM_BACKEND_SERVICE_VERSION:-latest}
     container_name: ${INSTANCE_NAME}-aam-backend-service
@@ -147,6 +147,7 @@ services:
     restart: unless-stopped
     profiles:
       - full-stack
+      - full-stack-without-sqs
 
   aam-backend-service-db:
     image: postgres:16.5-bookworm
@@ -162,8 +163,9 @@ services:
     restart: unless-stopped
     profiles:
       - full-stack
+      - full-stack-without-sqs
 
-  # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
+  # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" or "full-stack-without-sqs" is set in the `.env` file
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: ${INSTANCE_NAME}-rabbitmq
@@ -182,8 +184,10 @@ services:
       - ./storage/rabbitmq/log:/var/log/rabbitmq
     profiles:
       - full-stack
+      - full-stack-without-sqs
 
   # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
+  # Note: SQS is excluded from the full-stack-without-sqs profile (which skips the private SQS image)
   sqs:
     image: ghcr.io/aam-digital/sqs-aam:latest
     container_name: ${INSTANCE_NAME}-sqs

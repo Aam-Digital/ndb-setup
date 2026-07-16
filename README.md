@@ -79,6 +79,28 @@ instance name or path — and, apart from the interactive orchestrator itself, w
 See **[scripts/README.md](./scripts/README.md)** for the architecture, the shared conventions (config
 resolution, name-or-path instance targeting, idempotency) and how to run or extend the scripts.
 
+### Docker Compose Profiles
+
+You can start all or limited backend services using Docker Compose profiles. Set the `COMPOSE_PROFILES` variable in your instance's `.env` file to select which services to deploy:
+
+| Profile | Services | Description | Hierarchy | Setup |
+|---------|----------|-------------|-----------|-------|
+| `database-only` | app + couchdb-only | **Default.** Minimal setup with the frontend app and a standalone CouchDB database. No permission checking. | Base | Set by default when creating a new instance |
+| `with-permissions` | app + couchdb-with-permissions + replication-backend | Adds permission enforcement via the replication-backend service, which proxies all database requests. | Includes `database-only` | Set when adding the permission backend via `interactive_setup.sh` |
+| `full-stack` | everything from `with-permissions` + aam-backend-service + PostgreSQL + RabbitMQ + SQS | Complete backend stack including the aam-backend-service for SQL reports and API integrations, plus its dependencies (PostgreSQL database, RabbitMQ message broker, and SQS for CouchDB change feed processing). | Includes `with-permissions` | Set when enabling backend via `enable-backend.sh` |
+| `full-stack-without-sqs` | everything from `full-stack` except SQS | Same as full-stack but skips SQS (which uses a private Docker image), keeping only public images. | Includes `with-permissions` | Use as alternative to `full-stack` when the SQS image is unavailable |
+
+**Note:** You cannot mix profiles — select one that matches your requirements.
+
+**How to set:**
+```bash
+# In your instance's .env file:
+COMPOSE_PROFILES=full-stack
+
+# Then start the containers:
+docker compose up -d
+```
+
 ---
 
 ## Admin CLI (migrations, statistics, CouchDB operations)
@@ -240,12 +262,14 @@ Consult the [Keycloak docs](https://www.keycloak.org/docs/latest/server_admin/in
 It is possible to calculate reports for the app's data using SQL queries.
 For details information, check our [Report documentation](http://aam-digital.github.io/ndb-core/documentation/additional-documentation/how-to-guides/create-a-report.html)
 
+> This feature requires a propriatary plugin, [Structured Query Service (SQS)](https://neighbourhood.ie/products-and-services/structured-query-server)
+
 ### Set up API Integration
 
 (e.g. with TolaData)
 
 1. Enable the reporting backend:
-   - add `aam-backend-service` to your COMPOSE_PROFILES .env variable to activate that container in the docker compose: `COMPOSE_PROFILES=replication-backend,aam-backend-service`
+   - set `COMPOSE_PROFILES=full-stack` in your instance's `.env` file to activate all backend services including aam-backend-service
    - add `AAM_BACKEND_SERVICE_URL=http://aam-backend-service:3000` to the .env file that feeds into the docker-compose.yml
 2. Set up Reporting API according to [aam-services README](https://github.com/Aam-Digital/aam-services/blob/main/README.md)
    - (re-up the docker compose and confirm the new containers are running)

@@ -22,19 +22,21 @@
 #   `exact_username`: handled by THIS script (see below).
 #
 # Why:
-#   Keycloak 26's in-place migration upgrades the DB schema and restores the
-#   `sub` claim automatically (via the `basic` client scope), but it does NOT
-#   add custom User Profile attributes to existing realms. `exact_username`
-#   stores the entity id linked to a user account; it must be view-able by
-#   admin+user but edit-able by admins only (a user changing their own linked
-#   id is a permission-escalation loophole). This declares it on every realm.
+#   Keycloak's own in-place 23->26 migration upgrades the DB schema and restores
+#   the `sub` claim automatically (via the `basic` client scope). But Keycloak's
+#   migration does NOT carry custom User Profile attributes over to existing
+#   realms — so `exact_username` must be declared separately, which is what THIS
+#   script does (for every realm, in one run).
+#
+#   `exact_username` stores the entity id linked to a user account; it must be
+#   view-able by admin+user but edit-able by admins only (a user changing their
+#   own linked id is a permission-escalation loophole).
 #
 #   Existing `exact_username` values are preserved regardless; this only locks
-#   down WHO may edit them. The migration does NOT retro-apply this to existing
-#   realms, so it is required for every realm upgraded in place. Fresh realms
-#   already get it from realm_config.json. Manual alternative to this script:
-#   apply the User Profile declaration per realm via the Admin Console
-#   (Realm settings -> User profile) or by re-importing the realm config.
+#   down WHO may edit them. It is required for every realm upgraded in place;
+#   fresh realms already get it from realm_config.json. Manual alternative to
+#   this script: apply the User Profile declaration per realm via the Admin
+#   Console (Realm settings -> User profile) or by re-importing the realm config.
 #
 # Unlike the other migrate-*.sh scripts (which loop instance directories under
 # /var/docker), this loops Keycloak realms via the Admin API, because the User

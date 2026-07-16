@@ -3,6 +3,24 @@
 # Migration script: declare `exact_username` as an admin-only User Profile
 # attribute in every Keycloak realm (Keycloak 26 upgrade follow-up).
 #
+# --- Keycloak 23 -> 26 in-place upgrade procedure (context) ---
+#   The upgrade is an in-place upgrade of the existing Keycloak Postgres DB.
+#   Back up first — it is IRREVERSIBLE (no downgrade). On the first start of the
+#   KC26 container the Postgres schema migrates automatically. Steps:
+#     1. Stop the Keycloak container.
+#     2. Snapshot / pg_dump the Keycloak Postgres volume
+#        (rollback = restore the snapshot + pin the previous image tag).
+#     3. Bump the image tag to the KC26 build (keycloak/docker-compose.yml, or
+#        charts/aam-keycloak/values.yaml for Helm) and start — migrates on boot.
+#   `sub` claim: restored automatically — the migration adds the `basic` client
+#   scope (which carries the sub mapper) to existing clients; fresh realms get
+#   the explicit sub mapper from client_config.json.
+#     Exception: if a realm ALREADY has a `basic` client scope, Keycloak SKIPS
+#     this auto-migration — add the Subject (sub) + auth_time protocol mappers
+#     manually. Realms created before KC25 have no `basic` scope, so the
+#     automatic path applies to them.
+#   `exact_username`: handled by THIS script (see below).
+#
 # Why:
 #   Keycloak 26's in-place migration upgrades the DB schema and restores the
 #   `sub` claim automatically (via the `basic` client scope), but it does NOT

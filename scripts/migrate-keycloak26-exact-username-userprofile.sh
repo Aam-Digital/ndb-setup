@@ -11,6 +11,13 @@
 #   admin+user but edit-able by admins only (a user changing their own linked
 #   id is a permission-escalation loophole). This declares it on every realm.
 #
+#   Existing `exact_username` values are preserved regardless; this only locks
+#   down WHO may edit them. The migration does NOT retro-apply this to existing
+#   realms, so it is required for every realm upgraded in place. Fresh realms
+#   already get it from realm_config.json. Manual alternative to this script:
+#   apply the User Profile declaration per realm via the Admin Console
+#   (Realm settings -> User profile) or by re-importing the realm config.
+#
 # Unlike the other migrate-*.sh scripts (which loop instance directories under
 # /var/docker), this loops Keycloak realms via the Admin API, because the User
 # Profile is a per-realm setting on the single shared Keycloak and we want to
@@ -77,7 +84,7 @@ fi
 # The attribute to declare. admin+user may VIEW; only admin may EDIT.
 EXACT_USERNAME_ATTR='{
   "name": "exact_username",
-  "displayName": "Exact Username",
+  "displayName": "Aam Digital user profile ID",
   "permissions": { "view": ["admin","user"], "edit": ["admin"] },
   "multivalued": false
 }'

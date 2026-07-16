@@ -145,10 +145,6 @@ After the upgrade:
   > this automatic migration — you must then add the Subject (`sub`) and `auth_time` protocol mappers
   > to the client/scope manually. Realms created before Keycloak 25 have no `basic` scope, so the
   > automatic path applies to them.
-- **`exact_username`**: existing values are preserved and keep working. To make it **admin-only
-  editable**, the User Profile declaration from `realm_config.json` must be applied to the existing
-  realm (it is not retro-applied by the migration) — via the Admin Console
-  (*Realm settings → User profile*) or by re-importing the realm configuration.
 
 ## 2-Factor-Auth
 Keycloak supports a second login factor through the methods described below:

@@ -22,11 +22,13 @@
 #   `exact_username`: handled by THIS script (see below).
 #
 # Why:
-#   Keycloak's own in-place 23->26 migration upgrades the DB schema and restores
-#   the `sub` claim automatically (via the `basic` client scope). But Keycloak's
-#   migration does NOT carry custom User Profile attributes over to existing
-#   realms — so `exact_username` must be declared separately, which is what THIS
-#   script does (for every realm, in one run).
+#   Upgrading Keycloak 23 -> 26 involves two separate things:
+#     1. Keycloak's own migration runs automatically and restores the `sub`
+#        claim (via the `basic` client scope). Nothing to do here.
+#     2. Custom User Profile attributes are outside that automatic migration,
+#        so on existing realms `exact_username` is missing until we re-add it.
+#   This script does step 2: it re-declares `exact_username` on every realm
+#   (in one run).
 #
 #   `exact_username` stores the entity id linked to a user account; it must be
 #   view-able by admin+user but edit-able by admins only (a user changing their

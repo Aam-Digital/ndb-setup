@@ -181,6 +181,7 @@ migrate_instance() {
   ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE" "openid" "$appEnvFile"
   setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE" "openid" "$appEnvFile"
   ensureEnv "FEATURES_EXPORT_API_ENABLED" "true" "$appEnvFile"
+  setEnv    "FEATURES_EXPORT_API_ENABLED" "true" "$appEnvFile"
 
   # 3. Restart so aam-backend-service picks up the new config
   echo "  Restarting..."

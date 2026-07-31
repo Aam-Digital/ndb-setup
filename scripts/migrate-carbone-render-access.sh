@@ -2,8 +2,11 @@
 
 # Migration script: wires Carbone PDF render API access for aam-backend-service.
 #
+# enable-backend.sh now registers this client itself for newly created instances, so this script is
+# mainly needed for instances created before that fix (or ones still on the old shared dev client).
+#
 # For each full-stack instance:
-# - Creates a Keycloak client `<instance>-render` in the central `aam-platform` realm
+# - Creates a Keycloak client `carbone-<instance>` in the central `aam-platform` realm
 #   (one client per tenant — see aam-cloud-infrastructure/infra/src/aam-platform/README.md)
 # - Adds AAM_RENDER_API_CLIENT_CONFIGURATION_* + FEATURES_EXPORT_API_ENABLED=true to application.env
 # - Restarts the instance
@@ -35,7 +38,7 @@ source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 # Configuration
 ##############################
 
-CARBONE_REALM="aam-platform"
+# CARBONE_REALM and OAUTH2_PROXY_CLIENT_ID come from lib/keycloak.sh (sourced above).
 
 # CARBONE_HOST must be set in setup.env. It is the public hostname of the Carbone
 # deployment for this environment — NOT derived from the instance's own DOMAIN.
@@ -45,9 +48,6 @@ if [[ -z "${CARBONE_HOST:-}" ]]; then
   echo "  Production: CARBONE_HOST=pdf.aam-digital.app"
   exit 1
 fi
-
-# oauth2-proxy client ID — render clients must include this in their token audience.
-OAUTH2_PROXY_CLIENT_ID="carbone-oauth2-proxy"
 
 ##############################
 # BWS secrets (skipped if KEYCLOAK_HOST/USER/PASSWORD are already set in setup.env)
@@ -85,120 +85,10 @@ checkServicesRealmExists() {
 }
 
 ##############################
-# Ensure an audience mapper on the given client includes OAUTH2_PROXY_CLIENT_ID
-# in the access-token `aud` claim (idempotent — checked by mapper name).
-# oauth2-proxy rejects bearer tokens without this audience.
-# Args: realm, clientUuid
-##############################
-
-ensureAudienceMapper() {
-  local realm="$1"
-  local clientUuid="$2"
-  local mapperName="audience-${OAUTH2_PROXY_CLIENT_ID}"
-
-  local existing
-  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/protocol-mappers/models" \
-    -H "Authorization: Bearer $token" | jq -r --arg n "$mapperName" '.[] | select(.name == $n) | .id // empty')
-
-  if [ -n "$existing" ]; then
-    echo "  audience mapper already present on client."
-    return 0
-  fi
-
-  local status
-  status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-    "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/protocol-mappers/models" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"name\": \"$mapperName\",
-      \"protocol\": \"openid-connect\",
-      \"protocolMapper\": \"oidc-audience-mapper\",
-      \"config\": {
-        \"included.client.audience\": \"$OAUTH2_PROXY_CLIENT_ID\",
-        \"id.token.claim\": \"false\",
-        \"access.token.claim\": \"true\",
-        \"introspection.token.claim\": \"true\",
-        \"userinfo.token.claim\": \"false\"
-      }
-    }")
-
-  if [ "$status" != "201" ]; then
-    echo "  ERROR: failed to add audience mapper (HTTP $status)."
-    return 1
-  fi
-  echo "  Added audience mapper for $OAUTH2_PROXY_CLIENT_ID."
-}
-
-##############################
-# Create a render client in the central aam-platform realm
-# Args: realm, clientId
-# Sets: clientSecret (global)
-##############################
-
-createCarboneRenderClient() {
-  local realm="$1"
-  local clientId="$2"
-  clientSecret=""
-
-  if ! getKeycloakToken; then
-    return 1
-  fi
-
-  # check if client already exists
-  local existing existingUuid
-  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=$clientId" \
-    -H "Authorization: Bearer $token")
-  existingUuid=$(echo "$existing" | jq -r '.[0].id // empty')
-
-  if [ -n "$existingUuid" ]; then
-    echo "  $clientId client already exists in realm $realm: $existingUuid"
-    clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$existingUuid/client-secret" \
-      -H "Authorization: Bearer $token" | jq -r '.value // empty')
-    ensureAudienceMapper "$realm" "$existingUuid" || return 1
-    return 0
-  fi
-
-  # create the client: confidential, service-account only (no interactive flows)
-  local clientResponse location clientUuid
-  clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/clients" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"clientId\": \"$clientId\",
-      \"enabled\": true,
-      \"clientAuthenticatorType\": \"client-secret\",
-      \"serviceAccountsEnabled\": true,
-      \"publicClient\": false,
-      \"standardFlowEnabled\": false,
-      \"directAccessGrantsEnabled\": false,
-      \"protocol\": \"openid-connect\"
-    }")
-
-  location=$(echo "$clientResponse" | grep -i "^location:")
-  clientUuid=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
-
-  if [ -z "$clientUuid" ]; then
-    echo "  ERROR: Failed to create $clientId client in realm '$realm'."
-    return 1
-  fi
-
-  echo "  Created $clientId client: $clientUuid"
-
-  clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/client-secret" \
-    -H "Authorization: Bearer $token" | jq -r '.value // empty')
-
-  if [ -z "$clientSecret" ]; then
-    echo "  ERROR: Failed to retrieve client secret for $clientId in realm '$realm'."
-    return 1
-  fi
-
-  ensureAudienceMapper "$realm" "$clientUuid" || return 1
-}
-
-##############################
 # migrate one instance
 ##############################
+
+# ensureAudienceMapper() and createCarboneRenderClient() are provided by lib/keycloak.sh (sourced above).
 
 migrate_instance() {
   local instanceDir="$1"
@@ -291,6 +181,7 @@ migrate_instance() {
   ensureEnv "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE" "openid" "$appEnvFile"
   setEnv    "AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE" "openid" "$appEnvFile"
   ensureEnv "FEATURES_EXPORT_API_ENABLED" "true" "$appEnvFile"
+  setEnv    "FEATURES_EXPORT_API_ENABLED" "true" "$appEnvFile"
 
   # 3. Restart so aam-backend-service picks up the new config
   echo "  Restarting..."

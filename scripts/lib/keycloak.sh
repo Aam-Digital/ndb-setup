@@ -148,6 +148,132 @@ serviceAccountHasRealmManagementRole() {
     -H "Authorization: Bearer $token" | jq -e --arg r "$roleName" 'any(.[]; .name == $r)' >/dev/null
 }
 
+##############################
+# Carbone render client helpers
+##############################
+
+# CARBONE_REALM is the central realm for Carbone PDF render API access
+CARBONE_REALM="aam-platform"
+
+# oauth2-proxy client ID — render clients must include this in their token audience.
+OAUTH2_PROXY_CLIENT_ID="carbone-oauth2-proxy"
+
+# Ensure an audience mapper on the given client includes OAUTH2_PROXY_CLIENT_ID
+# in the access-token `aud` claim (idempotent — checked by mapper name).
+# oauth2-proxy rejects bearer tokens without this audience.
+# Args: realm, clientUuid
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+ensureAudienceMapper() {
+  local realm="$1"
+  local clientUuid="$2"
+  local mapperName="audience-${OAUTH2_PROXY_CLIENT_ID}"
+
+  if [ -z "${token:-}" ] && ! getKeycloakToken; then
+    return 1
+  fi
+
+  local existing
+  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/protocol-mappers/models" \
+    -H "Authorization: Bearer $token" | jq -r --arg n "$mapperName" '.[] | select(.name == $n) | .id // empty')
+
+  if [ -n "$existing" ]; then
+    echo "  audience mapper already present on client."
+    return 0
+  fi
+
+  local status
+  status=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+    "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/protocol-mappers/models" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"name\": \"$mapperName\",
+      \"protocol\": \"openid-connect\",
+      \"protocolMapper\": \"oidc-audience-mapper\",
+      \"config\": {
+        \"included.client.audience\": \"$OAUTH2_PROXY_CLIENT_ID\",
+        \"id.token.claim\": \"false\",
+        \"access.token.claim\": \"true\",
+        \"introspection.token.claim\": \"true\",
+        \"userinfo.token.claim\": \"false\"
+      }
+    }")
+
+  if [ "$status" != "201" ]; then
+    echo "  ERROR: failed to add audience mapper (HTTP $status)."
+    return 1
+  fi
+  echo "  Added audience mapper for $OAUTH2_PROXY_CLIENT_ID."
+}
+
+# Create a render client in the central aam-platform realm
+# Args: realm, clientId
+# Sets: clientSecret (global)
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+createCarboneRenderClient() {
+  local realm="$1"
+  local clientId="$2"
+  clientSecret=""
+
+  if ! getKeycloakToken; then
+    return 1
+  fi
+
+  # check if client already exists
+  local existing existingUuid
+  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=$clientId" \
+    -H "Authorization: Bearer $token")
+  existingUuid=$(echo "$existing" | jq -r '.[0].id // empty')
+
+  if [ -n "$existingUuid" ]; then
+    echo "  $clientId client already exists in realm $realm: $existingUuid"
+    clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$existingUuid/client-secret" \
+      -H "Authorization: Bearer $token" | jq -r '.value // empty')
+    ensureAudienceMapper "$realm" "$existingUuid" || return 1
+    return 0
+  fi
+
+  # create the client: confidential, service-account only (no interactive flows)
+  local clientResponse location clientUuid
+  clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/clients" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"clientId\": \"$clientId\",
+      \"enabled\": true,
+      \"clientAuthenticatorType\": \"client-secret\",
+      \"serviceAccountsEnabled\": true,
+      \"publicClient\": false,
+      \"standardFlowEnabled\": false,
+      \"directAccessGrantsEnabled\": false,
+      \"protocol\": \"openid-connect\"
+    }")
+
+  location=$(echo "$clientResponse" | grep -i "^location:")
+  clientUuid=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
+
+  if [ -z "$clientUuid" ]; then
+    echo "  ERROR: Failed to create $clientId client in realm '$realm'."
+    return 1
+  fi
+
+  echo "  Created $clientId client: $clientUuid"
+
+  clientSecret=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/client-secret" \
+    -H "Authorization: Bearer $token" | jq -r '.value // empty')
+
+  if [ -z "$clientSecret" ]; then
+    echo "  ERROR: Failed to retrieve client secret for $clientId in realm '$realm'."
+    return 1
+  fi
+
+  ensureAudienceMapper "$realm" "$clientUuid" || return 1
+}
+
+##############################
+# Internal: realm-management role helpers
+##############################
+
 # Internal: assign required realm-management roles to the service account of a client
 _assignManageRealmRole() {
   local realm="$1"

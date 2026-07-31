@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# This script will enable the backend for an customer instance.
+# This script will enable the backend for a customer instance.
+# For each instance, this script creates a dedicated Keycloak client in the central aam-platform realm
+# for Carbone PDF render API access (named carbone-{instance}).
 # Credentials are resolved via getConfig: from setup.env / the environment, falling back to the
 # Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set (so it can run without BWS access).
 
@@ -13,11 +15,15 @@
 #   <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
 #               instance directory (e.g. "." when run from inside it)
 #
-# Requires: CARBONE_HOST set in setup.env (environment-specific):
+# Requires: CARBONE_HOST and KEYCLOAK_HOST set in setup.env (environment-specific):
 #   Environment  KEYCLOAK_HOST                  CARBONE_HOST
 #   -----------  -----------------------------  --------------------------------
 #   Staging      keycloak.aam-digital.net        pdf.dev-cluster.aam-digital.net
 #   Production   keycloak.aam-digital.com        pdf.aam-digital.app
+#
+# KEYCLOAK_HOST may also be fetched automatically via BWS_ACCESS_TOKEN instead of
+# setting it directly in setup.env (KEYCLOAK_USER/KEYCLOAK_PASSWORD are also needed then).
+# Requires: the aam-platform realm to already exist on the central Keycloak.
 #
 
 ##############################
@@ -72,8 +78,6 @@ fi
 ##############################
 
 # resolve config from setup.env / environment, falling back to Bitwarden when a token is available
-requireConfig RENDER_API_CLIENT_ID_DEV
-requireConfig RENDER_API_CLIENT_SECRET_DEV
 requireConfig SENTRY_AUTH_TOKEN
 requireConfig SENTRY_DSN_BACKEND
 requireConfig KEYCLOAK_HOST
@@ -102,6 +106,19 @@ fi
 if ! replicationBackendEnabledCheck; then
   # all functionality should be the same with a direct CouchDB without replication-backend. However, some URLs will need to be adapted for this scenario
   echo "Replication Backend is required for backend. Please enable first. Abort."
+  exit 1
+fi
+
+# Preflight: confirm aam-platform realm exists on the central Keycloak
+if ! getKeycloakToken; then
+  echo "ERROR: Failed to authenticate with Keycloak. Abort."
+  exit 1
+fi
+realmStatus=$(curl -s -o /dev/null -w "%{http_code}" "https://$KEYCLOAK_HOST/admin/realms/$CARBONE_REALM" \
+  -H "Authorization: Bearer $token")
+if [ "$realmStatus" != "200" ]; then
+  echo "ERROR: Realm '$CARBONE_REALM' not found on $KEYCLOAK_HOST (HTTP $realmStatus)."
+  echo "Create it first — see aam-cloud-infrastructure/infra/src/aam-platform/README.md > Initial setup."
   exit 1
 fi
 
@@ -138,11 +155,30 @@ if [[ -z "${CARBONE_HOST:-}" ]]; then
   echo "  Production: CARBONE_HOST=pdf.aam-digital.app"
   exit 1
 fi
+
+# Create a per-instance Carbone render client in the aam-platform realm
+carboneClientId="carbone-${instance}"
+if ! createCarboneRenderClient "$CARBONE_REALM" "$carboneClientId"; then
+  echo "ERROR: Failed to create or fetch Keycloak render client for '$instance'. Aborting."
+  exit 1
+fi
+carboneClientSecret="$clientSecret"
+if [ -z "$carboneClientSecret" ]; then
+  echo "ERROR: Carbone render client created/fetched but secret could not be retrieved for '$instance'. Aborting."
+  exit 1
+fi
+
+tokenEndpoint="https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token"
+
 setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH "https://$CARBONE_HOST" "$path/config/aam-backend-service/application.env"
-setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID "$RENDER_API_CLIENT_ID_DEV" "$path/config/aam-backend-service/application.env"
-setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET "$RENDER_API_CLIENT_SECRET_DEV" "$path/config/aam-backend-service/application.env"
-setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT "https://auth.aam-digital.dev/realms/aam-digital/protocol/openid-connect/token" "$path/config/aam-backend-service/application.env"
+setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID "$carboneClientId" "$path/config/aam-backend-service/application.env"
+setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET "$carboneClientSecret" "$path/config/aam-backend-service/application.env"
+setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT "$tokenEndpoint" "$path/config/aam-backend-service/application.env"
 setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE "client_credentials" "$path/config/aam-backend-service/application.env"
+ensureEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE "openid" "$path/config/aam-backend-service/application.env"
+setEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE "openid" "$path/config/aam-backend-service/application.env"
+ensureEnv FEATURES_EXPORT_API_ENABLED "true" "$path/config/aam-backend-service/application.env"
+setEnv FEATURES_EXPORT_API_ENABLED "true" "$path/config/aam-backend-service/application.env"
 setEnv SENTRY_AUTH_TOKEN "$SENTRY_AUTH_TOKEN" "$path/config/aam-backend-service/application.env"
 setEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$path/config/aam-backend-service/application.env"
 setEnv SENTRY_SERVER_NAME "$instance.$DOMAIN" "$path/config/aam-backend-service/application.env"

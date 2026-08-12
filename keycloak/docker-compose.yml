@@ -3,7 +3,7 @@ name: i-keycloak-dev
 services:
   keycloak:
     # The keycloak-aam image (bundles the aam-theme, 2FA/metrics/third-party, etc.)
-    image: ghcr.io/aam-digital/keycloak-aam:26.4.7-0
+    image: ghcr.io/aam-digital/keycloak-aam:26.7.1-0
     environment:
       # For all available options see https://www.keycloak.org/server/all-config
       KEYCLOAK_ADMIN: admin

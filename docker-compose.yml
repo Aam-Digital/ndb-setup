@@ -19,6 +19,10 @@ services:
       # Request a Let's Encrypt certificate for this host (acme-companion).
       # Set only here: the certificate is per-host, shared across all paths.
       LETSENCRYPT_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
+      # Other origins that may embed this instance in an iframe (space-separated),
+      # e.g. "https://example.com https://www.example.com". The instance's own origin
+      # is always allowed. Set in the instance's .env only where this is needed.
+      CSP_EXTRA_FRAME_ANCESTORS: ${CSP_EXTRA_FRAME_ANCESTORS:-}
     restart: unless-stopped
 
   couchdb-only:

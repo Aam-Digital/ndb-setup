@@ -9,6 +9,7 @@
 # Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
 #   DNS_HETZNER_API_TOKEN, DNS_HETZNER_ZONE_ID_APP   (BWS-backed)
 #   DNS_SERVER_NAME                                  (setup.env / environment)
+#   DNS_SERVER_DOMAIN                                (setup.env / environment, optional, defaults to aam-digital.net)
 
 ##############################
 # setup
@@ -38,6 +39,7 @@ org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 requireConfig DNS_HETZNER_API_TOKEN
 requireConfig DNS_HETZNER_ZONE_ID_APP
 requireConfig DNS_SERVER_NAME
+DNS_SERVER_DOMAIN="${DNS_SERVER_DOMAIN:-aam-digital.net}"
 
 ##############################
 # script
@@ -55,7 +57,7 @@ fi
 
 echo "Creating DNS CNAME record for '$org'..."
 body=$(jq -n \
-  --arg value "$DNS_SERVER_NAME.aam-digital.net." \
+  --arg value "$DNS_SERVER_NAME.$DNS_SERVER_DOMAIN." \
   --arg name "$org" \
   --arg zone_id "$DNS_HETZNER_ZONE_ID_APP" \
   '{value: $value, type: "CNAME", name: $name, zone_id: $zone_id}')

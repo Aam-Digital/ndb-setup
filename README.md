@@ -155,6 +155,25 @@ This repository comes with a [docker compose](https://github.com/Aam-Digital/ndb
 4. Start the required containers (this is only needed once on a server)
    > cd `swag-proxy/<server>` && docker-compose up -d
 
+#### Shared vs. per-server nginx config
+
+Config that is the same on every server lives once in `swag-proxy/shared/nginx/`
+and is mounted from there (`../shared/…`, the same way `../jail.local` already
+is), so a routing change is made in one place instead of being copied per
+server:
+
+- `proxy.conf`, `resolver.conf`
+- `proxy-confs/instance.com.subdomain.conf`, `proxy-confs/instance.app.subdomain.conf` —
+  the instance routing (frontend, `/db`, `/api`), identical for every instance
+  under that domain
+- `proxy-confs/aam-db-uri-map.subdomain.conf` — a helper the `/db/`, `/api/`
+  and `/query/` routes depend on; mount it wherever an instance conf is
+  mounted
+
+Everything genuinely specific to one server stays in
+`swag-proxy/<server>/config/nginx/` (its own `<server>.subdomain.conf`, keycloak,
+api, dev-only hosts, …).
+
 ### Option B: nginx-proxy
 
 The instance services already carry the `VIRTUAL_HOST`, `VIRTUAL_PATH` and `LETSENCRYPT_HOST` variables that nginx-proxy reads (these are simply ignored by swag-proxy and when no proxy is used), so no per-instance proxy config is needed.

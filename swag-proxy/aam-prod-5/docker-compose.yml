@@ -22,10 +22,12 @@ services:
       - ../jail.local:/config/fail2ban/jail.local
       - ./config/dns-conf/hetzner-cloud.ini:/config/dns-conf/hetzner-cloud.ini
       - ./config/nginx/proxy-confs/aam-prod-5.subdomain.conf:/config/nginx/proxy-confs/aam-prod-5.subdomain.conf
-      - ./config/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
-      - ./config/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf
-      - ./config/nginx/proxy.conf:/config/nginx/proxy.conf
-      - ./config/nginx/resolver.conf:/config/nginx/resolver.conf
+      - ../shared/nginx/proxy-confs/instance.app.subdomain.conf:/config/nginx/proxy-confs/instance.app.subdomain.conf
+      - ../shared/nginx/proxy-confs/instance.com.subdomain.conf:/config/nginx/proxy-confs/instance.com.subdomain.conf
+      # required by the /db/ routes in the instance confs above
+      - ../shared/nginx/proxy-confs/aam-db-uri-map.subdomain.conf:/config/nginx/proxy-confs/aam-db-uri-map.subdomain.conf
+      - ../shared/nginx/proxy.conf:/config/nginx/proxy.conf
+      - ../shared/nginx/resolver.conf:/config/nginx/resolver.conf
       - /var/docker/volumes/swag-proxy/etc:/config/etc
       - /var/docker/volumes/swag-proxy/fail2ban:/config/fail2ban
       - /var/docker/volumes/swag-proxy/keys:/config/keys

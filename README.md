@@ -166,8 +166,9 @@ server:
 - `proxy-confs/instance.com.subdomain.conf`, `proxy-confs/instance.app.subdomain.conf` —
   the instance routing (frontend, `/db`, `/api`), identical for every instance
   under that domain
-- `proxy-confs/aam-db-uri-map.subdomain.conf` — a helper the `/db/` routes
-  depend on; mount it wherever an instance conf is mounted
+- `proxy-confs/aam-db-uri-map.subdomain.conf` — a helper the `/db/`, `/api/`
+  and `/query/` routes depend on; mount it wherever an instance conf is
+  mounted
 
 Everything genuinely specific to one server stays in
 `swag-proxy/<server>/config/nginx/` (its own `<server>.subdomain.conf`, keycloak,

@@ -346,6 +346,26 @@ Keycloak expires them itself once `eventsExpiration` is set.
 Keep `adminEventsDetailsEnabled` off: it stores full request payloads, which are large and
 contain user data we have no reason to retain.
 
+### 3. Events in the container logs (already happening)
+
+`jboss-logging` is the realm's other event listener, and its defaults are `success-level=debug`
+/ `error-level=warn` — so **failed logins are already written to Keycloak's container log at
+WARN today**, independently of the event store above. The line carries event type, realm,
+client, user id, IP address and the error, which is enough to investigate an incident even on a
+realm where the event store was never enabled.
+
+Successful logins sit at `debug` and are therefore invisible by default. To include them:
+
+```
+KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_SUCCESS_LEVEL=info
+```
+
+(runtime option, so it belongs on the deployment, not in the image). If the cluster runs a log
+pipeline such as Loki, this is the cheapest possible audit trail: retention lives in the log
+store instead of the Keycloak database, and it costs no writes and no schema. Note it records
+user *ids* rather than usernames, so investigating means one Admin API lookup per id — and
+turning successful logins up to `info` on a busy realm is a real increase in log volume.
+
 ## Last login timestamps
 
 **Keycloak has no built-in last-login field** — not as of 26.7. It is a
@@ -358,15 +378,26 @@ shows creation time, never last login. So this needs a deliberate choice between
 | **A. Query the event store** | Last login per user, over the retention window | None beyond the events config above — but bounded by `eventsExpiration`, and you cannot sort or filter the *user list* by it |
 | **B. Event listener writes a `lastLogin` user attribute** | A real per-user field: searchable, sortable, no retention limit | Needs a provider JAR in `keycloak-aam`, plus a write on every login |
 | **C. Sessions** | Only who is logged in *right now* | Not last login at all — a session disappears when it expires |
+| **D. Batch snapshot: events → attribute** | A sortable field like B, and it outlives the retention window | A scheduled script; the value is stale by up to one interval |
+| **E. Ship events to logs** | Per-user history and investigation, retention handled outside Keycloak | Not a sortable field, and it records user *ids*, not usernames |
+
+None of these needs a database of its own: A and D read Keycloak's own event tables, B and D
+write a Keycloak user attribute, and E leaves the data in the log pipeline that already exists.
+The only option that adds a moving part is B, and that part is a plugin, not a datastore.
 
 **Option A works today** with no new code, once the events config above is applied:
 
 ```bash
 # most recent successful login for one user
 curl -s -H "Authorization: Bearer $token" \
-  "https://$KEYCLOAK_HOST/admin/realms/$realm/events?type=LOGIN&user=$userId&max=1" \
+  "https://$KEYCLOAK_HOST/admin/realms/$realm/events?type=LOGIN&user=$userId&direction=desc&max=1" \
   | jq -r '.[0].time | . / 1000 | todate'
 ```
+
+`direction=desc` is load-bearing: the endpoint applies no ordering unless asked. The JPA event
+store happens to default to newest-first, so this works without it today — but that is an
+implementation detail, not an API guarantee, and `max=1` against an unordered query is not
+something to leave to chance.
 
 Start here if the goal is "when did this person last log in?" or finding dormant accounts. Its
 real limit is that it answers one user at a time within the retention window — it cannot back a
@@ -405,7 +436,42 @@ writes on every page load. Writing only when the stored value is older than a th
 is plenty for "who is dormant?") collapses that to at most one write per user per day. This
 write-per-login cost is the reason the feature was declined upstream.
 
-Two implementation notes:
+### Option D: snapshot the events into the attribute periodically
+
+This is worth considering before committing to a plugin, because it gets B's sortable field
+without B's plugin *or* its write-per-login problem. A scheduled script queries the events once
+per realm, reduces them to the newest `LOGIN` per user, and writes `lastLogin` through the Admin
+API:
+
+```
+GET /admin/realms/<realm>/events?type=LOGIN&dateFrom=<last run>&direction=desc
+```
+
+Because each run stores the maximum it has ever seen, the value **outlives the 90-day retention
+window** — which is A's main limitation — while the writes drop to one per user per run instead
+of one per page load. It needs no Java, no JAR, and no release pipeline; it is the same
+loop-the-realms-over-the-Admin-API shape as the `migrate-*.sh` scripts already in `scripts/`.
+The cost is staleness: the value is only as fresh as the last run, which is fine for "who is
+dormant?" and wrong for "is someone logged in right now?" (that is option C).
+
+Two traps specific to this route:
+
+- `PUT /admin/realms/<realm>/users/<id>` **replaces** the whole attribute map. Read the user
+  first and merge, or the write silently drops `exact_username` and unlinks the account from its
+  app profile.
+- Page the events query. `max` defaults to a bounded page size, so a realm busier than that
+  page silently yields a partial picture — and a *partial* picture here means a user looks
+  dormant when they are not.
+
+### Not viable: per-user data in Prometheus
+
+Since the metrics stack is already there, it is tempting to answer this from Grafana. It does not
+work: a per-user label means one time series per user per realm, which is exactly the cardinality
+explosion the `event-metrics-user-tags` default guards against. Metrics answer "how many logins
+failed", never "when did this person last log in". Keep per-user questions on the event store,
+the attribute, or the logs.
+
+Two implementation notes for option B:
 
 - Keycloak runs a single replica today, so a cache eviction is local and cheap. If Keycloak moves
   to the cluster with more than one replica, each eviction is broadcast to every node — the

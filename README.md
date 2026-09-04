@@ -436,32 +436,55 @@ writes on every page load. Writing only when the stored value is older than a th
 is plenty for "who is dormant?") collapses that to at most one write per user per day. This
 write-per-login cost is the reason the feature was declined upstream.
 
-### Option D: snapshot the events into the attribute periodically
+### Option D: snapshot the events into the attribute periodically (implemented)
 
-This is worth considering before committing to a plugin, because it gets B's sortable field
-without B's plugin *or* its write-per-login problem. A scheduled script queries the events once
-per realm, reduces them to the newest `LOGIN` per user, and writes `lastLogin` through the Admin
-API:
+**[`scripts/sync-keycloak-last-login.sh`](./scripts/sync-keycloak-last-login.sh)** does this. It
+gets B's sortable field without B's plugin *or* its write-per-login problem: it reads the
+`LOGIN` events already stored, reduces them to the newest per user, and writes `lastLogin`
+through the Admin API — at most one write per user per run instead of one per page load.
 
+Because each run keeps the maximum it has ever seen, the value **outlives the 90-day retention
+window**, which is option A's main limitation: a user who last logged in two years ago still
+reports that date long after the event itself expired out of the store. The cost is staleness —
+the value is only as fresh as the last run. That is fine for "who is dormant?" and wrong for "is
+someone logged in right now?" (that is option C).
+
+```bash
+./scripts/sync-keycloak-last-login.sh                      # dry-run, all realms
+./scripts/sync-keycloak-last-login.sh --apply              # write
+./scripts/sync-keycloak-last-login.sh --declare-attribute --apply   # + declare it on old realms
 ```
-GET /admin/realms/<realm>/events?type=LOGIN&dateFrom=<last run>&direction=desc
-```
 
-Because each run stores the maximum it has ever seen, the value **outlives the 90-day retention
-window** — which is A's main limitation — while the writes drop to one per user per run instead
-of one per page load. It needs no Java, no JAR, and no release pipeline; it is the same
-loop-the-realms-over-the-Admin-API shape as the `migrate-*.sh` scripts already in `scripts/`.
-The cost is staleness: the value is only as fresh as the last run, which is fine for "who is
-dormant?" and wrong for "is someone logged in right now?" (that is option C).
+**Meant to run as a scheduled job**, so it is deliberately self-contained (like
+`collect-credentials.sh`): no `lib/` sourcing, no `setup.env`, no instance directories, no
+Bitwarden. Everything is environment variables, so an image needs only bash, curl and jq. It is
+also stateless — it re-scans a lookback window each run and writes only what is newer — so
+there is no state to persist and no volume to mount. As a Kubernetes CronJob, point
+`KEYCLOAK_HOST` at the in-cluster service with `KEYCLOAK_SCHEME=http` and nothing has to be
+publicly reachable. It exits non-zero on any error, so a failed run shows up as a failed pod
+rather than a silent no-op.
 
-Two traps specific to this route:
+Two things to get right when scheduling it:
 
-- `PUT /admin/realms/<realm>/users/<id>` **replaces** the whole attribute map. Read the user
-  first and merge, or the write silently drops `exact_username` and unlinks the account from its
-  app profile.
-- Page the events query. `max` defaults to a bounded page size, so a realm busier than that
-  page silently yields a partial picture — and a *partial* picture here means a user looks
-  dormant when they are not.
+- **Pass `--apply`.** Dry-run is the default, for consistency with the `migrate-*.sh` scripts. A
+  CronJob without `--apply` will report what it would have done, forever, and change nothing.
+- **Use a service account, not the admin user.** Set `KEYCLOAK_CLIENT_ID` /
+  `KEYCLOAK_CLIENT_SECRET` for a client-credentials grant; it needs only `view-events`,
+  `view-users` and `manage-users`. `KEYCLOAK_USER` / `KEYCLOAK_PASSWORD` also works, but a
+  long-lived credential sitting in a cluster secret should be the narrow one.
+
+Two traps the script already handles, worth knowing if it is ever reimplemented:
+
+- `PUT /admin/realms/<realm>/users/<id>` **replaces** the whole attribute map, so a naive write
+  drops `exact_username` and unlinks the account from its app profile. It reads the user and
+  merges.
+- The events query has to be paged. `max` is bounded server-side, and a truncated scan reports
+  an *active* user as dormant.
+
+It also refuses to run against a realm whose User Profile does not declare the attribute, rather
+than writing values Keycloak silently discards (see the `unmanagedAttributePolicy` note above).
+Fresh realms get the declaration from `keycloak/realm_config.json`; `--declare-attribute` adds it
+to existing ones.
 
 ### Not viable: per-user data in Prometheus
 

@@ -142,6 +142,11 @@ open the file. Rather than duplicate that here, note only the deviations from th
   tar and restore paths are coupled), so they are not relocatable for the backup operation itself.
 - **`collect-credentials.sh`** is intentionally self-contained (meant to be copied out; takes an
   `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
+- **`sync-keycloak-last-login.sh`** is likewise self-contained, for the same reason in reverse: it
+  is meant to run as a scheduled job (a Kubernetes CronJob or plain cron), so it takes all config
+  from environment variables, never sources `lib/` or `setup.env`, and touches no instance
+  directory. It is stateless and safe to re-run, and exits non-zero on error so a scheduler sees
+  a failure.
 - **`enable-feature-notification.sh`** still needs BWS for a *fresh* Firebase config (Firebase is JSON,
   not a scalar `getConfig` can resolve).
 

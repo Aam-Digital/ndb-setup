@@ -384,12 +384,38 @@ So the attribute has to be declared in the User Profile as well — admin-view-o
   "permissions": { "view": ["admin"], "edit": [] } }
 ```
 
-For the listener itself, prefer writing one into
-[`aam-services`](https://github.com/Aam-Digital/aam-services) (which already ships
-`keycloak-third-party-authentication`) over adopting one of the community providers. The
-existing JARs are pinned per version for a reason, and `keycloak-aam`'s README already records
-what an unversioned third-party JAR costs us. An event listener for `LOGIN` is a small class,
-and owning it avoids another dependency that can break on a Keycloak upgrade.
+It has to be a **Keycloak provider JAR** baked into the `keycloak-aam` image — nothing about it
+can live in a deployed service, since not every instance runs the backend at all. The precedent
+is `keycloak-third-party-authentication`: a standalone Maven module (no parent POM, only
+`org.keycloak.*` dependencies) with its own CI workflow that publishes a release, which
+`keycloak-aam`'s Dockerfile then pins by version. Either repo can *host the source* — but
+`aam-services` already has that module layout and release pipeline for exactly this artifact
+type, whereas `keycloak-aam` currently has no Java build at all. Prefer owning the class either
+way over adopting a community provider: `keycloak-aam`'s README records what an unversioned
+third-party JAR costs us.
+
+**Throttle the write, and treat that as a requirement rather than an optimisation.** The write
+itself is one row in `USER_ATTRIBUTE` and is not the problem — modifying a user **evicts it from
+Keycloak's user cache**, and the frequency is far higher than "once per login": ndb-core
+initialises Keycloak with `onLoad: "check-sso"`, and Keycloak fires a `LOGIN` event on every
+silent SSO check, so every page reload and every new tab counts. The event carries nothing that
+distinguishes an SSO re-check from a real authentication
+([keycloak#24498](https://github.com/keycloak/keycloak/issues/24498)), so a naive listener
+writes on every page load. Writing only when the stored value is older than a threshold (a day
+is plenty for "who is dormant?") collapses that to at most one write per user per day. This
+write-per-login cost is the reason the feature was declined upstream.
+
+Two implementation notes:
+
+- Keycloak runs a single replica today, so a cache eviction is local and cheap. If Keycloak moves
+  to the cluster with more than one replica, each eviction is broadcast to every node — the
+  throttle matters considerably more there than it does now.
+- `setSingleAttribute` can silently no-op inside an `EventListenerProvider` depending on the
+  transaction it runs in ([keycloak#14942](https://github.com/keycloak/keycloak/issues/14942),
+  closed as not planned). Resolve the user through the session that owns the transaction (as
+  `AamThirdPartyAuthenticator` does with `session.users().getUserById(...)`) or wrap the write in
+  its own transaction, and assert in a test that the attribute is actually readable afterwards —
+  this fails quietly rather than loudly.
 
 ---
 

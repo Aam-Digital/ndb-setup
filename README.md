@@ -276,6 +276,123 @@ Consult the [Keycloak docs](https://www.keycloak.org/docs/latest/server_admin/in
 
 ---
 
+## Authentication monitoring
+
+Authentication monitoring splits into two halves that deliberately live in different places.
+Neither replaces the other: a metric tells you an attack is happening, an event tells you who
+it happened to.
+
+### 1. Metrics — "are we under attack right now?" (Prometheus/Grafana)
+
+Aggregate counters, exported by Keycloak itself:
+
+```
+keycloak_user_events_total{realm="...",event="login",error="invalid_user_credentials"}
+```
+
+This is produced by the Keycloak **image**, not by any per-realm config: `keycloak-aam` sets
+`KC_METRICS_ENABLED` and `KC_EVENT_METRICS_USER_ENABLED` at image build time, because both are
+Keycloak *build time* options and are ignored on a `start --optimized` container. Nothing to
+configure here — but a Keycloak older than `26.7.1-1` does not export them.
+
+Scrape the **management port 9000** (`http://<keycloak>:9000/metrics`) from inside the Docker
+network or the cluster. It is not published through the reverse proxy, and it should stay that
+way. Useful things to alert on:
+
+| Alert | Signal |
+|---|---|
+| Credential stuffing / brute force | `rate(keycloak_user_events_total{event="login",error!=""}[5m])` climbing, especially against a single realm |
+| Password spraying across realms | failures spread thin across *many* realms at once, which a per-realm rate misses |
+| Lockouts | `event="user_disabled_by_temporary_lockout"` — brute-force protection is on, so this fires before an attacker gets far |
+| Broken client, not an attack | `error="invalid_token"` on `refresh_token` — usually a misconfigured client looping, worth separating from real login failures |
+
+`event-metrics-user-tags` defaults to `realm` only. Adding `clientId` multiplies the series
+count by the number of clients per realm; with realm-per-instance that adds up, so add it only
+if a dashboard actually needs the breakdown.
+
+> **The bundled `keycloak-metrics-spi` also serves login metrics — at
+> `/realms/<any-realm>/metrics` on the _public_ HTTP port, unauthenticated, returning data for
+> *every* realm regardless of the realm in the URL.** Nothing in `swag-proxy/*/config/nginx/`
+> blocks that path, so with realm-per-customer it exposes realm names and per-realm login
+> volumes to anyone who asks. Worth verifying against your deployment and then either blocking
+> the path at the proxy, setting the SPI's `DISABLE_EXTERNAL_ACCESS`, or dropping the provider —
+> Keycloak has covered these metrics natively since 26.1, so it is redundant for this purpose.
+
+### 2. Events — "who was attacked, from where?" (Keycloak)
+
+Metrics are counters; they cannot tell you *which* account was targeted or from which IP. That
+needs Keycloak's event store, which is **off by default** and is a **per-realm** setting — so
+with realm-per-instance it has to be enabled on every realm.
+
+- **Fresh realms** get it from `keycloak/realm_config.json` (`eventsEnabled`, a
+  security-relevant `enabledEventTypes` subset, `adminEventsEnabled`, and a 90-day
+  `eventsExpiration` so the table stays bounded without a cron job).
+- **Existing realms** need `scripts/migrate-keycloak-event-config.sh`, which applies the same
+  settings over the Admin API. Dry-run by default:
+
+  ```bash
+  ./scripts/migrate-keycloak-event-config.sh              # show what would change
+  ./scripts/migrate-keycloak-event-config.sh --apply      # write
+  ```
+
+  It reads and writes back `eventsListeners` unchanged, so the existing `metrics-listener`
+  entry is preserved — overwriting it would silently switch the metrics above off.
+
+Events are then visible per realm under **Realm settings → Sessions/Events** and over
+`GET /admin/realms/<realm>/events?type=LOGIN_ERROR`. They live in the `EVENT_ENTITY` /
+`ADMIN_EVENT_ENTITY` tables in the **Keycloak** Postgres (not the instance volumes), and
+Keycloak expires them itself once `eventsExpiration` is set.
+
+Keep `adminEventsDetailsEnabled` off: it stores full request payloads, which are large and
+contain user data we have no reason to retain.
+
+## Last login timestamps
+
+**Keycloak has no built-in last-login field** — not as of 26.7. It is a
+[long-standing upstream request](https://github.com/keycloak/keycloak/discussions/34077),
+declined mainly on performance grounds (a write on every login). The admin console's user list
+shows creation time, never last login. So this needs a deliberate choice between three options:
+
+| Option | Gives you | Cost |
+|---|---|---|
+| **A. Query the event store** | Last login per user, over the retention window | None beyond the events config above — but bounded by `eventsExpiration`, and you cannot sort or filter the *user list* by it |
+| **B. Event listener writes a `lastLogin` user attribute** | A real per-user field: searchable, sortable, no retention limit | Needs a provider JAR in `keycloak-aam`, plus a write on every login |
+| **C. Sessions** | Only who is logged in *right now* | Not last login at all — a session disappears when it expires |
+
+**Option A works today** with no new code, once the events config above is applied:
+
+```bash
+# most recent successful login for one user
+curl -s -H "Authorization: Bearer $token" \
+  "https://$KEYCLOAK_HOST/admin/realms/$realm/events?type=LOGIN&user=$userId&max=1" \
+  | jq -r '.[0].time | . / 1000 | todate'
+```
+
+Start here if the goal is "when did this person last log in?" or finding dormant accounts. Its
+real limit is that it answers one user at a time within the retention window — it cannot back a
+sorted "inactive users" column.
+
+**Option B is the one to build if that column is the goal**, and it has a gotcha worth knowing
+before starting: this realm config does not set `unmanagedAttributePolicy`, and Keycloak 26
+defaults it to *disabled*. An event listener writing a `lastLogin` attribute would persist it to
+the database but the Admin API would **not return it** and the admin console would not show it.
+So the attribute has to be declared in the User Profile as well — admin-view-only, exactly as
+`exact_username` already is:
+
+```json
+{ "name": "lastLogin", "displayName": "Last login",
+  "permissions": { "view": ["admin"], "edit": [] } }
+```
+
+For the listener itself, prefer writing one into
+[`aam-services`](https://github.com/Aam-Digital/aam-services) (which already ships
+`keycloak-third-party-authentication`) over adopting one of the community providers. The
+existing JARs are pinned per version for a reason, and `keycloak-aam`'s README already records
+what an unversioned third-party JAR costs us. An event listener for `LOGIN` is a small class,
+and owning it avoids another dependency that can break on a Keycloak upgrade.
+
+---
+
 ## API Integrations and SQL Reports
 
 It is possible to calculate reports for the app's data using SQL queries.

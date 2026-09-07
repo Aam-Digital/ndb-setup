@@ -1,0 +1,10 @@
+{
+  "clientId": "aam-backend",
+  "enabled": true,
+  "clientAuthenticatorType": "client-secret",
+  "serviceAccountsEnabled": true,
+  "publicClient": false,
+  "standardFlowEnabled": false,
+  "directAccessGrantsEnabled": false,
+  "protocol": "openid-connect"
+}

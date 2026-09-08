@@ -118,7 +118,7 @@ else
   clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$org/clients" \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
-    -d "$(jq --arg url "https://$url" '.baseUrl = $url' "$ndbSetupDir/keycloak/client_config.json")")
+    -d "$(jq --arg url "https://$url" '.clients[] | select(.clientId == "app") | .baseUrl = $url' "$ndbSetupDir/keycloak/client_config.json")")
   location=$(echo "$clientResponse" | grep -i "^location:")
   client=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
   if [ -z "$client" ]; then

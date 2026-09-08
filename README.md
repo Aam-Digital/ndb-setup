@@ -208,18 +208,19 @@ Once done, applications can be connected with Keycloak through the `interactive_
 `keycloak/realm_config.json` provides a sample configuration that the interactive setup script uses (replacing some placeholders automatically).
 You can create a custom realm_config.json in each baseConfig folder to overwrite this.
 
-`keycloak/client_config.json` (the `app` client) and `keycloak/client_config_aam-backend.json`
-(the confidential `aam-backend` client used by `replication-backend` and `aam-backend-service` to
-call the Keycloak Admin API) can both be imported the same way — under **Clients > Import client**
-in the Keycloak Admin UI — for setups that configure Keycloak manually instead of through the
-scripts here (e.g. local development).
+`keycloak/client_config.json` holds both the public `app` client and the confidential
+`aam-backend` client (used by `replication-backend` and `aam-backend-service` to call the Keycloak
+Admin API) as a single `{"clients": [...]}` file. For setups that configure Keycloak manually
+instead of through the scripts here (e.g. local development), import both at once via
+**Realm settings > Action > Partial import** in the Keycloak Admin UI, selecting "Clients" and
+uploading this file.
 
 For a real instance, `scripts/enable-backend.sh` already creates the `aam-backend` client for you
-via `createKeycloakBackendClient` in `scripts/lib/keycloak.sh` — that function is the source of
-truth for which realm-management roles the client's service account needs
-(`manage-realm`, `query-users`, `view-users`, `manage-users`). After importing
-`client_config_aam-backend.json` manually, assign the same four roles by hand so the manual path
-doesn't drift from what the script does.
+via `createKeycloakBackendClient` in `scripts/lib/keycloak.sh` — that function reads the same
+`client_config.json` (so the client definition has a single source of truth), then assigns the
+realm-management roles the client's service account needs (`manage-realm`, `query-users`,
+`view-users`, `manage-users`). After a manual partial import, assign the same four roles by hand so
+the manual path doesn't drift from what the script does.
 
 ## 2-Factor-Auth
 

@@ -141,7 +141,7 @@ This repository supports **two** proxy stacks and the instance `docker-compose.y
 - **[swag-proxy](https://docs.linuxserver.io/general/swag/)** (`swag-proxy/`) — routing is defined in explicit per-instance nginx config files. Uses a DNS-validated **wildcard** certificate, which is convenient when hosting many instances under one domain.
 - **[nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) + acme-companion** (`nginx-proxy/`) — routing is generated automatically from `VIRTUAL_*` environment variables already set on the instance services in `docker-compose.yml`. Uses a **per-host** Let's Encrypt certificate (HTTP validation), so the instance's public hostname must resolve to this server before you start it.
 
-Both route the same way: the frontend at `/`, CouchDB / replication-backend under `/db`, and the backend API under `/api`. (The legacy `/query` alias is only configured for swag-proxy.)
+Both route the same way: the frontend at `/`, CouchDB / replication-backend under `/db`, and the backend API under `/api`.
 
 ### Option A: swag-proxy
 
@@ -166,7 +166,7 @@ server:
 - `proxy-confs/instance.com.subdomain.conf`, `proxy-confs/instance.app.subdomain.conf` —
   forwards everything to the instance's app container, identical for every
   instance under that domain. The app image's own nginx routes `/db`,
-  `/db/couchdb`, `/api` and `/query` internally (ndb-core#4372), so this is a
+  `/db/couchdb` and `/api` internally (ndb-core#4372), so this is a
   single `location /` block - no per-path routing, and no URI-preserving map
   to mount alongside it (that used to be `aam-db-uri-map.subdomain.conf`,
   since retired).

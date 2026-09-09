@@ -11,7 +11,7 @@ services:
       # nginx-proxy auto-configuration (see nginx-proxy/). Ignored by the swag-proxy
       # and when no proxy is used, so this stays compatible with either proxy choice.
       # Serves everything at "/": the app image's own nginx routes /db, /db/couchdb,
-      # /api and /query internally (see COUCHDB_URL etc. below), so neither proxy
+      # and /api internally (see COUCHDB_URL etc. below), so neither proxy
       # option needs its own per-path routing to the other services any more.
       VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
       VIRTUAL_PORT: 8080
@@ -33,7 +33,7 @@ services:
       # of whatever COUCHDB_URL above resolves to.
       COUCHDB_DIRECT_URL: http://${INSTANCE_NAME}-database:5984
       # generates assets/keycloak.json at container start - no file mount needed
-      KEYCLOAK_URL: https://${KEYCLOAK_URL}
+      KEYCLOAK_URL: https://${KEYCLOAK_URL:?KEYCLOAK_URL is not set}
       KEYCLOAK_REALM: ${INSTANCE_NAME}
       # /api route for aam-backend-service, only present under the
       # full-stack profiles. API_BACKEND_URL is set by enable-backend.sh when switching to
@@ -105,7 +105,7 @@ services:
     container_name: ${INSTANCE_NAME}-aam-backend-service
     networks:
       # internal only: the app container is the only entrypoint, routing /api
-      # (and the deprecated /query alias) to this over internal_aam.
+      # to this over internal_aam.
       - internal_aam
     depends_on:
       # wait until CouchDB and RabbitMQ actually accept connections, not just that the containers started -

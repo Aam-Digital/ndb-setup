@@ -7,12 +7,12 @@ services:
       - external_web
     volumes:
       - ./config.json:/usr/share/nginx/html/assets/config.json
-      - ./keycloak.json:/usr/share/nginx/html/assets/keycloak.json
-      - ./firebase-config.json:/usr/share/nginx/html/assets/firebase-config.json
     environment:
       # nginx-proxy auto-configuration (see nginx-proxy/). Ignored by the swag-proxy
       # and when no proxy is used, so this stays compatible with either proxy choice.
-      # Serves the frontend at "/"; /db and /api are routed to the other services below.
+      # Serves everything at "/": the app image's own nginx routes /db, /db/couchdb,
+      # /api and /query internally (see COUCHDB_URL etc. below), so neither proxy
+      # option needs its own per-path routing to the other services any more.
       VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
       VIRTUAL_PORT: 8080
       VIRTUAL_PATH: /
@@ -23,32 +23,28 @@ services:
       # e.g. "https://example.com https://www.example.com". The instance's own origin
       # is always allowed. Set in the instance's .env only where this is needed.
       CSP_EXTRA_FRAME_ANCESTORS: ${CSP_EXTRA_FRAME_ANCESTORS:-}
+      # The "database entrypoint" for /db: CouchDB directly (database-only), or
+      # replication-backend (with-permissions / full-stack). DB_ENTRYPOINT_URL is
+      # set by enable-backend.sh / interactive-setup.sh when switching to a
+      # permission-checked profile; a fresh database-only instance needs no .env
+      # change at all, since the default below is already correct for it.
+      COUCHDB_URL: ${DB_ENTRYPOINT_URL:-http://${INSTANCE_NAME}-database:5984}
+      # /db/couchdb: always raw CouchDB directly, for admin access - independent
+      # of whatever COUCHDB_URL above resolves to.
+      COUCHDB_DIRECT_URL: http://${INSTANCE_NAME}-database:5984
+      # generates assets/keycloak.json at container start - no file mount needed
+      KEYCLOAK_URL: https://${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${INSTANCE_NAME}
+      # /api route for aam-backend-service, only present under the
+      # full-stack profiles. API_BACKEND_URL is set by enable-backend.sh when switching to
+      # one of those; the default below is nginx's own built-in placeholder (always resolves,
+      # to avoid nginx refusing to start over an unresolvable host), so /api just 502s until
+      # then instead of crashing the container - the same behavior full-stack instances see
+      # today, since aam-backend-service's actual URL was never wired up before this.
+      API_URL: ${API_BACKEND_URL:-http://localhost:3000}
     restart: unless-stopped
 
-  couchdb-only:
-    image: couchdb:3
-    container_name: ${INSTANCE_NAME}-db-entrypoint
-    user: "1000:1000"
-    networks:
-      - internal_aam
-      - external_web
-    volumes:
-      - ./couchdb/data:/opt/couchdb/data
-      - ./couchdb.ini:/opt/couchdb/etc/local.d/couchdb.ini
-    environment:
-      COUCHDB_USER: ${COUCHDB_USER:?COUCHDB_USER is not set}
-      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?COUCHDB_PASSWORD is not set}
-      # nginx-proxy: expose CouchDB under /db (trailing-slash VIRTUAL_DEST strips the
-      # /db prefix). Inert under swag-proxy / no proxy. See the "app" service above.
-      VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
-      VIRTUAL_PORT: 5984
-      VIRTUAL_PATH: /db/
-      VIRTUAL_DEST: /
-    restart: unless-stopped
-    profiles:
-      - database-only
-
-  couchdb-with-permissions:
+  couchdb:
     image: couchdb:3
     container_name: ${INSTANCE_NAME}-database
     user: "1000:1000"
@@ -68,20 +64,18 @@ services:
       retries: 12
       start_period: 30s
     restart: unless-stopped
-    profiles:
-      - with-permissions
-      - full-stack
-      - full-stack-without-sqs
 
   # (optional) replication-backend. Only deployed if "COMPOSE_PROFILES" is "with-permissions", "full-stack", or "full-stack-without-sqs" is set in the `.env` file
   replication-backend:
     image: ghcr.io/aam-digital/replication-backend:${AAM_REPLICATION_BACKEND_VERSION:-latest}
-    container_name: ${INSTANCE_NAME}-db-entrypoint
+    container_name: ${INSTANCE_NAME}-replication-backend
     networks:
+      # internal only: nothing external reaches this directly any more - the
+      # app container is the only entrypoint, routing /db to this over
+      # internal_aam via DB_ENTRYPOINT_URL (see the "app" service above).
       - internal_aam
-      - external_web
     depends_on:
-      couchdb-with-permissions:
+      couchdb:
         condition: service_healthy
     environment:
       DATABASE_URL: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
@@ -89,7 +83,6 @@ services:
       DATABASE_USER: ${COUCHDB_USER}
       DATABASE_PASSWORD: ${COUCHDB_PASSWORD}
       JWT_SECRET: ${REPLICATION_BACKEND_JWT_SECRET:?REPLICATION_BACKEND_JWT_SECRET is not set}
-      JWT_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\n${REPLICATION_BACKEND_PUBLIC_KEY:?REPLICATION_BACKEND_PUBLIC_KEY is not set}\n-----END PUBLIC KEY-----"
       SENTRY_DSN: ${SENTRY_DSN_REPLICATION_BACKEND}
       SENTRY_ENABLED: ${SENTRY_ENABLED}
       SENTRY_INSTANCE_NAME: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
@@ -100,13 +93,6 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET}
       AUDIT_ENABLED: ${REPLICATION_BACKEND_AUDIT_ENABLED:-true}
       PORT: 5984
-      # nginx-proxy: same /db routing as couchdb-only, but this container (the
-      # db-entrypoint in with-permissions/full-stack) enforces permission checks.
-      # Inert under swag-proxy / no proxy.
-      VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
-      VIRTUAL_PORT: 5984
-      VIRTUAL_PATH: /db/
-      VIRTUAL_DEST: /
     restart: unless-stopped
     profiles:
       - with-permissions
@@ -118,13 +104,14 @@ services:
     image: ghcr.io/aam-digital/aam-backend-service:${AAM_BACKEND_SERVICE_VERSION:-latest}
     container_name: ${INSTANCE_NAME}-aam-backend-service
     networks:
+      # internal only: the app container is the only entrypoint, routing /api
+      # (and the deprecated /query alias) to this over internal_aam.
       - internal_aam
-      - external_web
     depends_on:
       # wait until CouchDB and RabbitMQ actually accept connections, not just that the containers started -
       # otherwise the listener containers race broker readiness on boot and flood Sentry with
       # "Failed to check/redeclare auto-delete queue(s)." errors
-      couchdb-with-permissions:
+      couchdb:
         condition: service_healthy
       replication-backend:
         condition: service_started
@@ -137,17 +124,10 @@ services:
       - ./config/aam-backend-service/templates:/opt/app/templates:ro
     environment:
       # Override values from application.env that need per-instance interpolation.
-      # Using container_name avoids alias collisions on the shared external_web network.
+      # Using container_name avoids alias collisions on the shared internal_aam network.
       COUCHDBCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-database:5984
-      AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-db-entrypoint:5984
+      AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH: http://${INSTANCE_NAME:?INSTANCE_NAME is not set}-replication-backend:5984
       APPLICATION_BASEURL: ${INSTANCE_NAME:?INSTANCE_NAME is not set}.${INSTANCE_DOMAIN:?INSTANCE_DOMAIN is not set}
-      # nginx-proxy: expose the backend API under /api (no VIRTUAL_DEST, so the /api
-      # prefix is preserved when proxied). Inert under swag-proxy / no proxy.
-      # Note: swag also routes the legacy /query alias here; nginx-proxy does not
-      # (a single container cannot declare two rewrite paths via these env vars).
-      VIRTUAL_HOST: ${INSTANCE_NAME}.${INSTANCE_DOMAIN}
-      VIRTUAL_PORT: 8080
-      VIRTUAL_PATH: /api/
     env_file:
       - ./config/aam-backend-service/application.env
     restart: unless-stopped
@@ -200,7 +180,7 @@ services:
     networks:
       - internal_aam
     depends_on:
-      couchdb-with-permissions:
+      couchdb:
         condition: service_healthy
     restart: unless-stopped
     volumes:

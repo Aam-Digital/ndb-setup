@@ -85,8 +85,8 @@ You can start all or limited backend services using Docker Compose profiles. Set
 
 | Profile | Services | Description | Hierarchy | Setup |
 |---------|----------|-------------|-----------|-------|
-| `database-only` | app + couchdb-only | **Default.** Minimal setup with the frontend app and a standalone CouchDB database. No permission checking. | Base | Set by default when creating a new instance |
-| `with-permissions` | app + couchdb-with-permissions + replication-backend | Adds permission enforcement via the replication-backend service, which proxies all database requests. | Includes `database-only` | Set when adding the permission backend via `interactive_setup.sh` |
+| `database-only` | app + couchdb | **Default.** Minimal setup with the frontend app and a standalone CouchDB database. No permission checking. | Base | Set by default when creating a new instance |
+| `with-permissions` | app + couchdb + replication-backend | Adds permission enforcement via the replication-backend service, which the app container routes all database requests to (`DB_ENTRYPOINT_URL`). | Includes `database-only` | Set when adding the permission backend via `interactive_setup.sh` |
 | `full-stack` | everything from `with-permissions` + aam-backend-service + PostgreSQL + RabbitMQ + SQS | Complete backend stack including the aam-backend-service for SQL reports and API integrations, plus its dependencies (PostgreSQL database, RabbitMQ message broker, and SQS for CouchDB change feed processing). | Includes `with-permissions` | Set when enabling backend via `enable-backend.sh` |
 | `full-stack-without-sqs` | everything from `full-stack` except SQS | Same as full-stack but skips SQS (which uses a private Docker image), keeping only public images. | Includes `with-permissions` | Use as alternative to `full-stack` when the SQS image is unavailable |
 
@@ -164,11 +164,12 @@ server:
 
 - `proxy.conf`, `resolver.conf`
 - `proxy-confs/instance.com.subdomain.conf`, `proxy-confs/instance.app.subdomain.conf` —
-  the instance routing (frontend, `/db`, `/api`), identical for every instance
-  under that domain
-- `proxy-confs/aam-db-uri-map.subdomain.conf` — a helper the `/db/`, `/api/`
-  and `/query/` routes depend on; mount it wherever an instance conf is
-  mounted
+  forwards everything to the instance's app container, identical for every
+  instance under that domain. The app image's own nginx routes `/db`,
+  `/db/couchdb`, `/api` and `/query` internally (ndb-core#4372), so this is a
+  single `location /` block - no per-path routing, and no URI-preserving map
+  to mount alongside it (that used to be `aam-db-uri-map.subdomain.conf`,
+  since retired).
 
 Everything genuinely specific to one server stays in
 `swag-proxy/<server>/config/nginx/` (its own `<server>.subdomain.conf`, keycloak,

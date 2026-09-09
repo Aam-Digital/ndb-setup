@@ -2,9 +2,12 @@
 # CouchDB init helpers for ndb-setup scripts.
 # Source after common.sh. All helpers operate on the instance dir in $path and read credentials from its .env.
 #
-# The database-only CouchDB runs as the container "${INSTANCE_NAME}-db-entrypoint". That name is reused by
-# the replication-backend in the permission profiles, so the init container must be removed (couchdbInitStop)
-# before switching profiles. Instance data lives in ./couchdb/data and survives the container removal.
+# CouchDB runs as the single "couchdb" service (container "${INSTANCE_NAME}-database") in every profile, so
+# these helpers start just that one service to configure it before the rest of the stack (which may not even
+# be selected yet, e.g. replication-backend under a permission profile) is brought up. couchdbInitStop removes
+# the container afterward so the instance starts from a clean, healthchecked state once the real
+# `docker compose up -d` runs for whichever profile was actually selected. Instance data lives in
+# ./couchdb/data and survives the container removal.
 
 # Ensure the CouchDB data directory exists and is owned by the same UID:GID the couchdb containers run
 # as (hardcoded "1000:1000" in docker-compose.yml, matching the convention used across this repo's other
@@ -42,11 +45,15 @@ couchdbInitStart() {
   DB_LOCAL_URL="http://127.0.0.1:5984"
   DB_USER=$(getVar "$path/.env" COUCHDB_USER)
   DB_PASSWORD=$(getVar "$path/.env" COUCHDB_PASSWORD)
-  DB_CONTAINER="$(getVar "$path/.env" INSTANCE_NAME)-db-entrypoint"
+  DB_CONTAINER="$(getVar "$path/.env" INSTANCE_NAME)-database"
 
   ensureCouchdbDataOwnership || return 1
 
-  (cd "$path" && docker compose --profile database-only up -d couchdb-only)
+  # --remove-orphans: on an instance whose docker-compose.yml still predates the merged "couchdb"
+  # service (i.e. update-compose.sh hasn't run here yet), an old couchdb-only/couchdb-with-permissions
+  # container from the previous schema can already hold the "${INSTANCE_NAME}-database" name - without
+  # this flag `up` fails outright on that name conflict instead of creating the couchdb container.
+  (cd "$path" && docker compose up -d --remove-orphans couchdb)
 
   local status=""
   local attempts=0

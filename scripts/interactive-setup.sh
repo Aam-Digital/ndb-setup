@@ -162,6 +162,8 @@ fi
 # switch on the permission backend profile
 if [ "$withPermissions" = true ]; then
   setEnv COMPOSE_PROFILES "with-permissions" "$path/.env"
+  # the app container's /db now needs to reach replication-backend instead of CouchDB directly
+  upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$path/.env"
   echo "replication-backend added"
 fi
 

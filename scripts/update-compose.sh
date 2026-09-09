@@ -129,12 +129,32 @@ update_instance() {
     echo "[$instance] updated"
 
     echo "[$instance] redeploying..."
-    # --remove-orphans: a service rename (e.g. couchdb-only/couchdb-with-permissions -> couchdb)
-    # leaves the old container running under the old service label. Without this flag that's
-    # not just leftover clutter: couchdb-with-permissions and the new couchdb service share the
-    # literal container_name "${INSTANCE_NAME}-database", so `up -d` outright fails on a name
-    # conflict for every with-permissions/full-stack instance; for database-only, where the old
-    # and new container_name differ, it instead silently succeeds with BOTH CouchDB containers
+    # The merged "couchdb" service inherits container_name "${INSTANCE_NAME}-database" from the
+    # couchdb-with-permissions service it replaces, so on that transition `up` has to remove the
+    # superseded container before it can create the new one under the same name. Whether Compose
+    # does that reliably is version-dependent: on v2.29.7 it converges as a single name-matched
+    # recreate and always works, while on v5.5.0 `up` instead fails outright with a Docker-level
+    # "container name ... is already in use" conflict, leaving the stack half-converged.
+    # --remove-orphans does not prevent it - it decides *what* is obsolete, not *when* it is
+    # removed - so free the name here first, addressing the container directly instead of relying
+    # on Compose's convergence order. Safe: CouchDB's state lives in the bind-mounted
+    # ./couchdb/data, not in the container, so the new couchdb service picks the same data back up.
+    local dbContainer="${org}-database"
+    local holderService=""
+    holderService=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' \
+        "$dbContainer" 2>/dev/null) || true
+    case "$holderService" in
+        couchdb-only|couchdb-with-permissions)
+            echo "[$instance] removing superseded $holderService container ($dbContainer)"
+            # never abort the run here: this is a best-effort cleanup, and `up` below reports the
+            # name conflict clearly enough on its own (with the rollback) if the removal did fail.
+            docker rm -f "$dbContainer" >/dev/null || true
+            ;;
+    esac
+
+    # --remove-orphans: the same service rename leaves the old container behind under its old
+    # service label. For database-only, where the old and new container_name differ, no name
+    # conflict masks it and `up` would otherwise silently succeed with BOTH CouchDB containers
     # running and bind-mounting the same ./couchdb/data - two processes writing the same files.
     if ! (cd "$D" && docker compose up -d --remove-orphans); then
         echo "[$instance] redeploy failed, rolling back docker-compose.yml and redeploying previous config"

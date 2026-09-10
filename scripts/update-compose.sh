@@ -104,14 +104,17 @@ update_instance() {
     ensureAssetVolumeMountsFromDir "$target" "$D/assets"
 
     # This canonical version routes /db through DB_ENTRYPOINT_URL when replication-backend
-    # enforces access (COMPOSE_PROFILES != database-only). An instance already on such a profile
-    # needs this backfilled now: without it, COUCHDB_URL silently falls back to CouchDB directly
-    # on redeploy, bypassing every permission check replication-backend exists to enforce.
+    # enforces access (COMPOSE_PROFILES is with-permissions, full-stack or full-stack-without-sqs -
+    # the profiles that actually deploy replication-backend; unset/empty behaves like database-only,
+    # i.e. no profile active). An instance already on such a profile needs this backfilled now:
+    # without it, COUCHDB_URL silently falls back to CouchDB directly on redeploy, bypassing every
+    # permission check replication-backend exists to enforce.
     local envFile="$D/.env"
     local org composeProfiles
     org=$(getVar "$envFile" INSTANCE_NAME)
     composeProfiles=$(getVar "$envFile" COMPOSE_PROFILES)
-    if [ "$composeProfiles" != "database-only" ] && [ -z "$(getVar "$envFile" DB_ENTRYPOINT_URL)" ]; then
+    if { [ "$composeProfiles" = "with-permissions" ] || [ "$composeProfiles" = "full-stack" ] || [ "$composeProfiles" = "full-stack-without-sqs" ]; } \
+        && [ -z "$(getVar "$envFile" DB_ENTRYPOINT_URL)" ]; then
         upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$envFile"
     fi
 

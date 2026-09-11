@@ -12,6 +12,12 @@
 # mount is re-created for every asset present in the instance's assets/ folder (the
 # same logic enable-assets-overwrites.sh uses), so updating does not disable them.
 #
+# It also backfills DB_ENTRYPOINT_URL into any instance's .env whose COMPOSE_PROFILES
+# already requires replication-backend (i.e. not "database-only") but predates that
+# variable - otherwise the new docker-compose.yml would route /db straight to CouchDB
+# on redeploy, silently bypassing replication-backend's permission checks. Same idea for
+# API_BACKEND_URL on any full-stack instance, so /api keeps reaching aam-backend-service.
+#
 # Can be run from any directory.
 
 set -euo pipefail
@@ -97,13 +103,74 @@ update_instance() {
     # present in the instance's assets/ folder (the filesystem is the source of truth).
     ensureAssetVolumeMountsFromDir "$target" "$D/assets"
 
+    # This canonical version routes /db through DB_ENTRYPOINT_URL when replication-backend
+    # enforces access (COMPOSE_PROFILES is with-permissions, full-stack or full-stack-without-sqs -
+    # the profiles that actually deploy replication-backend; unset/empty behaves like database-only,
+    # i.e. no profile active). An instance already on such a profile needs this backfilled now:
+    # without it, COUCHDB_URL silently falls back to CouchDB directly on redeploy, bypassing every
+    # permission check replication-backend exists to enforce.
+    local envFile="$D/.env"
+    local org composeProfiles
+    org=$(getVar "$envFile" INSTANCE_NAME)
+    composeProfiles=$(getVar "$envFile" COMPOSE_PROFILES)
+
+    backupFile "$envFile"
+    # Remember the .env backup (if any) so a failed redeploy can roll it back alongside docker-compose.yml.
+    local previousEnv="$BACKUP_FILE"
+
+    if { [ "$composeProfiles" = "with-permissions" ] || [ "$composeProfiles" = "full-stack" ] || [ "$composeProfiles" = "full-stack-without-sqs" ]; } \
+        && [ -z "$(getVar "$envFile" DB_ENTRYPOINT_URL)" ]; then
+        upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$envFile"
+    fi
+
+    # Same idea for /api: aam-backend-service is only deployed under the full-stack profiles
+    # (unlike replication-backend, not under with-permissions), and previously reached it via
+    # nginx-proxy's own VIRTUAL_PATH auto-discovery, bypassing the app container's nginx
+    # entirely - a route this canonical version's app service no longer has. Without this
+    # backfill /api would silently 502 (API_URL falls back to its always-resolvable default)
+    # for every full-stack instance still relying on that old route.
+    if { [ "$composeProfiles" = "full-stack" ] || [ "$composeProfiles" = "full-stack-without-sqs" ]; } \
+        && [ -z "$(getVar "$envFile" API_BACKEND_URL)" ]; then
+        upsertEnv API_BACKEND_URL "http://${org}-aam-backend-service:8080" "$envFile"
+    fi
+
     echo "[$instance] updated"
 
     echo "[$instance] redeploying..."
-    if ! (cd "$D" && docker compose up -d); then
-        echo "[$instance] redeploy failed, rolling back docker-compose.yml and redeploying previous config"
+    # The merged "couchdb" service inherits container_name "${INSTANCE_NAME}-database" from the
+    # couchdb-with-permissions service it replaces, so on that transition `up` has to remove the
+    # superseded container before it can create the new one under the same name. Whether Compose
+    # does that reliably is version-dependent: on v2.29.7 it converges as a single name-matched
+    # recreate and always works, while on v5.5.0 `up` instead fails outright with a Docker-level
+    # "container name ... is already in use" conflict, leaving the stack half-converged.
+    # --remove-orphans does not prevent it - it decides *what* is obsolete, not *when* it is
+    # removed - so free the name here first, addressing the container directly instead of relying
+    # on Compose's convergence order. Safe: CouchDB's state lives in the bind-mounted
+    # ./couchdb/data, not in the container, so the new couchdb service picks the same data back up.
+    local dbContainer="${org}-database"
+    local holderService=""
+    holderService=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' \
+        "$dbContainer" 2>/dev/null) || true
+    case "$holderService" in
+        couchdb-only|couchdb-with-permissions)
+            echo "[$instance] removing superseded $holderService container ($dbContainer)"
+            # never abort the run here: this is a best-effort cleanup, and `up` below reports the
+            # name conflict clearly enough on its own (with the rollback) if the removal did fail.
+            docker rm -f "$dbContainer" >/dev/null || true
+            ;;
+    esac
+
+    # --remove-orphans: the same service rename leaves the old container behind under its old
+    # service label. For database-only, where the old and new container_name differ, no name
+    # conflict masks it and `up` would otherwise silently succeed with BOTH CouchDB containers
+    # running and bind-mounting the same ./couchdb/data - two processes writing the same files.
+    if ! (cd "$D" && docker compose up -d --remove-orphans); then
+        echo "[$instance] redeploy failed, rolling back docker-compose.yml and .env and redeploying previous config"
         cp "$previous" "$target"
-        (cd "$D" && docker compose up -d) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed"
+        if [ -n "$previousEnv" ]; then
+            cp "$previousEnv" "$envFile"
+        fi
+        (cd "$D" && docker compose up -d --remove-orphans) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed - check 'docker compose ps' and 'docker compose logs' in $D"
         return 1
     fi
     echo "[$instance] redeployed"

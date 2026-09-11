@@ -7,7 +7,14 @@
 #   ./create-dns-record.sh <instance>
 #
 # Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   DNS_HETZNER_API_TOKEN, DNS_HETZNER_ZONE_ID_APP   (BWS-backed)
+#   DNS_HETZNER_API_TOKEN   (BWS-backed) A Hetzner Cloud API token (console.hetzner.com ->
+#                           Security -> API Tokens) for whichever Project holds DNS_SERVER_DOMAIN's
+#                           zone — tokens are scoped to one Project, so the wrong one looks like "no
+#                           such zone", not "wrong token". Hetzner shut the old DNS Console
+#                           (dns.hetzner.com) and its API down in May 2026; a token created there
+#                           does not work here. There is no separate zone id to configure — the
+#                           zone is looked up by DNS_SERVER_DOMAIN's own name (see below), so it
+#                           doubles as the query and can't go stale the way a hardcoded id could.
 #   DNS_SERVER_NAME                                  (setup.env / environment)
 #   DNS_SERVER_DOMAIN                                (setup.env / environment, optional, defaults to aam-digital.net)
 
@@ -37,7 +44,6 @@ fi
 org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 
 requireConfig DNS_HETZNER_API_TOKEN
-requireConfig DNS_HETZNER_ZONE_ID_APP
 requireConfig DNS_SERVER_NAME
 DNS_SERVER_DOMAIN="${DNS_SERVER_DOMAIN:-aam-digital.net}"
 
@@ -45,10 +51,18 @@ DNS_SERVER_DOMAIN="${DNS_SERVER_DOMAIN:-aam-digital.net}"
 # script
 ##############################
 
+zoneId=$(curl -s --fail-with-body "https://api.hetzner.cloud/v1/zones?name=$DNS_SERVER_DOMAIN" \
+  -H "Authorization: Bearer $DNS_HETZNER_API_TOKEN" | jq -r '.zones[0].id // empty')
+if [ -z "$zoneId" ]; then
+  echo "ERROR: no Hetzner zone named '$DNS_SERVER_DOMAIN' visible to DNS_HETZNER_API_TOKEN (it is" >&2
+  echo "  scoped to one Hetzner Cloud Project — check it was created in the one that holds this zone)." >&2
+  exit 1
+fi
+
 # idempotency: skip if a CNAME with this name already exists in the zone
-existingId=$(curl -s "https://dns.hetzner.com/api/v1/records?zone_id=$DNS_HETZNER_ZONE_ID_APP" \
-  -H "Auth-API-Token: $DNS_HETZNER_API_TOKEN" \
-  | jq -r --arg n "$org" '.records[]? | select(.type=="CNAME" and .name==$n) | .id' | head -n1)
+existingId=$(curl -s "https://api.hetzner.cloud/v1/zones/$zoneId/rrsets?name=$org" \
+  -H "Authorization: Bearer $DNS_HETZNER_API_TOKEN" \
+  | jq -r --arg n "$org" '.rrsets[]? | select(.type=="CNAME" and .name==$n) | .id' | head -n1)
 
 if [ -n "$existingId" ]; then
   echo "DNS record for '$org' already exists (id $existingId), skipping."
@@ -59,12 +73,11 @@ echo "Creating DNS CNAME record for '$org'..."
 body=$(jq -n \
   --arg value "$DNS_SERVER_NAME.$DNS_SERVER_DOMAIN." \
   --arg name "$org" \
-  --arg zone_id "$DNS_HETZNER_ZONE_ID_APP" \
-  '{value: $value, type: "CNAME", name: $name, zone_id: $zone_id}')
+  '{name: $name, type: "CNAME", records: [{value: $value}]}')
 
-status=$(curl -s -o /dev/null -w "%{http_code}" -X "POST" "https://dns.hetzner.com/api/v1/records" \
+status=$(curl -s -o /dev/null -w "%{http_code}" -X "POST" "https://api.hetzner.cloud/v1/zones/$zoneId/rrsets" \
      -H 'Content-Type: application/json' \
-     -H "Auth-API-Token: $DNS_HETZNER_API_TOKEN" \
+     -H "Authorization: Bearer $DNS_HETZNER_API_TOKEN" \
      -d "$body")
 
 if [ "$status" != "200" ] && [ "$status" != "201" ]; then

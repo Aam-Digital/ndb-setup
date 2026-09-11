@@ -113,6 +113,11 @@ update_instance() {
     local org composeProfiles
     org=$(getVar "$envFile" INSTANCE_NAME)
     composeProfiles=$(getVar "$envFile" COMPOSE_PROFILES)
+
+    backupFile "$envFile"
+    # Remember the .env backup (if any) so a failed redeploy can roll it back alongside docker-compose.yml.
+    local previousEnv="$BACKUP_FILE"
+
     if { [ "$composeProfiles" = "with-permissions" ] || [ "$composeProfiles" = "full-stack" ] || [ "$composeProfiles" = "full-stack-without-sqs" ]; } \
         && [ -z "$(getVar "$envFile" DB_ENTRYPOINT_URL)" ]; then
         upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$envFile"
@@ -160,8 +165,11 @@ update_instance() {
     # conflict masks it and `up` would otherwise silently succeed with BOTH CouchDB containers
     # running and bind-mounting the same ./couchdb/data - two processes writing the same files.
     if ! (cd "$D" && docker compose up -d --remove-orphans); then
-        echo "[$instance] redeploy failed, rolling back docker-compose.yml and redeploying previous config"
+        echo "[$instance] redeploy failed, rolling back docker-compose.yml and .env and redeploying previous config"
         cp "$previous" "$target"
+        if [ -n "$previousEnv" ]; then
+            cp "$previousEnv" "$envFile"
+        fi
         (cd "$D" && docker compose up -d --remove-orphans) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed - check 'docker compose ps' and 'docker compose logs' in $D"
         return 1
     fi

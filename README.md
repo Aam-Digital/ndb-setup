@@ -218,9 +218,16 @@ uploading this file.
 For a real instance, `scripts/enable-backend.sh` already creates the `aam-backend` client for you
 via `createKeycloakBackendClient` in `scripts/lib/keycloak.sh` — that function reads the same
 `client_config.json` (so the client definition has a single source of truth), then assigns the
-realm-management roles the client's service account needs (`manage-realm`, `query-users`,
-`view-users`, `manage-users`). After a manual partial import, assign the same four roles by hand so
-the manual path doesn't drift from what the script does.
+`roles` client scope and the realm-management roles the client's service account needs
+(`manage-realm`, `query-users`, `view-users`, `manage-users`). Partial import does **not** carry
+either of those over — confirmed: the client comes in with an empty `default-client-scopes` list,
+so its tokens carry no role claims at all until you fix that. After a manual partial import:
+
+- Under the `aam-backend` client's **Client scopes** tab, add `roles` as a **Default** scope
+  (without it, access tokens never carry `resource_access` role claims, regardless of the role
+  assignment below).
+- On its **Service account roles** tab, assign the same four realm-management roles by hand, so
+  the manual path doesn't drift from what the script does.
 
 ## 2-Factor-Auth
 

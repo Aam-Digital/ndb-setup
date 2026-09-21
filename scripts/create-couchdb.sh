@@ -2,8 +2,9 @@
 
 # Configure CouchDB for an instance: write couchdb.ini (with or without the JWT signing key, depending on
 # mode - see below), start the database, create the required databases and apply the document-level
-# _security appropriate for the mode: "user_app"-only for a directly-exposed database-only instance, or
-# admin-only (resetting any previously-applied "user_app" grant) when replication-backend fronts it.
+# _security appropriate for the mode: "user_app" as database admin and member for a directly-exposed
+# database-only instance, or admin-only (resetting any previously-applied "user_app" grant) when
+# replication-backend fronts it.
 # Idempotent: couchdb.ini is regenerated from the template each run, database creation tolerates existing
 # databases, and _security is always (re)applied for the current mode, not just applied-once. Reads
 # everything it needs from the instance .env — no secrets.
@@ -128,18 +129,24 @@ done
 # otherwise leave the "user_app" grant in place - a direct bypass of replication-backend's permission
 # checks, since any client CouchDB itself accepts (via that role) could then reach the database directly.
 # replication-backend's own startup checks assert this same invariant and refuse to start if it is wrong.
+#
+# "admin-only" has to be spelled ["_admin"], not []: CouchDB reads an empty members list as "public", so
+# empty arrays would open the database to unauthenticated read/write - reachable via /db/couchdb/.
+#
+# In the database-only case "user_app" is granted as admin AND member.
+# Admin lets the app create Mango indices, required for online-only mode.
 if [ "$withPermissions" = false ]; then
-  echo "Applying document-level security (user_app role)..."
+  echo "Applying document-level security (user_app role as admin and member)..."
   couchdbCurl -X PUT "$DB_LOCAL_URL/app/_security" \
-    -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }' >/dev/null
+    -d '{"admins": { "names": [], "roles": ["user_app"] }, "members": { "names": [], "roles": ["user_app"] } }' >/dev/null
   couchdbCurl -X PUT "$DB_LOCAL_URL/app-attachments/_security" \
-    -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": ["user_app"] } }' >/dev/null
+    -d '{"admins": { "names": [], "roles": ["user_app"] }, "members": { "names": [], "roles": ["user_app"] } }' >/dev/null
 else
   echo "Resetting document-level security to admin-only (replication-backend enforces access)..."
   couchdbCurl -X PUT "$DB_LOCAL_URL/app/_security" \
-    -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": [] } }' >/dev/null
+    -d '{"admins": { "names": [], "roles": ["_admin"] }, "members": { "names": [], "roles": ["_admin"] } }' >/dev/null
   couchdbCurl -X PUT "$DB_LOCAL_URL/app-attachments/_security" \
-    -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": [] } }' >/dev/null
+    -d '{"admins": { "names": [], "roles": ["_admin"] }, "members": { "names": [], "roles": ["_admin"] } }' >/dev/null
 fi
 
 # Remove the temporary init container so the instance starts from a clean, healthchecked state.

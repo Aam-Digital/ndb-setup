@@ -113,7 +113,9 @@ done
 # written, so a mode switch (e.g. an instance moving from database-only to --with-permissions) would
 # otherwise leave the "user_app" grant in place - a direct bypass of replication-backend's permission
 # checks, since any client CouchDB itself accepts (via that role) could then reach the database directly.
-# replication-backend's own startup checks assert this same invariant and refuse to start if it is wrong.
+#
+# "admin-only" has to be spelled ["_admin"], not []: CouchDB reads an empty members list as "public", so
+# empty arrays would open the database to unauthenticated read/write - reachable via /db/couchdb/.
 #
 # In the database-only case "user_app" is granted as admin AND member.
 # Admin lets the app create Mango indices, required for online-only mode.
@@ -126,9 +128,9 @@ if [ "$withPermissions" = false ]; then
 else
   echo "Resetting document-level security to admin-only (replication-backend enforces access)..."
   couchdbCurl -X PUT "$DB_LOCAL_URL/app/_security" \
-    -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": [] } }' >/dev/null
+    -d '{"admins": { "names": [], "roles": ["_admin"] }, "members": { "names": [], "roles": ["_admin"] } }' >/dev/null
   couchdbCurl -X PUT "$DB_LOCAL_URL/app-attachments/_security" \
-    -d '{"admins": { "names": [], "roles": [] }, "members": { "names": [], "roles": [] } }' >/dev/null
+    -d '{"admins": { "names": [], "roles": ["_admin"] }, "members": { "names": [], "roles": ["_admin"] } }' >/dev/null
 fi
 
 # Remove the temporary init container so a later profile switch can reuse the -db-entrypoint name.

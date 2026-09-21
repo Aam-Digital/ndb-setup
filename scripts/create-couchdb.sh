@@ -115,17 +115,8 @@ done
 # checks, since any client CouchDB itself accepts (via that role) could then reach the database directly.
 # replication-backend's own startup checks assert this same invariant and refuse to start if it is wrong.
 #
-# In the database-only case "user_app" is granted twice over, as database admin AND as member, because
-# the two do different jobs. As a member it is what keeps the database private: CouchDB treats an empty
-# members list as "any user can read and write regular documents"
-# (docs.couchdb.org/en/stable/api/database/security.html), so removing it would widen access rather than
-# narrow it. As an admin it is what lets the app create Mango indices - ndb-core calls createIndex on the
-# remote database whenever a list is sorted, and an index is a design document, which CouchDB only lets a
-# database admin write ("Admin permission required" for a mere member). The admin grant is broader than
-# index creation alone - a database admin can also rewrite _security itself - which is acceptable only
-# because "user_app" already reaches all of this database's data in this mode. Keep this body identical to
-# configureDatabaseSecurity in aam-cloud-infrastructure's couchdb-setup.ts, which secures cluster
-# instances the same way.
+# In the database-only case "user_app" is granted as admin AND member.
+# Admin lets the app create Mango indices, required for online-only mode.
 if [ "$withPermissions" = false ]; then
   echo "Applying document-level security (user_app role as admin and member)..."
   couchdbCurl -X PUT "$DB_LOCAL_URL/app/_security" \

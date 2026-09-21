@@ -11,8 +11,13 @@
 #
 # make sure to install the dependencies: ./install-dependencies.sh
 #
-# ./interactive-setup.sh <instance> <baseConfig> <locale> <userEmail> <userName> <withReplicationBackend> <withBackend> <createsMonitors> <enableSentry>
+# ./interactive-setup.sh <instance> <baseConfig> <locale> <userEmail> <userName> <withReplicationBackend> <withBackend> <unused> <enableSentry>
 # example: ./interactive-setup.sh qm codo de "mail@foo.bar" "Foo Bar" y y y y
+#
+# The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was
+# removed. The slot is kept rather than closed because the argument line is assembled by the external
+# deployer-backend service (see deployer/), whose code is not in this repo - so callers may still be
+# passing <enableSentry> in position 9.
 
 ##############################
 # setup
@@ -192,29 +197,6 @@ if [ "$aamBackendService" == 0 ]; then
       # Firebase credentials from BWS, so this runs non-interactively. --skip-restart is passed because this
       # script restarts the stack once at the very end, after all enable-* scripts have written their config.
       "$scriptDir/enable-feature-notification.sh" "$org" --skip-restart
-    fi
-  fi
-fi
-
-##############################
-# uptime monitoring (deprecated)
-##############################
-
-if [ "$app" == 0 ] && [ "${UPTIMEROBOT_API_KEY:-}" != "" ] && [ "${UPTIMEROBOT_ALERT_ID:-}" != "" ]; then
-  if [ -n "$8" ]; then
-    createsMonitors="$8"
-  else
-    echo "Do you want create UptimeRobot monitoring? (deprecated, answer is ignored) [y/n]"
-    read -r createsMonitors
-  fi
-
-  if [ "$createsMonitors" == "y" ] || [ "$createsMonitors" == "Y" ]; then
-    curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url&friendly_name=Aam - $org App&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
-    if [ "$withPermissions" = true ]; then
-      curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/api&friendly_name=Aam - $org Backend&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
-      curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/couchdb/_utils/&friendly_name=Aam - $org DB&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
-    else
-      curl -d "api_key=$UPTIMEROBOT_API_KEY&url=https://$url/db/_utils/&friendly_name=Aam - $org DB&alert_contacts=$UPTIMEROBOT_ALERT_ID&type=1" -H "Cache-Control: no-cache" -H "Content-Type: application/x-www-form-urlencoded" "https://api.uptimerobot.com/v2/newMonitor" -w "\n"
     fi
   fi
 fi

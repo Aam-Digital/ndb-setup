@@ -21,11 +21,11 @@ source "$ndbSetupDir/setup.env"
 source "$scriptDir/lib/common.sh"
 source "$scriptDir/lib/secrets.sh"
 
-# FIREBASE_CONFIG_JSON / FIREBASE_CREDENTIAL_BASE64 are resolved via getConfig/requireConfig
-# (setup.env/environment, falling back to Bitwarden Secrets Manager - see lib/secrets.sh). They hold
-# the shared Firebase project's credentials (the same ones are used for every instance):
-#   - the frontend web config (firebase-config.json) the browser uses to register for push notifications
-#   - the backend service-account credential (base64) the aam-backend-service uses to send pushes
+# FIREBASE_CREDENTIAL_BASE64 is resolved via getConfig/requireConfig (setup.env/environment, falling
+# back to Bitwarden Secrets Manager - see lib/secrets.sh). It is the shared Firebase project's backend
+# service-account credential (base64, same for every instance) the aam-backend-service uses to send
+# pushes. The frontend web config (assets/firebase-config.json) needs no per-instance action any more:
+# the ndb-core image ships the real shared config directly and nothing overwrites it.
 
 ##############################
 # parse flags
@@ -103,23 +103,6 @@ setEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredenti
 setEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$appEnv"
 setEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$appEnv"
 setEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv"
-
-# Write the frontend Firebase web config the browser uses to register for push notifications. Loaded as a
-# single JSON blob (shared Firebase project) and written to the file docker-compose mounts into the app
-# container (assets/firebase-config.json), replacing the empty template copied during interactive-setup.
-# Non-fatal when unresolved: leave the existing file in place rather than aborting the whole feature enable.
-if firebaseConfigJson=$(getConfig FIREBASE_CONFIG_JSON); then
-  if ! printf '%s' "$firebaseConfigJson" | jq empty 2>/dev/null; then
-    echo "ERROR: Retrieved firebase-config.json is not valid JSON. Abort."
-    exit 1
-  fi
-
-  backupFile "$path/firebase-config.json"
-  printf '%s' "$firebaseConfigJson" > "$path/firebase-config.json"
-  echo "  ~ wrote firebase-config.json (frontend web push config)"
-else
-  echo "WARNING: Could not resolve firebase-config.json (FIREBASE_CONFIG_JSON not set and not found in Bitwarden); leaving existing file in place."
-fi
 
 # Enable email notifications by default. Always pass --skip-restart: the email step writes its config but does
 # not restart, so the single restart below applies both the notification and email config in one cycle.

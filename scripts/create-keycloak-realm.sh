@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# Create (or reuse) the Keycloak realm and the "app" client for an instance, download keycloak.json,
-# and persist the realm's signing key into the instance .env for CouchDB / replication-backend JWT auth.
-# Idempotent: an existing realm or client is reused; keycloak.json and the key values are (re)written each run.
+# Create (or reuse) the Keycloak realm and the "app" client for an instance, and persist the
+# realm's signing key into the instance .env for CouchDB / replication-backend JWT auth.
+# (The app container generates its own keycloak.json at start from KEYCLOAK_URL/KEYCLOAK_REALM -
+# see docker-compose.yml - so this script no longer needs to download and write that file itself.)
+# Idempotent: an existing realm or client is reused; the key values are (re)written each run.
 #
 # Usage:
 #   ./create-keycloak-realm.sh <instance> [locale] [baseConfig]
@@ -125,13 +127,6 @@ else
     echo "ERROR: failed to create Keycloak 'app' client. Abort."
     exit 1
   fi
-fi
-
-# download the app's keycloak.json (frontend adapter config)
-if ! curl -s -f -L "https://$KEYCLOAK_HOST/admin/realms/$org/clients/$client/installation/providers/keycloak-oidc-keycloak-json" \
-  -H "Authorization: Bearer $token" > "$path/keycloak.json"; then
-  echo "ERROR: failed to download keycloak.json. Abort."
-  exit 1
 fi
 
 # persist the realm signing key so create-couchdb.sh can configure JWT auth without any Keycloak access

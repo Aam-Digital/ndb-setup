@@ -73,6 +73,17 @@ if [ -z "$instance" ]; then
   instance="${instance#"$PREFIX"}"
 fi
 
+# This script wires the app container's /db and /api routes to replication-backend /
+# aam-backend-service via env vars (DB_ENTRYPOINT_URL, API_BACKEND_URL) that only the current
+# docker-compose.yml schema reads. An instance still on an older schema ignores those vars
+# entirely, so switching profiles would silently look like it worked while /db and /api keep
+# going wherever that old schema already pointed them - update-compose.sh must run first.
+if ! diff -q "$path/docker-compose.yml" "$ndbSetupDir/docker-compose.yml" >/dev/null 2>&1; then
+  echo "ERROR: '$path/docker-compose.yml' differs from the canonical $ndbSetupDir/docker-compose.yml."
+  echo "  Run update-compose.sh for this instance first, then retry."
+  exit 1
+fi
+
 ##############################
 # variables
 ##############################
@@ -203,6 +214,10 @@ fi
 setEnv REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET "$clientSecret" "$path/.env"
 
 setEnv COMPOSE_PROFILES "full-stack" "$path/.env"
+# the app container's /db now needs to reach replication-backend instead of CouchDB directly
+upsertEnv DB_ENTRYPOINT_URL "http://${instance}-replication-backend:5984" "$path/.env"
+# ...and its /api now needs to reach aam-backend-service, which this profile also deploys
+upsertEnv API_BACKEND_URL "http://${instance}-aam-backend-service:8080" "$path/.env"
 
 if [ "$skipRestart" != "true" ]; then
   (cd "$path" && docker compose up -d)

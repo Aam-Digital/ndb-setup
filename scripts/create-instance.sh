@@ -73,7 +73,7 @@ mkdir -p "$path"
 mkdir -p "$path/couchdb/data"
 
 # copy template files, but never overwrite an existing (possibly customized) file
-for f in couchdb.ini config.json docker-compose.yml firebase-config.json; do
+for f in couchdb.ini config.json docker-compose.yml; do
   if [ ! -f "$path/$f" ]; then
     cp "$ndbSetupDir/$f" "$path/$f"
     echo "  + copied $f"

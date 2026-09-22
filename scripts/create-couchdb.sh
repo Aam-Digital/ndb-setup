@@ -6,16 +6,19 @@
 # database-only instance, or admin-only (resetting any previously-applied "user_app" grant) when
 # replication-backend fronts it.
 # Idempotent: couchdb.ini is regenerated from the template each run, database creation tolerates existing
-# databases, and _security is (re)applied. Reads everything it needs from the instance .env — no secrets.
+# databases, and _security is always (re)applied for the current mode, not just applied-once. Reads
+# everything it needs from the instance .env — no secrets.
 #
 # Usage:
 #   ./create-couchdb.sh <instance> [--with-permissions]
 #
 # <instance>           an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
 #                      instance directory (e.g. "." when run from inside it, or /any/path/to/instance)
-# --with-permissions   the replication-backend enforces access, so CouchDB stays internal and _security
-#                      is reset to admin-only instead of granting "user_app". Omit it for a database-only
-#                      instance (CouchDB exposed directly) where the user_app _security must be applied.
+# --with-permissions   the replication-backend enforces access, so CouchDB stays internal: _security is
+#                      reset to admin-only (couchdb-with-permissions.ini also omits the JWT signing key -
+#                      CouchDB's own JWT auth is dead config once nothing talks to it directly). Omit it
+#                      for a database-only instance (CouchDB exposed directly), where the "user_app"
+#                      _security and the JWT signing key in couchdb.ini are both applied.
 
 ##############################
 # setup
@@ -82,12 +85,24 @@ fi
 
 # Regenerate from the pristine template each run (the template is static apart from the key placeholders),
 # which keeps the substitution idempotent and update-safe even if the key rotated.
-cp "$ndbSetupDir/couchdb.ini" "$path/couchdb.ini"
-# '|' delimiter avoids clashing with '/' in a base64 key; escape sed-special chars in the value
-escapedKey=$(printf '%s' "$publicKey" | sed 's/[\\&|]/\\&/g')
-sed -i "s|<KID>|$kid|g" "$path/couchdb.ini"
-sed -i "s|<PUBLIC_KEY>|$escapedKey|g" "$path/couchdb.ini"
-echo "  ~ wrote JWT signing key into couchdb.ini"
+#
+# [jwt_keys] / jwt_authentication_handler are only meaningful in database-only mode, where the browser
+# talks to CouchDB directly and CouchDB must validate the user's Keycloak JWT itself. With replication-backend
+# in front (--with-permissions), every client here uses basic auth - CouchDB's own JWT auth is dead config in
+# that mode, and a realm role literally named "_admin" would make it a live server-admin bypass (Keycloak's
+# realm-role mapper copies realm roles verbatim onto the _couchdb.roles claim CouchDB checks for that). So
+# with-permissions uses a template with no [jwt_keys]/[jwt_auth] section and no jwt_authentication_handler.
+if [ "$withPermissions" = true ]; then
+  cp "$ndbSetupDir/couchdb-with-permissions.ini" "$path/couchdb.ini"
+  echo "  ~ wrote couchdb.ini (with-permissions: no JWT signing key, CouchDB's own JWT auth is disabled)"
+else
+  cp "$ndbSetupDir/couchdb.ini" "$path/couchdb.ini"
+  # '|' delimiter avoids clashing with '/' in a base64 key; escape sed-special chars in the value
+  escapedKey=$(printf '%s' "$publicKey" | sed 's/[\\&|]/\\&/g')
+  sed -i "s|<KID>|$kid|g" "$path/couchdb.ini"
+  sed -i "s|<PUBLIC_KEY>|$escapedKey|g" "$path/couchdb.ini"
+  echo "  ~ wrote JWT signing key into couchdb.ini"
+fi
 
 ##############################
 # start database + create databases
@@ -113,6 +128,7 @@ done
 # written, so a mode switch (e.g. an instance moving from database-only to --with-permissions) would
 # otherwise leave the "user_app" grant in place - a direct bypass of replication-backend's permission
 # checks, since any client CouchDB itself accepts (via that role) could then reach the database directly.
+# replication-backend's own startup checks assert this same invariant and refuse to start if it is wrong.
 #
 # "admin-only" has to be spelled ["_admin"], not []: CouchDB reads an empty members list as "public", so
 # empty arrays would open the database to unauthenticated read/write - reachable via /db/couchdb/.
@@ -133,7 +149,7 @@ else
     -d '{"admins": { "names": [], "roles": ["_admin"] }, "members": { "names": [], "roles": ["_admin"] } }' >/dev/null
 fi
 
-# Remove the temporary init container so a later profile switch can reuse the -db-entrypoint name.
+# Remove the temporary init container so the instance starts from a clean, healthchecked state.
 # Data in ./couchdb/data is preserved. Bring the instance up afterwards with `docker compose up -d`.
 couchdbInitStop
 

@@ -336,8 +336,9 @@ replicationBackendEnabledCheck() {
   [ "$composeProfiles" != "database-only" ]
 }
 
-# Fetch the latest aam-backend-service release version from GitHub.
-# Prints the version string to stdout.
+# Fetch the latest aam-backend-service release version from GitHub, e.g. `1.22.15`.
+# It is both the image tag of ghcr.io/aam-digital/aam-services and, prefixed with
+# `aam-backend-service/`, the git tag of the release.
 getLatestBackendVersion() {
   curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
 }

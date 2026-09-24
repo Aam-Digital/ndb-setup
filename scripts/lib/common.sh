@@ -336,23 +336,11 @@ replicationBackendEnabledCheck() {
   [ "$composeProfiles" != "database-only" ]
 }
 
-# Fetch the git tag of the latest aam-backend-service release from GitHub, e.g.
-# `aam-backend-service/1.22.15` (releases up to 1.22.14 are tagged with a `v`).
-getLatestBackendTag() {
-  curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name'
-}
-
-# Print the image tag of ghcr.io/aam-digital/aam-services for a release git tag:
-# its version, without a `v`.
-backendVersionOfTag() {
-  local version="${1#aam-backend-service/}"
-  echo "${version#v}"
-}
-
-# Fetch the latest aam-backend-service release version from GitHub, as the image
-# tag of ghcr.io/aam-digital/aam-services.
+# Fetch the latest aam-backend-service release version from GitHub, e.g. `1.22.15`.
+# It is both the image tag of ghcr.io/aam-digital/aam-services and, prefixed with
+# `aam-backend-service/`, the git tag of the release.
 getLatestBackendVersion() {
-  backendVersionOfTag "$(getLatestBackendTag)"
+  curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
 }
 
 ##############################

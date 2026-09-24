@@ -39,8 +39,7 @@ instance=$(getVar "$path/.env" INSTANCE_NAME)
 # script
 ##############################
 
-backendTag=$(getLatestBackendTag)
-backendVersion=$(backendVersionOfTag "$backendTag")
+backendVersion=$(getLatestBackendVersion)
 echo "Latest backendVersion available: $backendVersion"
 
 # check if backend is already enabled for this instance
@@ -58,7 +57,7 @@ setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 cp "$path/config/aam-backend-service/application.env" "$path/config/aam-backend-service/application.env_backup"
 
 # copy latest template config (from aam-services repository)
-curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/$backendTag/templates/aam-backend-service/application.template.env"
+curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
 
 # migrate values from backend to template if value is still part of the template
 

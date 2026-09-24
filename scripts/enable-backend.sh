@@ -100,8 +100,7 @@ requireConfig KEYCLOAK_USER
 # script
 ##############################
 
-backendTag=$(getLatestBackendTag)
-backendVersion=$(backendVersionOfTag "$backendTag")
+backendVersion=$(getLatestBackendVersion)
 echo "Latest backendVersion available: $backendVersion"
 
 # check if backend is already enabled for this instance
@@ -145,7 +144,7 @@ setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 mkdir -p "$path/config/aam-backend-service"
 
 # copy latest template config (from aam-services repository)
-curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/$backendTag/templates/aam-backend-service/application.template.env"
+curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
 
 setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$instance" "$path/config/aam-backend-service/application.env"

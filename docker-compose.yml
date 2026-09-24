@@ -101,7 +101,7 @@ services:
 
   # (optional) aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" or "full-stack-without-sqs" is set in the `.env` file
   aam-backend-service:
-    image: ghcr.io/aam-digital/aam-backend-service:${AAM_BACKEND_SERVICE_VERSION:-latest}
+    image: ghcr.io/aam-digital/aam-services:${AAM_BACKEND_SERVICE_VERSION:-latest}
     container_name: ${INSTANCE_NAME}-aam-backend-service
     networks:
       # internal only: the app container is the only entrypoint, routing /api

@@ -119,7 +119,8 @@ ensureRealValue APP_VERSION "$appVersion" "$path/.env"
 
 replicationBackendVersion=""
 if isPlaceholderValue "$(getVar "$path/.env" AAM_REPLICATION_BACKEND_VERSION)"; then
-  replicationBackendVersion=$(curl -fsSL https://api.github.com/repos/Aam-Digital/replication-backend/releases | jq -r 'map(select(.name | test("-") | not)) | .[0].name')
+  # without the release's `v` prefix, as the image is tagged
+  replicationBackendVersion=$(curl -fsSL https://api.github.com/repos/Aam-Digital/replication-backend/releases | jq -r 'map(select(.name | test("-") | not)) | .[0].name | ltrimstr("v")')
   if [ -z "$replicationBackendVersion" ] || [ "$replicationBackendVersion" = "null" ]; then
     echo "ERROR: could not determine latest replication-backend release version. Abort."
     exit 1

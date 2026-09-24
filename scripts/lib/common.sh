@@ -337,9 +337,10 @@ replicationBackendEnabledCheck() {
 }
 
 # Fetch the latest aam-backend-service release version from GitHub.
-# Prints the version string to stdout.
+# Prints the version as the image tag of ghcr.io/aam-digital/aam-services, i.e.
+# without the `v` of its git tag `aam-backend-service/v<version>`.
 getLatestBackendVersion() {
-  curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
+  curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1] | ltrimstr("v")'
 }
 
 ##############################

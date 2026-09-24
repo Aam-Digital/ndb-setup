@@ -359,7 +359,7 @@ More information on CouchDB backups can be found [here](https://docs.couchdb.org
 
 ## Building the Docker Image
 
-_If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on Docker Hub [aamdigital/ndb-server](https://cloud.docker.com/u/aamdigital/repository/docker/aamdigital/ndb-server)._
+_If you just want to use ndb-core through docker, you should not have to build the image yourself. Use the pre-built image on GitHub Container Registry [ghcr.io/aam-digital/ndb-core](https://github.com/Aam-Digital/ndb-core/pkgs/container/ndb-core)._
 
 The Dockerfile to build the image are part of the [ndb-core repository](https://github.com/Aam-Digital/ndb-core).
 See the `/build` sub folder there.

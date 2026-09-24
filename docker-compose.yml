@@ -1,6 +1,6 @@
 services:
   app:
-    image: aamdigital/ndb-server:${APP_VERSION:-latest}
+    image: ghcr.io/aam-digital/ndb-core:${APP_VERSION:-latest}
     container_name: ${INSTANCE_NAME}-app
     networks:
       - internal_aam

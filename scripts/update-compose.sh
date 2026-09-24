@@ -61,6 +61,50 @@ fi
 updated=0
 skipped=0
 
+# Print the resolved compose config of instance dir $1 (empty if it does not resolve).
+resolvedComposeConfig() {
+    (cd "$1" && docker compose config 2>/dev/null) || true
+}
+
+# From a resolved compose config on stdin, print "<service> <container_name>" for every active service.
+composeContainerNames() {
+    awk '
+        /^[^ ]/ { inServices = ($0 == "services:"); next }
+        inServices && /^  [^ ]/ { svc = $1; sub(/:$/, "", svc); next }
+        inServices && $1 == "container_name:" { print svc, $2 }
+    '
+}
+
+# Free container name $2 ahead of `docker compose up` in instance dir $1: remove the compose-managed
+# container holding that name unless it already is the one the current compose config assigns it to
+# (same project and service), which `up` converges on its own. Best-effort, never aborts the run.
+freeContainerName() {
+    local dir="$1" name="$2" instance="${1##*/}"
+    local labels holderProject="" holderService="" resolved project owner
+    labels=$(docker inspect --type container \
+        -f '{{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "com.docker.compose.service"}}' \
+        "$name" 2>/dev/null) || return 0   # nothing holds the name
+    read -r holderProject holderService <<<"$labels" || true
+
+    resolved=$(resolvedComposeConfig "$dir")
+    if [ -z "$resolved" ]; then
+        echo "[$instance] WARNING: could not resolve compose config, not touching $name"
+        return 0
+    fi
+    project=$(printf '%s\n' "$resolved" | sed -n 's/^name: *//p')
+    owner=$(printf '%s\n' "$resolved" | composeContainerNames | awk -v want="$name" '$2 == want { print $1 }')
+
+    if [ -n "$owner" ] && [ "$holderProject" = "$project" ] && [ "$holderService" = "$owner" ]; then
+        return 0
+    fi
+    if [ -z "$holderProject" ]; then
+        echo "[$instance] WARNING: $name is held by a container not managed by compose, not removing it"
+        return 0
+    fi
+    echo "[$instance] removing container $name (held by superseded $holderProject/$holderService)"
+    docker rm -f "$name" >/dev/null || true
+}
+
 update_instance() {
     local D="$1"
     local target="$D/docker-compose.yml"
@@ -147,18 +191,13 @@ update_instance() {
     # removed - so free the name here first, addressing the container directly instead of relying
     # on Compose's convergence order. Safe: CouchDB's state lives in the bind-mounted
     # ./couchdb/data, not in the container, so the new couchdb service picks the same data back up.
-    local dbContainer="${org}-database"
-    local holderService=""
-    holderService=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' \
-        "$dbContainer" 2>/dev/null) || true
-    case "$holderService" in
-        couchdb-only|couchdb-with-permissions)
-            echo "[$instance] removing superseded $holderService container ($dbContainer)"
-            # never abort the run here: this is a best-effort cleanup, and `up` below reports the
-            # name conflict clearly enough on its own (with the rollback) if the removal did fail.
-            docker rm -f "$dbContainer" >/dev/null || true
-            ;;
-    esac
+    # The name is taken from the resolved config (Compose strips quotes/CRs from .env that getVar keeps),
+    # and any holder other than this project's couchdb service is removed - not just known old service
+    # names - so leftovers of a previous partial run or a different project name are cleared as well.
+    local dbContainer
+    dbContainer=$(resolvedComposeConfig "$D" | composeContainerNames | awk '$1 == "couchdb" { print $2 }')
+    dbContainer="${dbContainer:-${org}-database}"
+    freeContainerName "$D" "$dbContainer"
 
     # --remove-orphans: the same service rename leaves the old container behind under its old
     # service label. For database-only, where the old and new container_name differ, no name
@@ -170,6 +209,9 @@ update_instance() {
         if [ -n "$previousEnv" ]; then
             cp "$previousEnv" "$envFile"
         fi
+        # The failed `up` may already have created the new couchdb container under the name the
+        # restored couchdb-with-permissions service needs, so free it in this direction too.
+        freeContainerName "$D" "$dbContainer"
         (cd "$D" && docker compose up -d --remove-orphans) || echo "[$instance] WARNING: rollback redeploy failed; manual intervention needed - check 'docker compose ps' and 'docker compose logs' in $D"
         return 1
     fi

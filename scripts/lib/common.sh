@@ -38,6 +38,14 @@ setEnv() {
   echo "  ~ updated $key in $(basename "$file")"
 }
 
+# Append a newline to a non-empty file that does not end with one, so a following append starts on its own line
+_ensureTrailingNewline() {
+  local file="$1"
+  if [ -s "$file" ] && [ -n "$(tail -c 1 "$file")" ]; then
+    echo >> "$file"
+  fi
+}
+
 # Set a variable in a file, appending it if it does not already exist
 upsertEnv() {
   local key="$1"
@@ -46,6 +54,7 @@ upsertEnv() {
   local escaped
   escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    _ensureTrailingNewline "$file"
     echo "$key=$value" >> "$file"
     echo "  + added $key to $(basename "$file")"
   else
@@ -60,6 +69,7 @@ ensureEnv() {
   local value="$2"
   local file="$3"
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    _ensureTrailingNewline "$file"
     echo "$key=$value" >> "$file"
     echo "  + added $key to $(basename "$file")"
   else

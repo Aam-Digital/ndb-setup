@@ -99,15 +99,23 @@ configCredentialBase64="$FIREBASE_CREDENTIAL_BASE64"
 
 backupFile "$appEnv"
 
-setEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredentialBase64" "$appEnv"
-setEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$appEnv"
-setEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$appEnv"
-setEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv"
+# upsertEnv (not setEnv): application.env files created from older aam-backend-service templates may lack
+# some of these keys (LINKBASEURL is not in the template at all), so they have to be added if missing.
+upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredentialBase64" "$appEnv" || exit 1
+upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$appEnv" || exit 1
+upsertEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$appEnv" || exit 1
+upsertEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv" || exit 1
 
 # Enable email notifications by default. Always pass --skip-restart: the email step writes its config but does
 # not restart, so the single restart below applies both the notification and email config in one cycle.
 # Pass $path (not $instance) so a custom instance location (outside the standard layout) is preserved.
-"$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart
+# Abort (without restarting) if the email step fails, instead of reporting success with a half-applied config.
+if ! "$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart; then
+  echo "ERROR: Enabling email notifications failed (see above). Push notification config was written to"
+  echo "       $(basename "$appEnv") but the instance was NOT restarted. Fix the issue and re-run"
+  echo "       './enable-feature-notification-email.sh $instance' (it restarts the instance when done)."
+  exit 1
+fi
 
 # Restart once, here, after both this script and the email step have written their config — unless the caller
 # asked to skip it (interactive-setup restarts the stack itself after all enable-* scripts have run).

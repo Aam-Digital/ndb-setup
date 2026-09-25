@@ -3,6 +3,7 @@ assets/*
 docker-image/dist/*
 .idea/
 */postgres/*
+.claude/worktrees/
 **/*.env
 **/credentials.json
 

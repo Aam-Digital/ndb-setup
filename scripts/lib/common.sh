@@ -234,10 +234,13 @@ ensureAssetVolumeMountsFromDir() {
 
 # Succeeds if $1 is a JSON object holding a non-empty Firebase web config (the frontend's
 # assets/firebase-config.json), i.e. not the empty template with blank values. Requires jq.
+# Exactly one JSON document is accepted (-s): `jq -e` alone only checks the last of several, and the
+# input is written out as the single config file the browser has to parse.
 isValidFirebaseWebConfig() {
-  printf '%s' "$1" | jq -e '
-    type == "object"
-    and ([.apiKey, .projectId, .messagingSenderId, .appId] | all(type == "string" and length > 0))
+  printf '%s' "$1" | jq -s -e '
+    length == 1
+    and (.[0] | type == "object"
+      and ([.apiKey, .projectId, .messagingSenderId, .appId] | all(type == "string" and length > 0)))
   ' >/dev/null 2>&1
 }
 

@@ -149,6 +149,10 @@ requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./e
 configCredentialBase64="$FIREBASE_CREDENTIAL_BASE64"
 
 backupFile "$appEnv"
+# Private pre-write copy to roll back to if the email step fails (below). Not $BACKUP_FILE: the email script
+# backs up application.env as well, and within the same second its backup would overwrite ours.
+appEnvBeforeWrite=$(mktemp)
+cp "$appEnv" "$appEnvBeforeWrite"
 
 # upsertEnv (not setEnv): application.env files created from older aam-backend-service templates may lack
 # some of these keys (LINKBASEURL is not in the template at all), so they have to be added if missing.
@@ -161,12 +165,17 @@ upsertEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv" || exit 1
 # not restart, so the single restart below applies both the notification and email config in one cycle.
 # Pass $path (not $instance) so a custom instance location (outside the standard layout) is preserved.
 # Abort (without restarting) if the email step fails, instead of reporting success with a half-applied config.
+# Roll application.env back as well: otherwise FEATURES_NOTIFICATIONAPI_ENABLED=true would make a re-run take
+# the "already enabled" shortcut above and never retry the email step or apply the pending config.
 if ! "$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart; then
-  echo "ERROR: Enabling email notifications failed (see above). Push notification config was written to"
-  echo "       $(basename "$appEnv") but the instance was NOT restarted. Fix the issue and re-run"
-  echo "       './enable-feature-notification-email.sh $instance' (it restarts the instance when done)."
+  cp "$appEnvBeforeWrite" "$appEnv"
+  rm -f "$appEnvBeforeWrite"
+  echo "ERROR: Enabling email notifications failed (see above). $(basename "$appEnv") was restored to its"
+  echo "       previous state and the instance was NOT restarted. Fix the issue and re-run"
+  echo "       './enable-feature-notification.sh $instance'."
   exit 1
 fi
+rm -f "$appEnvBeforeWrite"
 
 # Restart once, here, after both this script and the email step have written their config — unless the caller
 # asked to skip it (interactive-setup restarts the stack itself after all enable-* scripts have run).

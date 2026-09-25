@@ -113,6 +113,15 @@ freeContainerName() {
     docker rm -f "$name" >/dev/null || true
 }
 
+# Copy the legacy root-level Firebase web config of instance dir $1 to its assets/ folder.
+copyLegacyFirebaseConfig() {
+    local D="$1" instance="${1##*/}"
+    mkdir -p "$D/assets"
+    cp "$D/firebase-config.json" "$D/assets/firebase-config.json"
+    chmod 644 "$D/assets/firebase-config.json"
+    echo "[$instance] copied firebase-config.json to assets/"
+}
+
 update_instance() {
     local D="$1"
     local target="$D/docker-compose.yml"
@@ -143,8 +152,24 @@ update_instance() {
     fi
 
     if diff -q "$target" "$expected" >/dev/null 2>&1; then
-        echo "[$instance] already up to date"
         rm -f "$expected"
+        # docker-compose.yml may already mount assets/firebase-config.json (e.g. an earlier run was
+        # interrupted before the copy) while the file itself is still missing - complete that copy.
+        if [ "$migrateFirebase" -eq 1 ]; then
+            echo "[$instance] docker-compose.yml up to date, but assets/firebase-config.json is missing"
+            if [ "$ASSUME_YES" -eq 0 ]; then
+                read -r -p "Copy ./firebase-config.json to ./assets/firebase-config.json for [$instance]? [y/N] " reply < /dev/tty
+                case "$reply" in
+                    [yY]|[yY][eE][sS]) ;;
+                    *) echo "[$instance] skipped"; skipped=$((skipped + 1)); return ;;
+                esac
+            fi
+            copyLegacyFirebaseConfig "$D"
+            echo "[$instance] run 'docker compose up -d' in $D if the app container predates the mount"
+            updated=$((updated + 1))
+            return
+        fi
+        echo "[$instance] already up to date"
         skipped=$((skipped + 1))
         return
     fi
@@ -172,10 +197,7 @@ update_instance() {
     local previous="$BACKUP_FILE"
 
     if [ "$migrateFirebase" -eq 1 ]; then
-        mkdir -p "$D/assets"
-        cp "$legacyFirebase" "$assetsFirebase"
-        chmod 644 "$assetsFirebase"
-        echo "[$instance] copied firebase-config.json to assets/"
+        copyLegacyFirebaseConfig "$D"
     fi
 
     cp "$expected" "$target"

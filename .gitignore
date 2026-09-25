@@ -9,3 +9,5 @@ docker-image/dist/*
 
 # do not check in actual realm_configs
 baseConfigs/*/realm_config.json
+
+.claude/worktrees/*

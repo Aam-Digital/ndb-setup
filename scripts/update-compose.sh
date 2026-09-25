@@ -33,6 +33,7 @@ scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/couchdb.sh"
 
 CANONICAL="$baseDirectory/ndb-setup/docker-compose.yml"
 ASSUME_YES=0
@@ -236,7 +237,12 @@ update_instance() {
     # service label. For database-only, where the old and new container_name differ, no name
     # conflict masks it and `up` would otherwise silently succeed with BOTH CouchDB containers
     # running and bind-mounting the same ./couchdb/data - two processes writing the same files.
-    if ! (cd "$D" && docker compose up -d --remove-orphans); then
+    #
+    # Instances created from a compose file without "user:" on CouchDB ran it as root, so the image
+    # entrypoint chowned ./couchdb/data to its own couchdb user (uid 5984). The couchdb service runs as
+    # 1000:1000 and would crash on eacces with that data, so hand ownership over right before `up`
+    # (no-op for instances already on 1000:1000). A failure here takes the same rollback path.
+    if ! (path="$D"; ensureCouchdbDataOwnership) || ! (cd "$D" && docker compose up -d --remove-orphans); then
         echo "[$instance] redeploy failed, rolling back docker-compose.yml and .env and redeploying previous config"
         # The rollback below removes the new database container, so capture why it failed first.
         if docker inspect --type container "$dbContainer" >/dev/null 2>&1; then

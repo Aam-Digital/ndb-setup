@@ -92,8 +92,8 @@ fi
 
 isFeatureAlreadyEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_ENABLED)
 
-# Resolve the frontend Firebase web config first (before anything is written), so a missing config aborts
-# cleanly. Fall back to a valid legacy root-level file from before the mount was moved to assets/.
+# Resolve the Firebase config first (before anything is written), so a missing value aborts cleanly.
+# For the frontend web config, fall back to a valid legacy root-level file from before the mount was moved to assets/.
 if firebaseWebConfigJson=$(getConfig FIREBASE_CONFIG_JSON) && isValidFirebaseWebConfig "$firebaseWebConfigJson"; then
   :
 elif [ -f "$legacyFirebaseWebConfigFile" ] && isValidFirebaseWebConfig "$(cat "$legacyFirebaseWebConfigFile")"; then
@@ -107,20 +107,38 @@ else
   exit 1
 fi
 
+# Resolve the backend Firebase service-account credential (base64) as well, unless the feature is already
+# enabled (then only the frontend config below is applied). Prefer an explicit argument (e.g. for
+# offline/testing), otherwise load it via getConfig (setup.env/environment, then Bitwarden). Because the same
+# shared Firebase project is used for every instance, this is non-interactive and works during automated
+# interactive-setup.
+if [ "$isFeatureAlreadyEnabled" != "true" ]; then
+  [ -n "$2" ] && FIREBASE_CREDENTIAL_BASE64="$2"
+  requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./enable-feature-notification.sh <instance> <credential-base64>"
+  configCredentialBase64="$FIREBASE_CREDENTIAL_BASE64"
+fi
+
 # Write the frontend Firebase web config and volume-mount it into the app container (idempotent).
 # Sets frontendConfigChanged=true if the file or the mount had to be created/updated.
 frontendConfigChanged=false
-mkdir -p "$(dirname "$firebaseWebConfigFile")"
 newFirebaseWebConfig=$(printf '%s' "$firebaseWebConfigJson" | jq .)
 if [ ! -f "$firebaseWebConfigFile" ] || [ "$(cat "$firebaseWebConfigFile")" != "$newFirebaseWebConfig" ]; then
   # No backupFile here: a backup inside assets/ would get volume-mounted (and served) as well, and the config
   # is the shared, non-secret Firebase web config that can always be re-created from FIREBASE_CONFIG_JSON.
-  printf '%s\n' "$newFirebaseWebConfig" > "$firebaseWebConfigFile"
-  chmod 644 "$firebaseWebConfigFile"   # read by the unprivileged nginx user in the app container
+  writeFirebaseWebConfig "$firebaseWebConfigFile" "$newFirebaseWebConfig" || exit 1
   echo "  ~ wrote assets/$(basename "$firebaseWebConfigFile") (frontend web push config)"
   frontendConfigChanged=true
 fi
-if ! grep -Eq "^[[:space:]]*- \./assets/firebase-config\.json:" "$composeFile"; then
+# Pre-#121 docker-compose.yml files mount the legacy root-level file to the same container path. Drop that
+# mount instead of adding a second one next to it: Docker refuses to start a container with a duplicate
+# mount point.
+legacyFirebaseMount='^[[:space:]]*- \./firebase-config\.json:/usr/share/nginx/html/assets/firebase-config\.json([[:space:]]|$)'
+if grep -Eq "$legacyFirebaseMount" "$composeFile"; then
+  backupFile "$composeFile"
+  sed -i -E "\\#$legacyFirebaseMount#d" "$composeFile" || exit 1
+  echo "  - removed legacy ./firebase-config.json volume mount"
+  frontendConfigChanged=true
+elif ! grep -Eq "^[[:space:]]*- \./assets/firebase-config\.json:" "$composeFile"; then
   backupFile "$composeFile"
   frontendConfigChanged=true
 fi
@@ -140,18 +158,11 @@ if [ "$isFeatureAlreadyEnabled" == "true" ]; then
   exit 0
 fi
 
-# Resolve the backend Firebase service-account credential (base64). Prefer an explicit argument (e.g. for
-# offline/testing), otherwise load it via getConfig (setup.env/environment, then Bitwarden). Because the same
-# shared Firebase project is used for every instance, this is non-interactive and works during automated
-# interactive-setup.
-[ -n "$2" ] && FIREBASE_CREDENTIAL_BASE64="$2"
-requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./enable-feature-notification.sh <instance> <credential-base64>"
-configCredentialBase64="$FIREBASE_CREDENTIAL_BASE64"
-
 backupFile "$appEnv"
 # Private pre-write copy to roll back to if the email step fails (below). Not $BACKUP_FILE: the email script
 # backs up application.env as well, and within the same second its backup would overwrite ours.
 appEnvBeforeWrite=$(mktemp)
+trap 'rm -f "$appEnvBeforeWrite"' EXIT   # holds the backend secrets: remove it on every exit path
 cp "$appEnv" "$appEnvBeforeWrite"
 
 # upsertEnv (not setEnv): application.env files created from older aam-backend-service templates may lack
@@ -169,13 +180,11 @@ upsertEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv" || exit 1
 # the "already enabled" shortcut above and never retry the email step or apply the pending config.
 if ! "$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart; then
   cp "$appEnvBeforeWrite" "$appEnv"
-  rm -f "$appEnvBeforeWrite"
   echo "ERROR: Enabling email notifications failed (see above). $(basename "$appEnv") was restored to its"
   echo "       previous state and the instance was NOT restarted. Fix the issue and re-run"
   echo "       './enable-feature-notification.sh $instance'."
   exit 1
 fi
-rm -f "$appEnvBeforeWrite"
 
 # Restart once, here, after both this script and the email step have written their config — unless the caller
 # asked to skip it (interactive-setup restarts the stack itself after all enable-* scripts have run).

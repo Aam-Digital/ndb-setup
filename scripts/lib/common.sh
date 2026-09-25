@@ -244,6 +244,21 @@ isValidFirebaseWebConfig() {
   ' >/dev/null 2>&1
 }
 
+# Write the Firebase web config JSON $2 to $1 (an instance's assets/firebase-config.json), readable by the
+# unprivileged nginx user in the app container. An empty directory at $1 - what Docker creates when the
+# source of a bind mount is missing, e.g. the file was deleted while mounted - is replaced by the file.
+# Returns non-zero (with an error on stderr) if the file cannot be written.
+writeFirebaseWebConfig() {
+  local file="$1" json="$2"
+  mkdir -p "$(dirname "$file")" || return 1
+  if [ -d "$file" ] && ! rmdir "$file" 2>/dev/null; then
+    echo "ERROR: $file is a directory that could not be removed (not empty, or no permission -" >&2
+    echo "       Docker creates it as root: 'sudo rmdir $file'). Replace it with the config file." >&2
+    return 1
+  fi
+  printf '%s\n' "$json" > "$file" && chmod 644 "$file"
+}
+
 ##############################
 # Organisation name validation
 ##############################

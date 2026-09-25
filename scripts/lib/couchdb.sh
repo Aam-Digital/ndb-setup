@@ -9,6 +9,15 @@
 # `docker compose up -d` runs for whichever profile was actually selected. Instance data lives in
 # ./couchdb/data and survives the container removal.
 
+# Print the first path of the CouchDB bind mounts (./couchdb and ./couchdb.ini) not owned by 1000:1000,
+# the UID:GID the couchdb containers run as (see ensureCouchdbDataOwnership). Prints nothing if all match.
+# Requires: $path.
+couchdbOwnershipMismatch() {
+  local targets=("$path/couchdb")
+  [ -f "$path/couchdb.ini" ] && targets+=("$path/couchdb.ini")
+  find "${targets[@]}" \( ! -uid 1000 -o ! -gid 1000 \) -print -quit 2>/dev/null || true
+}
+
 # Ensure the CouchDB data directory exists and is owned by the same UID:GID the couchdb containers run
 # as (hardcoded "1000:1000" in docker-compose.yml, matching the convention used across this repo's other
 # stacks). A mismatch — e.g. the directory got created via sudo, restored from a backup archive, or
@@ -26,7 +35,7 @@ ensureCouchdbDataOwnership() {
   [ -f "$path/couchdb.ini" ] && targets+=("$path/couchdb.ini")
 
   local mismatch
-  mismatch=$(find "${targets[@]}" \( ! -uid 1000 -o ! -gid 1000 \) -print -quit 2>/dev/null) || true
+  mismatch=$(couchdbOwnershipMismatch)
   if [ -z "$mismatch" ]; then
     return 0
   fi

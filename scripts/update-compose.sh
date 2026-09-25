@@ -113,15 +113,6 @@ freeContainerName() {
     docker rm -f "$name" >/dev/null || true
 }
 
-# Copy the legacy root-level Firebase web config of instance dir $1 to its assets/ folder.
-copyLegacyFirebaseConfig() {
-    local D="$1" instance="${1##*/}"
-    mkdir -p "$D/assets"
-    cp "$D/firebase-config.json" "$D/assets/firebase-config.json"
-    chmod 644 "$D/assets/firebase-config.json"
-    echo "[$instance] copied firebase-config.json to assets/"
-}
-
 update_instance() {
     local D="$1"
     local target="$D/docker-compose.yml"
@@ -135,11 +126,16 @@ update_instance() {
 
     # Carry over a legacy root-level Firebase web config (see header) - only a valid one, as
     # instances without notifications got the empty template there. Copied after confirmation.
+    # A directory at assets/firebase-config.json counts as missing: Docker creates one when the
+    # mounted file does not exist (writeFirebaseWebConfig replaces it).
     local legacyFirebase="$D/firebase-config.json" assetsFirebase="$D/assets/firebase-config.json"
     local migrateFirebase=0
-    if [ ! -e "$assetsFirebase" ] && [ -f "$legacyFirebase" ] \
+    if [ ! -f "$assetsFirebase" ] && [ -f "$legacyFirebase" ] \
         && isValidFirebaseWebConfig "$(cat "$legacyFirebase")"; then
         migrateFirebase=1
+    elif [ -d "$assetsFirebase" ]; then
+        echo "[$instance] WARNING: assets/firebase-config.json is a directory (Docker creates one when a mounted file is"
+        echo "[$instance]          missing), so push notifications cannot register. Re-run enable-feature-notification.sh."
     fi
 
     # The target file: canonical + this instance's asset mounts.
@@ -151,35 +147,38 @@ update_instance() {
         ensureAssetVolumeMount "$expected" "firebase-config.json" >/dev/null
     fi
 
+    local composeChanged=1
     if diff -q "$target" "$expected" >/dev/null 2>&1; then
-        rm -f "$expected"
-        # docker-compose.yml may already mount assets/firebase-config.json (e.g. an earlier run was
-        # interrupted before the copy) while the file itself is still missing - complete that copy.
-        if [ "$migrateFirebase" -eq 1 ]; then
-            echo "[$instance] docker-compose.yml up to date, but assets/firebase-config.json is missing"
-            if [ "$ASSUME_YES" -eq 0 ]; then
-                read -r -p "Copy ./firebase-config.json to ./assets/firebase-config.json for [$instance]? [y/N] " reply < /dev/tty
-                case "$reply" in
-                    [yY]|[yY][eE][sS]) ;;
-                    *) echo "[$instance] skipped"; skipped=$((skipped + 1)); return ;;
-                esac
-            fi
-            copyLegacyFirebaseConfig "$D"
-            echo "[$instance] run 'docker compose up -d' in $D if the app container predates the mount"
-            updated=$((updated + 1))
+        composeChanged=0
+        if [ "$migrateFirebase" -eq 0 ]; then
+            rm -f "$expected"
+            echo "[$instance] already up to date"
+            skipped=$((skipped + 1))
             return
         fi
-        echo "[$instance] already up to date"
-        skipped=$((skipped + 1))
-        return
-    fi
+        # docker-compose.yml may already mount assets/firebase-config.json (e.g. an earlier run was
+        # interrupted before the copy) while the file itself is still missing - complete that copy.
+        echo "[$instance] docker-compose.yml up to date, but assets/firebase-config.json is missing"
+    else
+        echo
+        echo "===================================================================="
+        echo "[$instance] differs from canonical + its asset mounts (- current / + new):"
+        echo "--------------------------------------------------------------------"
+        diff "$target" "$expected" || true
+        echo "--------------------------------------------------------------------"
 
-    echo
-    echo "===================================================================="
-    echo "[$instance] differs from canonical + its asset mounts (- current / + new):"
-    echo "--------------------------------------------------------------------"
-    diff "$target" "$expected" || true
-    echo "--------------------------------------------------------------------"
+        # Instances created from a compose file without "user:" on CouchDB ran it as root, so the image
+        # entrypoint chowned ./couchdb/data to its own couchdb user (uid 5984). The couchdb service runs as
+        # 1000:1000 and crashes on eacces with that data, so the redeploy below would fail and roll back.
+        # Only point it out (ownership is left to the operator), before anything is changed.
+        local ownershipMismatch
+        ownershipMismatch=$(path="$D"; couchdbOwnershipMismatch)
+        if [ -n "$ownershipMismatch" ]; then
+            echo "[$instance] WARNING: $ownershipMismatch is owned by $(stat -c '%u:%g' "$ownershipMismatch"), but CouchDB runs as 1000:1000"
+            echo "[$instance]          and will fail to start (the redeploy then rolls back). Fix it first:"
+            echo "[$instance]            sudo chown -R 1000:1000 $D/couchdb $D/couchdb.ini"
+        fi
+    fi
     if [ "$migrateFirebase" -eq 1 ]; then
         echo "[$instance] will copy ./firebase-config.json to ./assets/firebase-config.json"
     fi
@@ -192,13 +191,26 @@ update_instance() {
         esac
     fi
 
+    if [ "$migrateFirebase" -eq 1 ]; then
+        if ! writeFirebaseWebConfig "$assetsFirebase" "$(cat "$legacyFirebase")"; then
+            echo "[$instance] skipped (could not copy firebase-config.json to assets/)"
+            rm -f "$expected"
+            skipped=$((skipped + 1))
+            return
+        fi
+        echo "[$instance] copied firebase-config.json to assets/"
+    fi
+
+    if [ "$composeChanged" -eq 0 ]; then
+        rm -f "$expected"
+        echo "[$instance] run 'docker compose up -d' in $D if the app container predates the mount"
+        updated=$((updated + 1))
+        return
+    fi
+
     backupFile "$target"
     # Remember the backup just made so a failed redeploy can roll back config + runtime.
     local previous="$BACKUP_FILE"
-
-    if [ "$migrateFirebase" -eq 1 ]; then
-        copyLegacyFirebaseConfig "$D"
-    fi
 
     cp "$expected" "$target"
     rm -f "$expected"
@@ -262,14 +274,8 @@ update_instance() {
     # service label. For database-only, where the old and new container_name differ, no name
     # conflict masks it and `up` would otherwise silently succeed with BOTH CouchDB containers
     # running and bind-mounting the same ./couchdb/data - two processes writing the same files.
-    #
-    # Instances created from a compose file without "user:" on CouchDB ran it as root, so the image
-    # entrypoint chowned ./couchdb/data to its own couchdb user (uid 5984). The couchdb service runs as
-    # 1000:1000 and would crash on eacces with that data, so hand ownership over right before `up`
-    # (no-op for instances already on 1000:1000). A failure here takes the same rollback path.
     if ! (cd "$D" && docker compose pull) \
         || ! freeContainerName "$D" "$dbContainer" \
-        || ! (path="$D"; ensureCouchdbDataOwnership) \
         || ! (cd "$D" && docker compose up -d --remove-orphans); then
         echo "[$instance] redeploy failed, rolling back docker-compose.yml and .env and redeploying previous config"
         # The rollback below removes the new database container, so capture why it failed first.

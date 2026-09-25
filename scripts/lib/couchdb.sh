@@ -9,33 +9,48 @@
 # `docker compose up -d` runs for whichever profile was actually selected. Instance data lives in
 # ./couchdb/data and survives the container removal.
 
+# Print the first path of the CouchDB bind mounts (./couchdb and ./couchdb.ini) not owned by 1000:1000,
+# the UID:GID the couchdb containers run as (see ensureCouchdbDataOwnership). Prints nothing if all match.
+# Requires: $path.
+couchdbOwnershipMismatch() {
+  local targets=("$path/couchdb")
+  [ -f "$path/couchdb.ini" ] && targets+=("$path/couchdb.ini")
+  find "${targets[@]}" \( ! -uid 1000 -o ! -gid 1000 \) -print -quit 2>/dev/null || true
+}
+
 # Ensure the CouchDB data directory exists and is owned by the same UID:GID the couchdb containers run
 # as (hardcoded "1000:1000" in docker-compose.yml, matching the convention used across this repo's other
 # stacks). A mismatch — e.g. the directory got created via sudo, restored from a backup archive, or
 # auto-created by Docker as root before this ran — leaves CouchDB unable to write to the bind-mounted
 # volume. Left unchecked, that only surfaces indirectly as the 120s readiness timeout in couchdbInitStart.
+# Every file is checked, not just the top directory: an old compose file without "user:" ran CouchDB as root,
+# whose image entrypoint then chowned the bind mounts (./couchdb/data and couchdb.ini) to its own couchdb user
+# (uid 5984) while leaving the unmounted ./couchdb itself untouched - CouchDB then crashes with eacces.
 # Requires: $path.
 ensureCouchdbDataOwnership() {
   local dataDir="$path/couchdb"
   mkdir -p "$dataDir/data"
 
-  local owner
-  owner=$(stat -c '%u:%g' "$dataDir")
-  if [ "$owner" = "1000:1000" ]; then
+  local targets=("$dataDir")
+  [ -f "$path/couchdb.ini" ] && targets+=("$path/couchdb.ini")
+
+  local mismatch
+  mismatch=$(couchdbOwnershipMismatch)
+  if [ -z "$mismatch" ]; then
     return 0
   fi
 
-  echo "  ~ fixing ownership of $dataDir (currently $owner, needs 1000:1000)"
-  if chown -R 1000:1000 "$dataDir" 2>/dev/null; then
+  echo "  ~ fixing ownership of ${targets[*]} (e.g. $mismatch is $(stat -c '%u:%g' "$mismatch"), needs 1000:1000)"
+  if chown -R 1000:1000 "${targets[@]}" 2>/dev/null; then
     return 0
   fi
-  if sudo -n chown -R 1000:1000 "$dataDir" 2>/dev/null; then
+  if sudo -n chown -R 1000:1000 "${targets[@]}" 2>/dev/null; then
     return 0
   fi
 
-  echo "ERROR: $dataDir is not owned by 1000:1000 and could not be fixed automatically" >&2
+  echo "ERROR: ${targets[*]} not owned by 1000:1000 and could not be fixed automatically" >&2
   echo "  (no permission, and passwordless sudo is unavailable). Run manually:" >&2
-  echo "    sudo chown -R 1000:1000 $dataDir" >&2
+  echo "    sudo chown -R 1000:1000 ${targets[*]}" >&2
   return 1
 }
 

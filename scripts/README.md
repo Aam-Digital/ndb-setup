@@ -142,8 +142,10 @@ open the file. Rather than duplicate that here, note only the deviations from th
   tar and restore paths are coupled), so they are not relocatable for the backup operation itself.
 - **`collect-credentials.sh`** is intentionally self-contained (meant to be copied out; takes an
   `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
-- **`enable-feature-notification.sh`** still needs BWS for a *fresh* Firebase config (Firebase is JSON,
-  not a scalar `getConfig` can resolve).
+- **`enable-feature-notification.sh`** writes the frontend Firebase web config to the instance's
+  `assets/firebase-config.json` and volume-mounts it (the published ndb-core image does not contain it).
+  Without BWS, provide `FIREBASE_CONFIG_JSON` as a single-quoted JSON object in `setup.env`. Re-running
+  the script on an instance with notifications already enabled only adds a missing web config/mount.
 
 ## Running without Bitwarden
 

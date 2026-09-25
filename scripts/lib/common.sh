@@ -38,6 +38,14 @@ setEnv() {
   echo "  ~ updated $key in $(basename "$file")"
 }
 
+# Append a newline to a non-empty file that does not end with one, so a following append starts on its own line
+_ensureTrailingNewline() {
+  local file="$1"
+  if [ -s "$file" ] && [ -n "$(tail -c 1 "$file")" ]; then
+    echo >> "$file"
+  fi
+}
+
 # Set a variable in a file, appending it if it does not already exist
 upsertEnv() {
   local key="$1"
@@ -46,6 +54,7 @@ upsertEnv() {
   local escaped
   escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    _ensureTrailingNewline "$file"
     echo "$key=$value" >> "$file"
     echo "  + added $key to $(basename "$file")"
   else
@@ -60,6 +69,7 @@ ensureEnv() {
   local value="$2"
   local file="$3"
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
+    _ensureTrailingNewline "$file"
     echo "$key=$value" >> "$file"
     echo "  + added $key to $(basename "$file")"
   else
@@ -220,6 +230,33 @@ ensureAssetVolumeMountsFromDir() {
       ensureAssetVolumeMount "$composeFile" "$subfolderName"
     fi
   done
+}
+
+# Succeeds if $1 is a JSON object holding a non-empty Firebase web config (the frontend's
+# assets/firebase-config.json), i.e. not the empty template with blank values. Requires jq.
+# Exactly one JSON document is accepted (-s): `jq -e` alone only checks the last of several, and the
+# input is written out as the single config file the browser has to parse.
+isValidFirebaseWebConfig() {
+  printf '%s' "$1" | jq -s -e '
+    length == 1
+    and (.[0] | type == "object"
+      and ([.apiKey, .projectId, .messagingSenderId, .appId] | all(type == "string" and length > 0)))
+  ' >/dev/null 2>&1
+}
+
+# Write the Firebase web config JSON $2 to $1 (an instance's assets/firebase-config.json), readable by the
+# unprivileged nginx user in the app container. An empty directory at $1 - what Docker creates when the
+# source of a bind mount is missing, e.g. the file was deleted while mounted - is replaced by the file.
+# Returns non-zero (with an error on stderr) if the file cannot be written.
+writeFirebaseWebConfig() {
+  local file="$1" json="$2"
+  mkdir -p "$(dirname "$file")" || return 1
+  if [ -d "$file" ] && ! rmdir "$file" 2>/dev/null; then
+    echo "ERROR: $file is a directory that could not be removed (not empty, or no permission -" >&2
+    echo "       Docker creates it as root: 'sudo rmdir $file'). Replace it with the config file." >&2
+    return 1
+  fi
+  printf '%s\n' "$json" > "$file" && chmod 644 "$file"
 }
 
 ##############################

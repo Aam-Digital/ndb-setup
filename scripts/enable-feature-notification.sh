@@ -75,6 +75,21 @@ firebaseWebConfigFile="$path/assets/firebase-config.json"
 # Pre-#121 instances had it in the instance root, mounted by the canonical docker-compose.yml back then.
 legacyFirebaseWebConfigFile="$path/firebase-config.json"
 
+# The notification module filters recipients through replication-backend's /permissions/check, which
+# authenticates via Basic auth against CouchDB. Without these credentials every check fails with 401 and all
+# notifications are denied. application.env files from older setups may lack the keys entirely (enable-backend.sh
+# only updates keys present in the template), so they are synced from .env here.
+permissionCheckUser=$(getVar "$path/.env" COUCHDB_USER)
+permissionCheckPassword=$(getVar "$path/.env" COUCHDB_PASSWORD)
+permissionCheckAuthOutdated() {
+  [ "$(getVar "$appEnv" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME)" != "$permissionCheckUser" ] ||
+    [ "$(getVar "$appEnv" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD)" != "$permissionCheckPassword" ]
+}
+syncPermissionCheckAuth() {
+  upsertEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME" "$permissionCheckUser" "$appEnv" || return 1
+  upsertEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD" "$permissionCheckPassword" "$appEnv" || return 1
+}
+
 ##############################
 # script
 ##############################
@@ -87,6 +102,11 @@ fi
 
 if ! isBackendConfigCreated; then
   echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
+  exit 1
+fi
+
+if [ -z "$permissionCheckUser" ] || [ -z "$permissionCheckPassword" ]; then
+  echo "ERROR: COUCHDB_USER / COUCHDB_PASSWORD not found in $path/.env (needed for notification permission checks). Abort."
   exit 1
 fi
 
@@ -144,14 +164,21 @@ elif ! grep -Eq "^[[:space:]]*- \./assets/firebase-config\.json:" "$composeFile"
 fi
 ensureAssetVolumeMount "$composeFile" "firebase-config.json"
 
-# Already enabled: only the frontend config above may have been missing (e.g. instances whose mount was
-# dropped when the canonical docker-compose.yml stopped mounting it). Apply that and stop here.
+# Already enabled: only the frontend config above or the permission-check credentials may have been missing
+# (e.g. instances whose mount was dropped when the canonical docker-compose.yml stopped mounting it). Apply
+# that and stop here.
 if [ "$isFeatureAlreadyEnabled" == "true" ]; then
-  if [ "$frontendConfigChanged" == "true" ]; then
+  backendConfigChanged=false
+  if permissionCheckAuthOutdated; then
+    backupFile "$appEnv"
+    syncPermissionCheckAuth || exit 1
+    backendConfigChanged=true
+  fi
+  if [ "$frontendConfigChanged" == "true" ] || [ "$backendConfigChanged" == "true" ]; then
     if [ "$skipRestart" != "true" ]; then
       (cd "$path" && docker compose up -d)
     fi
-    echo "Feature was already enabled; added the missing frontend Firebase config."
+    echo "Feature was already enabled; added the missing config."
   else
     echo "Feature is already enabled for this instance. Nothing to do."
   fi
@@ -171,6 +198,7 @@ upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCrede
 upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$appEnv" || exit 1
 upsertEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$appEnv" || exit 1
 upsertEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv" || exit 1
+syncPermissionCheckAuth || exit 1
 
 # Enable email notifications by default. Always pass --skip-restart: the email step writes its config but does
 # not restart, so the single restart below applies both the notification and email config in one cycle.

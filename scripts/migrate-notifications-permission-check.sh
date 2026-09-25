@@ -76,15 +76,13 @@ migrate_instance() {
   elif ! grep -q "^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=" "$envFile" 2>/dev/null; then
     needsMigration=true
   elif [ -f "$appEnvFile" ]; then
-    # BASICAUTH vars must be present; BASEPATH must be ABSENT (it is now defined/overridden by
-    # docker-compose, so a leftover local default needs cleaning up).
-    for var in AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME \
-               AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD; do
-      if ! grep -q "^$var=" "$appEnvFile" 2>/dev/null; then
-        needsMigration=true
-        break
-      fi
-    done
+    # BASICAUTH vars must match the CouchDB credentials (a missing or empty value makes every permission
+    # check fail with 401); BASEPATH must be ABSENT (it is now defined/overridden by docker-compose, so a
+    # leftover local default needs cleaning up).
+    if [ "$(getVar "$appEnvFile" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME)" != "$(getVar "$envFile" COUCHDB_USER)" ] ||
+       [ "$(getVar "$appEnvFile" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD)" != "$(getVar "$envFile" COUCHDB_PASSWORD)" ]; then
+      needsMigration=true
+    fi
     if [ "$(getVar "$appEnvFile" AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH)" == "http://replication-backend:5984" ]; then
       needsMigration=true
     fi
@@ -134,8 +132,8 @@ migrate_instance() {
 
     # BASEPATH is now defined (and overridden) by docker-compose, so drop the stale local default.
     removeEnvIfValue "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH" "http://replication-backend:5984" "$appEnvFile"
-    ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME" "$couchUser" "$appEnvFile"
-    ensureEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD" "$couchPass" "$appEnvFile"
+    upsertEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME" "$couchUser" "$appEnvFile"
+    upsertEnv "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD" "$couchPass" "$appEnvFile"
   else
     echo "  no application.env found — skipping aam-backend-service config"
   fi

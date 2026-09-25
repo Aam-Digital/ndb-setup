@@ -6,7 +6,7 @@
 # changes to the canonical file (new service, changed volume, etc.) do not
 # propagate automatically. This script previews the diff for each instance,
 # asks for confirmation, backs up the old file, copies the new one and
-# redeploys the instance ('docker compose up -d').
+# redeploys the instance ('docker compose pull' + 'docker compose up -d').
 #
 # The wholesale copy would drop any instance-local asset volume mounts, so the target
 # file is the canonical one plus a mount for every asset present in the instance's
@@ -253,8 +253,11 @@ update_instance() {
     local dbContainer
     dbContainer=$(resolvedComposeConfig "$D" | composeContainerNames | awk '$1 == "couchdb" { print $2 }')
     dbContainer="${dbContainer:-${org}-database}"
-    freeContainerName "$D" "$dbContainer"
 
+    # Pull first, before freeing the container name, so the images the new config
+    # references are in place (keeping the downtime short) and a pull failure rolls back
+    # while the old containers are still running.
+    #
     # --remove-orphans: the same service rename leaves the old container behind under its old
     # service label. For database-only, where the old and new container_name differ, no name
     # conflict masks it and `up` would otherwise silently succeed with BOTH CouchDB containers
@@ -264,7 +267,10 @@ update_instance() {
     # entrypoint chowned ./couchdb/data to its own couchdb user (uid 5984). The couchdb service runs as
     # 1000:1000 and would crash on eacces with that data, so hand ownership over right before `up`
     # (no-op for instances already on 1000:1000). A failure here takes the same rollback path.
-    if ! (path="$D"; ensureCouchdbDataOwnership) || ! (cd "$D" && docker compose up -d --remove-orphans); then
+    if ! (cd "$D" && docker compose pull) \
+        || ! freeContainerName "$D" "$dbContainer" \
+        || ! (path="$D"; ensureCouchdbDataOwnership) \
+        || ! (cd "$D" && docker compose up -d --remove-orphans); then
         echo "[$instance] redeploy failed, rolling back docker-compose.yml and .env and redeploying previous config"
         # The rollback below removes the new database container, so capture why it failed first.
         if docker inspect --type container "$dbContainer" >/dev/null 2>&1; then

@@ -130,9 +130,19 @@ update_instance() {
     # mounted file does not exist (writeFirebaseWebConfig replaces it).
     local legacyFirebase="$D/firebase-config.json" assetsFirebase="$D/assets/firebase-config.json"
     local migrateFirebase=0
-    if [ ! -f "$assetsFirebase" ] && [ -f "$legacyFirebase" ] \
-        && isValidFirebaseWebConfig "$(cat "$legacyFirebase")"; then
-        migrateFirebase=1
+    if [ ! -f "$assetsFirebase" ] && [ -f "$legacyFirebase" ]; then
+        # Without jq every config would look invalid and its mount be dropped silently.
+        if ! command -v jq >/dev/null 2>&1; then
+            echo "[$instance] ERROR: jq is required to check ./firebase-config.json before its mount is dropped, skipping"
+            skipped=$((skipped + 1))
+            return
+        fi
+        if isValidFirebaseWebConfig "$(cat "$legacyFirebase")"; then
+            migrateFirebase=1
+        else
+            echo "[$instance] note: ./firebase-config.json is not a valid Firebase web config (e.g. the empty template),"
+            echo "[$instance]       so its legacy mount is dropped without carrying it over to assets/"
+        fi
     elif [ -d "$assetsFirebase" ]; then
         echo "[$instance] WARNING: assets/firebase-config.json is a directory (Docker creates one when a mounted file is"
         echo "[$instance]          missing), so push notifications cannot register. Re-run enable-feature-notification.sh."

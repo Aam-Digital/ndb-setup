@@ -232,6 +232,15 @@ ensureAssetVolumeMountsFromDir() {
   done
 }
 
+# Succeeds if $1 is a JSON object holding a non-empty Firebase web config (the frontend's
+# assets/firebase-config.json), i.e. not the empty template with blank values. Requires jq.
+isValidFirebaseWebConfig() {
+  printf '%s' "$1" | jq -e '
+    type == "object"
+    and ([.apiKey, .projectId, .messagingSenderId, .appId] | all(type == "string" and length > 0))
+  ' >/dev/null 2>&1
+}
+
 ##############################
 # Organisation name validation
 ##############################

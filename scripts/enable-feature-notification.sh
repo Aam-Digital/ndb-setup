@@ -21,11 +21,13 @@ source "$ndbSetupDir/setup.env"
 source "$scriptDir/lib/common.sh"
 source "$scriptDir/lib/secrets.sh"
 
-# FIREBASE_CREDENTIAL_BASE64 is resolved via getConfig/requireConfig (setup.env/environment, falling
-# back to Bitwarden Secrets Manager - see lib/secrets.sh). It is the shared Firebase project's backend
-# service-account credential (base64, same for every instance) the aam-backend-service uses to send
-# pushes. The frontend web config (assets/firebase-config.json) needs no per-instance action any more:
-# the ndb-core image ships the real shared config directly and nothing overwrites it.
+# FIREBASE_CONFIG_JSON / FIREBASE_CREDENTIAL_BASE64 are resolved via getConfig/requireConfig
+# (setup.env/environment, falling back to Bitwarden Secrets Manager - see lib/secrets.sh). They hold
+# the shared Firebase project's credentials (the same ones are used for every instance):
+#   - the frontend web config (firebase-config.json) the browser uses to register for push notifications.
+#     The published ndb-core image does not contain it (the file is gitignored there), so it is written to
+#     the instance's assets/ folder and volume-mounted into the app container.
+#   - the backend service-account credential (base64) the aam-backend-service uses to send pushes
 
 ##############################
 # parse flags
@@ -66,6 +68,12 @@ fi
 ##############################
 
 appEnv="$path/config/aam-backend-service/application.env"
+composeFile="$path/docker-compose.yml"
+# Kept under assets/ (not the instance root) so update-compose.sh re-creates the volume mount after it
+# replaces docker-compose.yml with the canonical version (see ensureAssetVolumeMountsFromDir).
+firebaseWebConfigFile="$path/assets/firebase-config.json"
+# Pre-#121 instances had it in the instance root, mounted by the canonical docker-compose.yml back then.
+legacyFirebaseWebConfigFile="$path/firebase-config.json"
 
 ##############################
 # script
@@ -84,9 +92,52 @@ fi
 
 isFeatureAlreadyEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_ENABLED)
 
-if [ "$isFeatureAlreadyEnabled" == "true" ]; then
-  echo "Feature is already enabled for this instance. Abort."
+# Resolve the frontend Firebase web config first (before anything is written), so a missing config aborts
+# cleanly. Fall back to a valid legacy root-level file from before the mount was moved to assets/.
+if firebaseWebConfigJson=$(getConfig FIREBASE_CONFIG_JSON) && isValidFirebaseWebConfig "$firebaseWebConfigJson"; then
+  :
+elif [ -f "$legacyFirebaseWebConfigFile" ] && isValidFirebaseWebConfig "$(cat "$legacyFirebaseWebConfigFile")"; then
+  echo "  using legacy $(basename "$legacyFirebaseWebConfigFile") from the instance directory"
+  firebaseWebConfigJson=$(cat "$legacyFirebaseWebConfigFile")
+else
+  echo "ERROR: No valid Firebase web config (firebase-config.json) available. Without it the app cannot"
+  echo "       register browsers for push notifications. Provide FIREBASE_CONFIG_JSON (the JSON object with"
+  echo "       apiKey, projectId, messagingSenderId, appId, ...) in setup.env / the environment, or set"
+  echo "       BWS_ACCESS_TOKEN to load it from Bitwarden. Abort."
   exit 1
+fi
+
+# Write the frontend Firebase web config and volume-mount it into the app container (idempotent).
+# Sets frontendConfigChanged=true if the file or the mount had to be created/updated.
+frontendConfigChanged=false
+mkdir -p "$(dirname "$firebaseWebConfigFile")"
+newFirebaseWebConfig=$(printf '%s' "$firebaseWebConfigJson" | jq .)
+if [ ! -f "$firebaseWebConfigFile" ] || [ "$(cat "$firebaseWebConfigFile")" != "$newFirebaseWebConfig" ]; then
+  # No backupFile here: a backup inside assets/ would get volume-mounted (and served) as well, and the config
+  # is the shared, non-secret Firebase web config that can always be re-created from FIREBASE_CONFIG_JSON.
+  printf '%s\n' "$newFirebaseWebConfig" > "$firebaseWebConfigFile"
+  chmod 644 "$firebaseWebConfigFile"   # read by the unprivileged nginx user in the app container
+  echo "  ~ wrote assets/$(basename "$firebaseWebConfigFile") (frontend web push config)"
+  frontendConfigChanged=true
+fi
+if ! grep -Eq "^[[:space:]]*- \./assets/firebase-config\.json:" "$composeFile"; then
+  backupFile "$composeFile"
+  frontendConfigChanged=true
+fi
+ensureAssetVolumeMount "$composeFile" "firebase-config.json"
+
+# Already enabled: only the frontend config above may have been missing (e.g. instances whose mount was
+# dropped when the canonical docker-compose.yml stopped mounting it). Apply that and stop here.
+if [ "$isFeatureAlreadyEnabled" == "true" ]; then
+  if [ "$frontendConfigChanged" == "true" ]; then
+    if [ "$skipRestart" != "true" ]; then
+      (cd "$path" && docker compose up -d)
+    fi
+    echo "Feature was already enabled; added the missing frontend Firebase config."
+  else
+    echo "Feature is already enabled for this instance. Nothing to do."
+  fi
+  exit 0
 fi
 
 # Resolve the backend Firebase service-account credential (base64). Prefer an explicit argument (e.g. for

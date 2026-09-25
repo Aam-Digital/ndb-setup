@@ -8,9 +8,16 @@
 # asks for confirmation, backs up the old file, copies the new one and
 # redeploys the instance ('docker compose up -d').
 #
-# The wholesale copy drops any instance-local asset volume mounts, so afterwards a
-# mount is re-created for every asset present in the instance's assets/ folder (the
-# same logic enable-assets-overwrites.sh uses), so updating does not disable them.
+# The wholesale copy would drop any instance-local asset volume mounts, so the target
+# file is the canonical one plus a mount for every asset present in the instance's
+# assets/ folder (the same logic enable-assets-overwrites.sh uses). The up-to-date check,
+# the preview diff and the copy all use that target, so asset mounts (e.g. the
+# assets/firebase-config.json written by enable-feature-notification.sh) are neither
+# dropped nor reported as a change on every run.
+#
+# Instances from before the Firebase web config moved to assets/ still mount
+# ./firebase-config.json from the instance root; a valid (non-empty) one is carried
+# over to assets/ so push notifications keep working after the update.
 #
 # It also backfills DB_ENTRYPOINT_URL into any instance's .env whose COMPOSE_PROFILES
 # already requires replication-backend (i.e. not "database-only") but predates that
@@ -116,24 +123,46 @@ update_instance() {
         return
     fi
 
-    if diff -q "$target" "$CANONICAL" >/dev/null 2>&1; then
+    # Carry over a legacy root-level Firebase web config (see header) - only a valid one, as
+    # instances without notifications got the empty template there. Copied after confirmation.
+    local legacyFirebase="$D/firebase-config.json" assetsFirebase="$D/assets/firebase-config.json"
+    local migrateFirebase=0
+    if [ ! -e "$assetsFirebase" ] && [ -f "$legacyFirebase" ] \
+        && isValidFirebaseWebConfig "$(cat "$legacyFirebase")"; then
+        migrateFirebase=1
+    fi
+
+    # The target file: canonical + this instance's asset mounts.
+    local expected
+    expected=$(mktemp)
+    cp "$CANONICAL" "$expected"
+    ensureAssetVolumeMountsFromDir "$expected" "$D/assets" >/dev/null
+    if [ "$migrateFirebase" -eq 1 ]; then
+        ensureAssetVolumeMount "$expected" "firebase-config.json" >/dev/null
+    fi
+
+    if diff -q "$target" "$expected" >/dev/null 2>&1; then
         echo "[$instance] already up to date"
+        rm -f "$expected"
         skipped=$((skipped + 1))
         return
     fi
 
     echo
     echo "===================================================================="
-    echo "[$instance] differs from canonical (- current / + new):"
+    echo "[$instance] differs from canonical + its asset mounts (- current / + new):"
     echo "--------------------------------------------------------------------"
-    diff "$target" "$CANONICAL" || true
+    diff "$target" "$expected" || true
     echo "--------------------------------------------------------------------"
+    if [ "$migrateFirebase" -eq 1 ]; then
+        echo "[$instance] will copy ./firebase-config.json to ./assets/firebase-config.json"
+    fi
 
     if [ "$ASSUME_YES" -eq 0 ]; then
         read -r -p "Apply this change to [$instance]? [y/N] " reply < /dev/tty
         case "$reply" in
             [yY]|[yY][eE][sS]) ;;
-            *) echo "[$instance] skipped"; skipped=$((skipped + 1)); return ;;
+            *) echo "[$instance] skipped"; rm -f "$expected"; skipped=$((skipped + 1)); return ;;
         esac
     fi
 
@@ -141,11 +170,15 @@ update_instance() {
     # Remember the backup just made so a failed redeploy can roll back config + runtime.
     local previous="$BACKUP_FILE"
 
-    cp "$CANONICAL" "$target"
+    if [ "$migrateFirebase" -eq 1 ]; then
+        mkdir -p "$D/assets"
+        cp "$legacyFirebase" "$assetsFirebase"
+        chmod 644 "$assetsFirebase"
+        echo "[$instance] copied firebase-config.json to assets/"
+    fi
 
-    # The wholesale copy drops any asset volume mounts, so re-create one for every asset
-    # present in the instance's assets/ folder (the filesystem is the source of truth).
-    ensureAssetVolumeMountsFromDir "$target" "$D/assets"
+    cp "$expected" "$target"
+    rm -f "$expected"
 
     # This canonical version routes /db through DB_ENTRYPOINT_URL when replication-backend
     # enforces access (COMPOSE_PROFILES is with-permissions, full-stack or full-stack-without-sqs -
@@ -205,6 +238,15 @@ update_instance() {
     # running and bind-mounting the same ./couchdb/data - two processes writing the same files.
     if ! (cd "$D" && docker compose up -d --remove-orphans); then
         echo "[$instance] redeploy failed, rolling back docker-compose.yml and .env and redeploying previous config"
+        # The rollback below removes the new database container, so capture why it failed first.
+        if docker inspect --type container "$dbContainer" >/dev/null 2>&1; then
+            echo "[$instance] --- $dbContainer state / health checks:"
+            docker inspect -f '{{.State.Status}} (restarts: {{.RestartCount}}, exit code: {{.State.ExitCode}}){{if .State.Health}}{{range .State.Health.Log}}{{"\n"}}  {{.Start}} exit={{.ExitCode}} {{.Output}}{{end}}{{end}}' \
+                "$dbContainer" 2>&1 || true
+            echo "[$instance] --- $dbContainer logs (last 40 lines):"
+            docker logs --tail 40 "$dbContainer" 2>&1 || true
+            echo "[$instance] ---"
+        fi
         cp "$previous" "$target"
         if [ -n "$previousEnv" ]; then
             cp "$previousEnv" "$envFile"

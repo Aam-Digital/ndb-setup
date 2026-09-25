@@ -80,21 +80,17 @@ createKeycloakBackendClient() {
     return 0
   fi
 
-  # create the aam-backend client (confidential, service account enabled)
+  # create the aam-backend client (confidential, service account enabled) — reuse the same
+  # client definition documented for manual import, instead of duplicating it here
+  local libDir clientConfigFile
+  libDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  clientConfigFile="$libDir/../../keycloak/client_config.json"
+
   local clientResponse location clientUuid
   clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/clients" \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
-    -d '{
-      "clientId": "aam-backend",
-      "enabled": true,
-      "clientAuthenticatorType": "client-secret",
-      "serviceAccountsEnabled": true,
-      "publicClient": false,
-      "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "protocol": "openid-connect"
-    }')
+    -d "$(jq -c '.clients[] | select(.clientId == "aam-backend")' "$clientConfigFile")")
 
   # extract client UUID from Location header
   location=$(echo "$clientResponse" | grep -i "^location:")

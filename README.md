@@ -116,6 +116,9 @@ Admin operations such as running config migrations, checking for conflicts, and 
    # output: credentials.json in the current directory
    ```
 
+   For instances on the Kubernetes cluster, use `infra/scripts/collect-credentials.sh --stack=<staging|production>`
+   in [aam-cloud-infrastructure](https://github.com/Aam-Digital/aam-cloud-infrastructure) instead.
+
 2. Copy `credentials.json` to your local ndb-core checkout (it is git-ignored there).
 
 3. Run CLI commands from your ndb-core checkout:

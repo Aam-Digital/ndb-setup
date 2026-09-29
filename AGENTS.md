@@ -14,13 +14,13 @@ internal tools (e.g. Sentry issues) are acceptable.
 
 ## Scripts
 
-Follow [scripts/DEVELOPING.md](scripts/DEVELOPING.md) when changing or adding scripts. In particular, don't
-add `migrate-*.sh` scripts: make the setup script that owns that part repair existing instances when re-run.
+Follow [scripts/DEVELOPING.md](scripts/DEVELOPING.md) when changing or adding scripts. In particular:
 
-## Scripts: Config and Secrets
-
-Never call the `bws` (Bitwarden Secrets Manager) CLI directly in scripts. Source `scripts/lib/secrets.sh`
-(after `scripts/lib/common.sh`) and resolve values with `requireConfig KEY` / `getConfig KEY`. These take
-the value from `setup.env` / the environment first and only fall back to Bitwarden when `BWS_ACCESS_TOKEN`
-is set, so scripts also work on servers without the `bws` CLI or a token. New Bitwarden-backed keys must
-be added to `_isBwsBackedKey` in `secrets.sh` (secrets are looked up by name, not by ID).
+- Don't add `migrate-*.sh` scripts: make the setup script that owns that part repair existing instances
+  when re-run.
+- Config and secrets: never call the `bws` (Bitwarden Secrets Manager) CLI directly. Scripts source
+  `scripts/lib/init.sh` (which loads `lib/common.sh` and `lib/secrets.sh`) and resolve values with
+  `requireConfig KEY` / `getConfig KEY`. These take the value from `setup.env` / the environment first and
+  only fall back to Bitwarden when `BWS_ACCESS_TOKEN` is set, so scripts also work on servers without the
+  `bws` CLI or a token. New Bitwarden-backed keys must be added to `_isBwsBackedKey` in `secrets.sh`
+  (secrets are looked up by name, not by ID).

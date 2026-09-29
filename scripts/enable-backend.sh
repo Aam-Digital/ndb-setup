@@ -167,6 +167,7 @@ writeReplicationBackendKeycloakClient() {
 # - the Carbone PDF render API (a per-instance "carbone-<instance>" client in the aam-platform realm).
 # A repair whose precondition fails (e.g. the instance's realm is not on this Keycloak) is reported and
 # skipped; the others still run, and the function returns 1.
+# Uses the globals path, org, appEnv and envFile.
 repairBackendConfig() {
   local failed=false
 

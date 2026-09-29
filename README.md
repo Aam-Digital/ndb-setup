@@ -300,48 +300,58 @@ For details information, check our [Report documentation](https://aam-digital.gi
 
 ## Backups
 
-Basic backup scripts are available in the "scripts" folder.
+[`scripts/backup.sh`](./scripts/backup.sh) creates, lists and restores system backups: encrypted archives of
+the whole base directory (all instances and this checkout), one per day. Set `BACKUP_DIR` (where the
+archives go) and `BACKUP_PASSPHRASE` (to encrypt them) in `setup.env`, then:
 
-Set the setup.env variables for the backup root folder and passphrase (to encrypt backups).
-Then run the `backup.sh` script to create a current backup.
+```bash
+./scripts/backup.sh                          # create today's backup (keeps the newest 14; --keep <n>)
+./scripts/backup.sh list                     # list the available backups
+./scripts/backup.sh restore 20260101 acme    # restore acme's CouchDB data from that day's backup
+```
+
+(Not to be confused with the *rollback copies* like `.env.rollback-<timestamp>`, which scripts save next to a
+file before changing it; `scripts/prune-rollback-copies.sh` deletes those.)
 
 ### Scheduled regular backups
 
 You can set up the script to run via cron:
 
-Start the new cron job
-
 ```bash
 crontab -e
 # then enter the following (adjusted to your actual file locations)
-0 2 * * *       /var/docker/ndb-setup/backup.sh
+0 2 * * *       /var/docker/ndb-setup/scripts/backup.sh
 # the above runs every day at 2 am
 ```
 
 ### Restoring a backup
 
-Under `/var/docker` run the interactive script `backup-restore.sh` to load a backup for a certain client from a certain date.
+`./scripts/backup.sh restore [<date> [<instance>]]` asks for whatever is not given. It unpacks the backup to
+`<baseDirectory>/_backup_<date>` and, for the chosen instance, replaces its CouchDB data with the backed-up
+one and restarts it. The replaced data is kept as `couchdb.before-restore-<timestamp>` in the instance
+folder; delete it and the unpacked backup once everything works. Only the CouchDB data is restored, not the
+instance's `.env` or config (those are in the unpacked backup, too).
 
-To manually load a backup follow these steps:
+To restore manually:
 
-1. Find the passphrase in the `/var/docker/backup.sh` file.
-2. Go to `mnt/<backup-volume>/backups`
+1. Take the passphrase from `BACKUP_PASSPHRASE` in `setup.env`.
+2. Go to the `BACKUP_DIR` folder.
 3. Decrypt a backup using
    ```bash
-   gpg --passphrase \<passphrase\> -o output -d \<backup-file\>
+   gpg --passphrase <passphrase> -o output -d <YYYYMMDD>.tar.gz.gpg
    ```
 4. Decompress the backup
    ```bash
    mkdir ./unpacked && tar -xzvf output --directory ./unpacked
    ```
-5. Go to application where backups should be applied and stop docker container
+5. Go to the instance the backup should be applied to and stop its containers
    ```bash
-   cd /var/docker/ndb-\<instance\>
+   cd <baseDirectory>/<PREFIX><instance>
    docker compose down
    ```
-6. Load the backup
+6. Load the backup (the archive contains the base directory without its leading `/`)
    ```bash
-   mv couchdb couchdb_old && mv ~/backups/unpacked/var/docker/ndb-\<instance\>/couchdb ./couchdb
+   mv couchdb couchdb_old && mv <BACKUP_DIR>/unpacked/<baseDirectory>/<PREFIX><instance>/couchdb ./couchdb
    ```
 7. Start the docker containers
    ```bash
@@ -349,7 +359,7 @@ To manually load a backup follow these steps:
    ```
 8. After everything works as expected, delete all temporary data
    ```bash
-   rm -rf couchdb_old ~/backups/output ~/backups/unpacked
+   rm -rf couchdb_old <BACKUP_DIR>/output <BACKUP_DIR>/unpacked
    ```
 
 When applying a backup, do not forget to clear your browser cache before opening the application again. Otherwise the previously corrupted data will be synced from the browser to the DB that has just been backed up. To delete all local data go to `https://<instance>.aam-digital.com/support` and press `Reset Application`. All users, which have corrupted data will need to do this.

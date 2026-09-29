@@ -112,8 +112,9 @@ open the file. Rather than duplicate that here, these notes cover only what need
 
 - **`update-backend-config.sh`** updates aam-backend-service to a release and migrates `application.env`
   to its template (current values kept, new keys added, keys no longer in the template kept and reported).
-- **`backup.sh` / `backup-restore.sh`** still target `/var/docker` for the actual backup data path (the
-  tar and restore paths are coupled), so they are not relocatable for the backup operation itself.
+- **`backup.sh`** creates, lists and restores the encrypted system backups (`create` is the default, for
+  cron; see the [repository README](../README.md#backups)). Not to be confused with the rollback copies
+  scripts save before changing a file, which `prune-rollback-copies.sh` deletes.
 - **`collect-credentials.sh`** is intentionally self-contained (meant to be copied out; takes an
   `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
 - **`enable-backend.sh`** re-run on an instance with the backend already enabled does not abort but only

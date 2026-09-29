@@ -118,7 +118,8 @@ Say instances need a new setting, a new Keycloak role or a corrected value. Inst
 
 4. **In the re-run path, collect what's out of date, then fix only that.** Change external systems (e.g.
    Keycloak) before local files, so a failure doesn't leave config pointing at something that doesn't exist.
-   Back up each file before its first change, and restart only the services whose config changed.
+   Save a rollback copy of each file before its first change (`saveRollbackCopy`), and restart only the
+   services whose config changed.
    `repairBackendConfig` in [`enable-backend.sh`](enable-backend.sh) is the full example.
 
    ```bash
@@ -128,7 +129,7 @@ Say instances need a new setting, a new Keycloak role or a corrected value. Inst
      echo "Nothing to do."
      exit 0
    fi
-   backupFile "$appEnv"
+   saveRollbackCopy "$appEnv"
    writeFooConfig "$appEnv" "$token"
    ```
 
@@ -168,7 +169,7 @@ from real problems found while turning migrations into repairs:
 ## Shell pitfalls in this code base
 
 - **Helpers return values in globals.** `createKeycloakBackendClient` and `createCarboneRenderClient` both set
-  `$clientSecret`; `resolveInstancePath` sets `$path`; `backupFile` sets `$BACKUP_FILE`. Copy the value into
+  `$clientSecret`; `resolveInstancePath` sets `$path`; `saveRollbackCopy` sets `$ROLLBACK_COPY`. Copy the value into
   your own variable right after the call, before calling the next helper.
 - **A bare `return` returns the status of the previous command.** Use `return 0` for "skipped, not failed",
   or the caller counts a harmless skip as a failure.
@@ -183,7 +184,7 @@ from real problems found while turning migrations into repairs:
 
 | File | Provides |
 | --- | --- |
-| [`common.sh`](lib/common.sh) | see the `.env` helpers below; `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, `downloadBackendConfigTemplate`, docker-compose volume-mount helpers |
+| [`common.sh`](lib/common.sh) | see the `.env` helpers below; `generate_password`, `saveRollbackCopy` (rollback copies of files a script changes; see `prune-rollback-copies.sh`), instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, `downloadBackendConfigTemplate`, docker-compose volume-mount helpers |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig`, and `_isBwsBackedKey` (which keys may come from Bitwarden) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart`: bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
 | [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmStatus`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `createCarboneRenderClient`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles`, `ensureExactUsernameUserProfileAttribute` |

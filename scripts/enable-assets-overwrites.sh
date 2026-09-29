@@ -40,12 +40,8 @@ fi
 # script
 ##############################
 
-# if $instance not starts with $PREFIX, add it
-if [[ ! "$instance" =~ ^$PREFIX ]]; then
-  instancePath="$baseDirectory/$PREFIX$instance"
-else
-  instancePath="$baseDirectory/$instance"
-fi
+resolveInstancePath "$instance" || exit 1
+instancePath="$path"
 
 # abort if no assets folder for baseConfig exists
 baseConfigPath="$ndbSetupDir/baseConfigs/$baseConfig"
@@ -54,12 +50,13 @@ if [ ! -d "$baseConfigPath/assets" ]; then
   exit 1
 fi
 
-cp "$instancePath/docker-compose.yml" "$instancePath/docker-compose.yml.bak"
+saveRollbackCopy "$instancePath/docker-compose.yml"
 
 # copy assets from baseConfig to instance
 if [ -d "$instancePath/assets" ]; then
-  echo "Moving existing assets folder to backup."
-  mv "$instancePath/assets" "$instancePath/assets.bak"
+  assetsCopy="assets.rollback-$(date +%Y%m%d%H%M%S)"
+  echo "  rollback copy: $assetsCopy/ (the previous assets folder)"
+  mv "$instancePath/assets" "$instancePath/$assetsCopy"
   # remove any volume mounts for the existing assets folder in docker-compose.yml
   sed -i '/assets\/.*:\/usr\/share\/nginx\/html\/assets/d' "$instancePath/docker-compose.yml"
 fi
@@ -70,5 +67,5 @@ ensureAssetVolumeMountsFromDir "$instancePath/docker-compose.yml" "$instancePath
 
 # restart docker if a third arg ($3) is "y" or "true"
 if [ "$3" == "y" ] || [ "$3" == "true" ]; then
-  docker compose -f "$instance/docker-compose.yml" down && docker compose  -f "$instance/docker-compose.yml" up -d
+  (cd "$instancePath" && docker compose down && docker compose up -d)
 fi

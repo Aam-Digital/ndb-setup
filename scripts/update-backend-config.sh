@@ -2,7 +2,7 @@
 # Update an instance's aam-backend-service to a release and migrate its application.env to that release's
 # config template: keys still in the template keep their current value, new keys get the template default.
 # Keys no longer in the template are kept too (and reported), so nothing written by the setup scripts gets
-# lost. application.env is backed up first. Since new keys only have the template's defaults, re-run
+# lost. A rollback copy of application.env is saved first. Since new keys only have the template's defaults, re-run
 # ./enable-backend.sh <instance> afterwards to re-apply the instance-specific values (its repair path).
 #
 # Usage:
@@ -85,14 +85,14 @@ if [ "${#droppedKeys[@]}" -gt 0 ]; then
   echo "[$instance] not in the $backendVersion template anymore, kept (remove them if obsolete): ${droppedKeys[*]}"
 fi
 
-backupFile "$appEnv"
+saveRollbackCopy "$appEnv"
 cat "$merged" > "$appEnv"
-backupFile "$path/.env"
+saveRollbackCopy "$path/.env"
 setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 
 echo "[$instance] redeploying..."
 if ! (cd "$path" && docker compose pull && docker compose up -d); then
-  echo "[$instance] ERROR: redeploy failed. The previous config is in the backups listed above."
+  echo "[$instance] ERROR: redeploy failed. The previous config is in the rollback copies listed above."
   exit 1
 fi
 echo "[$instance] aam-backend-service updated to $backendVersion."

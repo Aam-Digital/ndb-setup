@@ -5,7 +5,7 @@
 # Instances get a *copy* of docker-compose.yml at setup time, so structural
 # changes to the canonical file (new service, changed volume, etc.) do not
 # propagate automatically. This script previews the diff for the instance,
-# asks for confirmation, backs up the old file, copies the new one and
+# asks for confirmation, saves a rollback copy of the old file, copies the new one and
 # redeploys the instance ('docker compose pull' + 'docker compose up -d').
 #
 # The wholesale copy would drop any instance-local asset volume mounts, so the target
@@ -210,9 +210,9 @@ update_instance() {
         return 0
     fi
 
-    backupFile "$target"
-    # Remember the backup just made so a failed redeploy can roll back config + runtime.
-    local previous="$BACKUP_FILE"
+    saveRollbackCopy "$target"
+    # Remember the rollback copy just made so a failed redeploy can roll back config + runtime.
+    local previous="$ROLLBACK_COPY"
 
     cp "$expected" "$target"
     rm -f "$expected"
@@ -227,9 +227,9 @@ update_instance() {
     org=$(getVar "$envFile" INSTANCE_NAME)
     composeProfiles=$(getVar "$envFile" COMPOSE_PROFILES)
 
-    backupFile "$envFile"
-    # Remember the .env backup (if any) so a failed redeploy can roll it back alongside docker-compose.yml.
-    local previousEnv="$BACKUP_FILE"
+    saveRollbackCopy "$envFile"
+    # Remember the .env rollback copy (if any) so a failed redeploy can roll it back alongside docker-compose.yml.
+    local previousEnv="$ROLLBACK_COPY"
 
     if profileDeploysReplicationBackend "$composeProfiles" \
         && [ -z "$(getVar "$envFile" DB_ENTRYPOINT_URL)" ]; then

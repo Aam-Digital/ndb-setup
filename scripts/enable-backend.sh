@@ -251,7 +251,7 @@ repairBackendConfig() {
 
   local servicesToRecreate=()
   if needs keycloak-admin || needs couchdb-credentials || needs render-api; then
-    backupFile "$appEnv"
+    saveRollbackCopy "$appEnv"
     servicesToRecreate+=("aam-backend-service")
   fi
   if needs keycloak-admin; then
@@ -264,7 +264,7 @@ repairBackendConfig() {
     writeRenderApiConfig "$appEnv" "carbone-${instance}" "$carboneSecret"
   fi
   if needs replication-backend-client; then
-    backupFile "$envFile"
+    saveRollbackCopy "$envFile"
     writeReplicationBackendKeycloakClient "$envFile" "$backendSecret"
     servicesToRecreate+=("replication-backend")
   fi
@@ -362,7 +362,7 @@ downloadBackendConfigTemplate "$backendVersion" "$templateFile" || exit 1
 
 (cd "$path" && docker compose down)
 
-backupFile "$path/.env"
+saveRollbackCopy "$path/.env"
 
 # set aam-backend-service-version to supported version
 setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"

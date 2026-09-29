@@ -218,7 +218,7 @@ if [ -z "$keycloakClientSecret" ]; then
   exit 1
 fi
 
-backupFile "$appEnv"
+saveRollbackCopy "$appEnv"
 
 # Configure SMTP only when not already set, so re-runs/repairs keep existing (possibly customized) mail settings.
 if [ -z "$existingMailHost" ]; then

@@ -143,7 +143,7 @@ fi
 frontendConfigChanged=false
 newFirebaseWebConfig=$(printf '%s' "$firebaseWebConfigJson" | jq .)
 if [ ! -f "$firebaseWebConfigFile" ] || [ "$(cat "$firebaseWebConfigFile")" != "$newFirebaseWebConfig" ]; then
-  # No backupFile here: a backup inside assets/ would get volume-mounted (and served) as well, and the config
+  # No saveRollbackCopy here: a copy inside assets/ would get volume-mounted (and served) as well, and the config
   # is the shared, non-secret Firebase web config that can always be re-created from FIREBASE_CONFIG_JSON.
   writeFirebaseWebConfig "$firebaseWebConfigFile" "$newFirebaseWebConfig" || exit 1
   echo "  ~ wrote assets/$(basename "$firebaseWebConfigFile") (frontend web push config)"
@@ -154,12 +154,12 @@ fi
 # mount point.
 legacyFirebaseMount='^[[:space:]]*- \./firebase-config\.json:/usr/share/nginx/html/assets/firebase-config\.json([[:space:]]|$)'
 if grep -Eq "$legacyFirebaseMount" "$composeFile"; then
-  backupFile "$composeFile"
+  saveRollbackCopy "$composeFile"
   sed -i -E "\\#$legacyFirebaseMount#d" "$composeFile" || exit 1
   echo "  - removed legacy ./firebase-config.json volume mount"
   frontendConfigChanged=true
 elif ! grep -Eq "^[[:space:]]*- \./assets/firebase-config\.json:" "$composeFile"; then
-  backupFile "$composeFile"
+  saveRollbackCopy "$composeFile"
   frontendConfigChanged=true
 fi
 ensureAssetVolumeMount "$composeFile" "firebase-config.json"
@@ -170,7 +170,7 @@ ensureAssetVolumeMount "$composeFile" "firebase-config.json"
 if [ "$isFeatureAlreadyEnabled" == "true" ]; then
   backendConfigChanged=false
   if permissionCheckAuthOutdated; then
-    backupFile "$appEnv"
+    saveRollbackCopy "$appEnv"
     syncPermissionCheckAuth || exit 1
     backendConfigChanged=true
   fi
@@ -185,9 +185,9 @@ if [ "$isFeatureAlreadyEnabled" == "true" ]; then
   exit 0
 fi
 
-backupFile "$appEnv"
-# Private pre-write copy to roll back to if the email step fails (below). Not $BACKUP_FILE: the email script
-# backs up application.env as well, and within the same second its backup would overwrite ours.
+saveRollbackCopy "$appEnv"
+# Private pre-write copy to roll back to if the email step fails (below). Not $ROLLBACK_COPY: the email script
+# saves a rollback copy of application.env as well, and within the same second its copy would overwrite ours.
 appEnvBeforeWrite=$(mktemp)
 trap 'rm -f "$appEnvBeforeWrite"' EXIT   # holds the backend secrets: remove it on every exit path
 cp "$appEnv" "$appEnvBeforeWrite"

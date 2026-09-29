@@ -135,17 +135,18 @@ removeEnvIfValue() {
   fi
 }
 
-# Create a timestamped backup of a file.
-# Sets the global BACKUP_FILE to the backup path (empty if the source file did not exist) so callers can
-# restore from it, e.g. to roll back a failed redeploy.
-backupFile() {
+# Save a rollback copy of a file before a script changes it: "<file>.rollback-<timestamp>" next to it.
+# (Not to be confused with backup.sh's system backups.) Sets the global ROLLBACK_COPY to the copy's path
+# (empty if the file did not exist) so callers can restore from it, e.g. to roll back a failed redeploy.
+# prune-rollback-copies.sh deletes them.
+saveRollbackCopy() {
   local file="$1"
-  local backup="$file.bak-$(date +%Y%m%d%H%M%S)"
-  BACKUP_FILE=""
+  local copy="$file.rollback-$(date +%Y%m%d%H%M%S)"
+  ROLLBACK_COPY=""
   if [ -f "$file" ]; then
-    cp "$file" "$backup"
-    BACKUP_FILE="$backup"
-    echo "  backup: $(basename "$backup")"
+    cp "$file" "$copy"
+    ROLLBACK_COPY="$copy"
+    echo "  rollback copy: $(basename "$copy")"
   fi
 }
 

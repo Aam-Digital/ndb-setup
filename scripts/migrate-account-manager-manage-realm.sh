@@ -56,7 +56,7 @@ migrateInstance() {
   instance=$(getVar "$instanceDir/.env" INSTANCE_NAME)
   if [ -z "$instance" ]; then
     instance="$(basename "$instanceDir")"
-    instance="${instance#"$PREFIX"}"
+    instance="${instance#"${PREFIX:-}"}"
   fi
 
   token=""   # the admin token is short-lived, get a fresh one for each instance

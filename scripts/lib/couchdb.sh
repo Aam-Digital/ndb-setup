@@ -83,7 +83,13 @@ couchdbInitStart() {
     # --remove-orphans: a stopped old couchdb-only/couchdb-with-permissions container from a previous
     # schema can still hold the "${INSTANCE_NAME}-database" name - without this flag `up` fails outright
     # on that name conflict instead of creating the couchdb container.
-    (cd "$path" && docker compose up -d --remove-orphans couchdb)
+    (cd "$path" && docker compose up -d --remove-orphans couchdb) || return 1
+    # target exactly the container just started (exec and the later rm), not whatever holds the name
+    DB_CONTAINER=$(cd "$path" && docker compose ps -q couchdb 2>/dev/null)
+    if [ -z "$DB_CONTAINER" ]; then
+      echo "ERROR: couchdb container of $path not found after starting it. Abort." >&2
+      return 1
+    fi
   fi
 
   couchdbWaitUntilUp

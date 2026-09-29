@@ -25,7 +25,8 @@
 #                      is detected from COMPOSE_PROFILES in the instance .env (the flag is needed while
 #                      setting up an instance whose profile is not switched yet). Database-only mode
 #                      (CouchDB exposed directly) applies the "user_app" _security and the JWT signing key.
-# --repair-all         run this for every instance, each in its detected mode; takes no other arguments
+# --repair-all         run this for every instance with replication-backend (database-only instances are
+#                      skipped); takes no other arguments
 
 ##############################
 # setup
@@ -64,13 +65,17 @@ set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 # must neither abort the loop nor leak into the next instance.
 if [ "$repairAll" = true ]; then
   if [ "$#" -gt 0 ] || [ "$withPermissions" = true ]; then
-    echo "ERROR: --repair-all repairs all instances in their detected mode and takes no other arguments (got: $*)."
+    echo "ERROR: --repair-all repairs all instances with replication-backend and takes no other arguments (got: $*)."
     echo "  To repair a single instance, run: $0 <instance>"
     exit 1
   fi
   failedInstances=()
   repairInstance() {
     local dir="$1"
+    case "$(getVar "$dir/.env" COMPOSE_PROFILES)" in
+      with-permissions | full-stack | full-stack-without-sqs) ;;
+      *) echo "[$(basename "$dir")] database-only, skipping"; return 0 ;;
+    esac
     echo "[$(basename "$dir")]"
     "$0" "$dir" || failedInstances+=("$(basename "$dir")")
     echo ""

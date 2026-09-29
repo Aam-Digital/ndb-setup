@@ -149,7 +149,7 @@ open the file. Rather than duplicate that here, note only the deviations from th
 - **`create-couchdb.sh`** is safe to re-run on a live instance and doubles as the repair for CouchDB's
   security config: it detects the mode from `COMPOSE_PROFILES`, reuses a running CouchDB (restarting it only
   if `couchdb.ini` changed) and re-applies `_security`, the JWT config and — with replication-backend —
-  rejecting anonymous requests. `--repair-all` does this for every instance.
+  rejecting anonymous requests. `--repair-all` does this for every instance with replication-backend.
 - **`migrate-account-manager-manage-realm.sh`** adds the realm-management roles the `account_manager`
   realm role needs (incl. `manage-realm`) so its members can manage roles in the app's admin UI. Unlike the
   other Keycloak repairs this runs on *every* instance, since that UI calls Keycloak from the frontend and

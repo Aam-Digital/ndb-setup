@@ -169,6 +169,10 @@ if [ "$withPermissions" = true ]; then
   setEnv COMPOSE_PROFILES "with-permissions" "$path/.env"
   # the app container's /db now needs to reach replication-backend instead of CouchDB directly
   upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$path/.env"
+  # an existing database-only instance still has the permissive "user_app" _security and CouchDB's JWT auth
+  if [ "$app" != 0 ]; then
+    "$scriptDir/create-couchdb.sh" "$org" --with-permissions || exit 1
+  fi
   echo "replication-backend added"
 fi
 

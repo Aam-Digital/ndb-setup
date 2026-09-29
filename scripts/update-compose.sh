@@ -226,9 +226,8 @@ update_instance() {
     rm -f "$expected"
 
     # This canonical version routes /db through DB_ENTRYPOINT_URL when replication-backend
-    # enforces access (COMPOSE_PROFILES is with-permissions, full-stack or full-stack-without-sqs -
-    # the profiles that actually deploy replication-backend; unset/empty behaves like database-only,
-    # i.e. no profile active). An instance already on such a profile needs this backfilled now:
+    # enforces access (see profileDeploysReplicationBackend). An instance already on such a
+    # profile needs this backfilled now:
     # without it, COUCHDB_URL silently falls back to CouchDB directly on redeploy, bypassing every
     # permission check replication-backend exists to enforce.
     local envFile="$D/.env"
@@ -240,7 +239,7 @@ update_instance() {
     # Remember the .env backup (if any) so a failed redeploy can roll it back alongside docker-compose.yml.
     local previousEnv="$BACKUP_FILE"
 
-    if { [ "$composeProfiles" = "with-permissions" ] || [ "$composeProfiles" = "full-stack" ] || [ "$composeProfiles" = "full-stack-without-sqs" ]; } \
+    if profileDeploysReplicationBackend "$composeProfiles" \
         && [ -z "$(getVar "$envFile" DB_ENTRYPOINT_URL)" ]; then
         upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$envFile"
     fi
@@ -251,7 +250,7 @@ update_instance() {
     # entirely - a route this canonical version's app service no longer has. Without this
     # backfill /api would silently 502 (API_URL falls back to its always-resolvable default)
     # for every full-stack instance still relying on that old route.
-    if { [ "$composeProfiles" = "full-stack" ] || [ "$composeProfiles" = "full-stack-without-sqs" ]; } \
+    if profileDeploysBackend "$composeProfiles" \
         && [ -z "$(getVar "$envFile" API_BACKEND_URL)" ]; then
         upsertEnv API_BACKEND_URL "http://${org}-aam-backend-service:8080" "$envFile"
     fi

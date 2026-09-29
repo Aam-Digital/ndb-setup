@@ -348,13 +348,27 @@ forEachInstance() {
 # Backend / instance checks
 ##############################
 
-# Check if aam-backend-service is enabled (COMPOSE_PROFILES=full-stack).
+# Whether a COMPOSE_PROFILES value deploys replication-backend / aam-backend-service (see the `profiles:` of
+# those services in docker-compose.yml). Unset/empty or anything else behaves like database-only.
+# Usage: profileDeploysReplicationBackend "$(getVar "$dir/.env" COMPOSE_PROFILES)"
+profileDeploysReplicationBackend() {
+  case "$1" in
+    with-permissions | full-stack | full-stack-without-sqs) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+profileDeploysBackend() {
+  case "$1" in
+    full-stack | full-stack-without-sqs) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Check if aam-backend-service is enabled (COMPOSE_PROFILES full-stack or full-stack-without-sqs).
 # Requires: $path set to the instance directory.
 # Returns: 0 (true) if enabled, 1 (false) otherwise
 backendEnabledCheck() {
-  local composeProfiles
-  composeProfiles=$(getVar "$path/.env" COMPOSE_PROFILES)
-  [ "$composeProfiles" = "full-stack" ]
+  profileDeploysBackend "$(getVar "$path/.env" COMPOSE_PROFILES)"
 }
 
 # Check if an application.env config exists for aam-backend-service.
@@ -364,13 +378,12 @@ isBackendConfigCreated() {
   [ -f "$path/config/aam-backend-service/application.env" ]
 }
 
-# Check if replication-backend is enabled (COMPOSE_PROFILES != database-only).
+# Check if replication-backend is enabled (COMPOSE_PROFILES with-permissions, full-stack or
+# full-stack-without-sqs).
 # Requires: $path set to the instance directory.
 # Returns: 0 (true) if enabled, 1 (false) otherwise
 replicationBackendEnabledCheck() {
-  local composeProfiles
-  composeProfiles=$(getVar "$path/.env" COMPOSE_PROFILES)
-  [ "$composeProfiles" != "database-only" ]
+  profileDeploysReplicationBackend "$(getVar "$path/.env" COMPOSE_PROFILES)"
 }
 
 # Fetch the latest aam-backend-service release version from GitHub, e.g. `1.22.15`.

@@ -347,6 +347,12 @@ upsertEnv DB_ENTRYPOINT_URL "http://${instance}-replication-backend:5984" "$path
 # ...and its /api now needs to reach aam-backend-service, which this profile also deploys
 upsertEnv API_BACKEND_URL "http://${instance}-aam-backend-service:8080" "$path/.env"
 
+# ensure CouchDB is locked down for replication-backend (admin-only _security, no JWT auth, no anonymous access)
+if ! "$scriptDir/create-couchdb.sh" "$path" --with-permissions; then
+  echo "ERROR: Failed to lock down CouchDB for '$instance'. Fix it and re-run create-couchdb.sh before starting the stack."
+  exit 1
+fi
+
 if [ "$skipRestart" != "true" ]; then
   (cd "$path" && docker compose up -d)
 fi

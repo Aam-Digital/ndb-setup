@@ -18,8 +18,8 @@
 # Re-running it on an instance with the backend already enabled only repairs the backend's Keycloak admin
 # access (realm-management roles incl. "manage-clients", KEYCLOAK_* in application.env) and recreates the
 # backend if something changed. To repair all instances that have the backend enabled (only those, as
-# running it on any other instance enables the backend there):
-#   for f in $(grep -l '^COMPOSE_PROFILES=full-stack' "$baseDirectory/$PREFIX"*/.env); do ./enable-backend.sh "$(dirname "$f")"; done
+# running it on any other instance enables the backend there), run from this scripts directory:
+#   (source ../setup.env; for f in $(grep -l '^COMPOSE_PROFILES=full-stack' ../../"$PREFIX"*/.env); do ./enable-backend.sh "$(dirname "$f")"; done)
 #
 # Requires: CARBONE_HOST and KEYCLOAK_HOST set in setup.env (environment-specific):
 #   Environment  KEYCLOAK_HOST                  CARBONE_HOST

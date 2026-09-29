@@ -80,15 +80,18 @@ cd /srv/instances/c-acme && …/create-couchdb.sh .   # "." from inside the fold
 ### All instances — `for-each-instance.sh`
 
 Scripts operate on **one** instance; to run one for every instance, use the wrapper instead of a
-per-script loop. It runs the command once per instance (in its own process, with the instance directory
-appended as the last argument), keeps going on failures and lists the failed instances at the end:
+per-script loop. It runs the command once per instance, in its own process inside the instance's directory,
+keeps going on failures and lists the failed instances at the end. A script path gets the instance
+directory appended as its last argument; any other command runs as given, and a single quoted string runs
+with bash:
 
 ```bash
 ./for-each-instance.sh ./update-compose.sh --yes
 ./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0
 ./for-each-instance.sh --only replication-backend ./create-couchdb.sh   # skip instances without it
 ./for-each-instance.sh --only backend ./enable-backend.sh               # skip instances without aam-backend-service
-./for-each-instance.sh --in-dir docker compose pull                     # run inside each instance dir
+./for-each-instance.sh docker compose pull
+./for-each-instance.sh "docker compose down && docker compose up -d"    # restart all instances
 ```
 
 Exceptions that keep their own loop: `list-instances.sh` (one combined table) and `collect-credentials.sh`

@@ -3,18 +3,21 @@
 # own process, and list the instances it failed for. A failure does not stop the remaining instances.
 #
 # Usage:
-#   ./for-each-instance.sh [--only replication-backend|backend] [--in-dir] [--] <command> [args...]
+#   ./for-each-instance.sh [--only replication-backend|backend] [--] <command> [args...]
 #
-# By default the instance directory is appended as the last argument, which fits every script taking an
-# <instance> argument:
-#   ./for-each-instance.sh --only replication-backend ./create-couchdb.sh
-#   ./for-each-instance.sh --only backend ./enable-backend.sh
-#   ./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0
+# How the command runs, always inside each instance's directory:
+#   a script path (contains "/"): gets the instance directory appended as its last argument, which fits
+#       every script here taking an <instance> argument
+#         ./for-each-instance.sh --only backend ./enable-backend.sh
+#         ./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0
+#   any other command: runs as given
+#         ./for-each-instance.sh docker compose pull
+#   one quoted string with spaces: runs with bash, so &&, | and variables work
+#         ./for-each-instance.sh "docker compose down && docker compose up -d"
+#         ./for-each-instance.sh 'grep ^APP_VERSION= .env'
 #
 # --only replication-backend   only instances whose COMPOSE_PROFILES deploys replication-backend
 # --only backend               only instances whose COMPOSE_PROFILES deploys aam-backend-service
-# --in-dir                     run the command inside each instance directory instead (nothing appended):
-#                                ./for-each-instance.sh --in-dir docker compose pull
 #
 # Can be run from any directory.
 
@@ -24,12 +27,11 @@ source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 usage() {
-  sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
 only=""
-inDir=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --only)
@@ -39,7 +41,6 @@ while [ "$#" -gt 0 ]; do
       esac
       shift 2
       ;;
-    --in-dir) inDir=true; shift ;;
     -h | --help) usage ;;
     --) shift; break ;;
     -*) echo "ERROR: unknown option '$1' (put the command after '--' if it starts with '-')."; usage ;;
@@ -48,13 +49,20 @@ while [ "$#" -gt 0 ]; do
 done
 [ "$#" -gt 0 ] || usage
 
-if ! command -v "$1" >/dev/null 2>&1; then
-  echo "ERROR: command not found: $1 (relative paths are resolved from the current directory)."
-  exit 1
-fi
-# A relative command path (e.g. ./create-couchdb.sh) must still resolve after changing into an instance dir.
-if [[ "$1" == */* ]]; then
-  set -- "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" "${@:2}"
+if [ "$#" -eq 1 ] && [[ "$1" == *[[:space:]]* ]]; then
+  mode=shell
+else
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "ERROR: command not found: $1 (relative paths are resolved from the current directory)."
+    exit 1
+  fi
+  if [[ "$1" == */* ]]; then
+    mode=script
+    # a relative script path (e.g. ./create-couchdb.sh) must still resolve inside the instance directories
+    set -- "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" "${@:2}"
+  else
+    mode=command
+  fi
 fi
 
 runForInstance() {
@@ -77,11 +85,11 @@ runForInstance() {
 
   echo "[$name]"
   local rc=0
-  if [ "$inDir" = true ]; then
-    (cd "$dir" && "${cmd[@]}") || rc=$?
-  else
-    ("${cmd[@]}" "$dir") || rc=$?
-  fi
+  case "$mode" in
+    shell) (cd "$dir" && bash -c "${cmd[0]}") || rc=$? ;;
+    script) (cd "$dir" && "${cmd[@]}" "$dir") || rc=$? ;;
+    command) (cd "$dir" && "${cmd[@]}") || rc=$? ;;
+  esac
   [ "$rc" -eq 0 ] || failed+=("$name")
   echo ""
 }

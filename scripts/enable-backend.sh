@@ -344,6 +344,11 @@ if ! getKeycloakToken; then
 fi
 checkCarbonePrerequisites || exit 1
 
+# latest template config (from aam-services repository), fetched before anything is stopped or changed
+templateFile=$(mktemp)
+trap 'rm -f "$templateFile"' EXIT
+downloadBackendConfigTemplate "$backendVersion" "$templateFile" || exit 1
+
 (cd "$path" && docker compose down)
 
 backupFile "$path/.env"
@@ -354,8 +359,7 @@ setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 # create backend config directory
 mkdir -p "$path/config/aam-backend-service"
 
-# copy latest template config (from aam-services repository)
-curl -L -o "$path/config/aam-backend-service/application.env" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$backendVersion/templates/aam-backend-service/application.template.env"
+cp "$templateFile" "$path/config/aam-backend-service/application.env"
 
 setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$instance" "$path/config/aam-backend-service/application.env"

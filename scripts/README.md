@@ -55,7 +55,7 @@ interactive-setup.sh
 Each step above is a self-contained script that can also be run on its own — e.g. to re-configure
 Keycloak or recreate the databases for an existing instance. Feature toggles (`enable-backend.sh`,
 `enable-feature-notification.sh`, `enable-feature-notification-email.sh`, `enable-assets-overwrites.sh`)
-and maintenance/migration scripts follow the same conventions.
+and maintenance scripts (`update-*.sh`, `prune-backups.sh`, …) follow the same conventions.
 
 ### 3. Shared library — `lib/`
 
@@ -94,7 +94,7 @@ value=$(getConfig SMTP_SERVER)   # returns non-zero if unresolved (caller decide
 ```
 
 **Consequence:** the standalone scripts run **without BWS** — just put the needed values in `setup.env`
-or the environment. Only `interactive-setup.sh` (and the not-yet-converted one-off migrations) require a
+or the environment. Only `interactive-setup.sh` requires a
 token. To add a new BWS-backed value, add its `NAME → UUID` mapping to `_bwsSecretId` in `lib/secrets.sh`.
 
 ### Instance targeting — name **or** path
@@ -124,9 +124,15 @@ appended as the last argument), keeps going on failures and lists the failed ins
 ./for-each-instance.sh --in-dir docker compose pull                     # run inside each instance dir
 ```
 
-Exceptions that keep their own loop: `version-info.sh` (one combined table), `collect-credentials.sh`
-(self-contained, see below) and the historical `migrate-*.sh` one-offs (via `forEachInstance` in
-`lib/common.sh`).
+Exceptions that keep their own loop: `version-info.sh` (one combined table) and `collect-credentials.sh`
+(self-contained, see below).
+
+### Migrations are repairs of the setup scripts
+
+There are no separate migration scripts: when the setup of an instance changes, the setup script that
+creates that part also repairs existing instances when re-run (see the notes below), and the change is
+rolled out with `for-each-instance.sh`. That keeps the "how it should be" in one place for new and
+existing instances.
 
 ### Idempotency
 
@@ -151,8 +157,8 @@ and restart the stack **once** at the end. Run standalone (without the flag) the
 Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
 open the file. Rather than duplicate that here, note only the deviations from the conventions above:
 
-- **One-off migrations** (`migrate-*.sh`) have their `baseDirectory` derived but still load secrets
-  directly from BWS; they are kept as historical one-offs, not converted to `getConfig`.
+- **`update-backend-config.sh`** updates aam-backend-service to a release and migrates `application.env`
+  to its template (current values kept, new keys added, keys no longer in the template kept and reported).
 - **`backup.sh` / `backup-restore.sh`** still target `/var/docker` for the actual backup data path (the
   tar and restore paths are coupled), so they are not relocatable for the backup operation itself.
 - **`collect-credentials.sh`** is intentionally self-contained (meant to be copied out; takes an

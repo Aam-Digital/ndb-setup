@@ -393,6 +393,26 @@ getLatestBackendVersion() {
   curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
 }
 
+# Download the application.env template of an aam-backend-service release (from the aam-services repository)
+# to a file. Fails (leaving the file untouched) if the download fails or returns no config.
+# Args: version, destination file
+downloadBackendConfigTemplate() {
+  local version="$1" dest="$2" tmp
+  if [ -z "$version" ] || [ "$version" = "null" ]; then
+    echo "ERROR: no aam-backend-service version given (GitHub API rate limit?)." >&2
+    return 1
+  fi
+  tmp=$(mktemp)
+  if ! curl -fsSL -o "$tmp" "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$version/templates/aam-backend-service/application.template.env" \
+    || ! grep -qE '^[A-Z0-9_]+=' "$tmp"; then
+    echo "ERROR: could not download the application.env template of aam-backend-service $version." >&2
+    rm -f "$tmp"
+    return 1
+  fi
+  cat "$tmp" > "$dest"
+  rm -f "$tmp"
+}
+
 ##############################
 # Password generation
 ##############################

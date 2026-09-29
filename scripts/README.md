@@ -144,7 +144,8 @@ open the file. Rather than duplicate that here, note only the deviations from th
   `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
 - **`enable-backend.sh`** re-run on an instance with the backend already enabled does not abort but only
   repairs the backend's Keycloak admin access (realm-management roles incl. `manage-clients`, `KEYCLOAK_*` in
-  `application.env`), recreating the backend if something changed. See its header for a loop over all instances.
+  `application.env`), recreating the backend if something changed. `--repair-all` does this for every instance
+  with the backend enabled.
 - **`enable-feature-notification.sh`** writes the frontend Firebase web config to the instance's
   `assets/firebase-config.json` and volume-mounts it (the published ndb-core image does not contain it).
   Without BWS, provide `FIREBASE_CONFIG_JSON` as a single-quoted JSON object in `setup.env`. Re-running

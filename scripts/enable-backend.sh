@@ -17,9 +17,8 @@
 #
 # Re-running it on an instance with the backend already enabled only repairs the backend's Keycloak admin
 # access (realm-management roles incl. "manage-clients", KEYCLOAK_* in application.env) and recreates the
-# backend if something changed. To repair all instances that have the backend enabled (only those, as
-# running it on any other instance enables the backend there), run from this scripts directory:
-#   (source ../setup.env; for f in $(grep -l '^COMPOSE_PROFILES=full-stack' ../../"$PREFIX"*/.env); do ./enable-backend.sh "$(dirname "$f")"; done)
+# backend if something changed. To do this for all instances that have the backend enabled (others are skipped):
+#   ./enable-backend.sh --repair-all
 #
 # Requires: CARBONE_HOST and KEYCLOAK_HOST set in setup.env (environment-specific):
 #   Environment  KEYCLOAK_HOST                  CARBONE_HOST
@@ -52,32 +51,18 @@ source "$scriptDir/lib/keycloak.sh"
 # --skip-restart: do not restart docker at the end; the caller (e.g. interactive-setup.sh) is responsible
 # for bringing the stack up once, after all enable-* scripts have written their config. Run standalone
 # (without the flag) the script restarts itself. Flags are stripped here so positional args stay intact.
+# --repair-all: only repair the backend's Keycloak admin access of every instance with the backend enabled.
 skipRestart=false
+repairAll=false
 positionalArgs=()
 for arg in "$@"; do
   case "$arg" in
     --skip-restart) skipRestart=true ;;
+    --repair-all) repairAll=true ;;
     *) positionalArgs+=("$arg") ;;
   esac
 done
 set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
-
-##############################
-# ask for input data
-##############################
-
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-instance=$(getVar "$path/.env" INSTANCE_NAME)
-if [ -z "$instance" ]; then
-  instance="$(basename "$path")"
-  instance="${instance#"$PREFIX"}"
-fi
 
 ##############################
 # already enabled: repair Keycloak admin access only
@@ -86,12 +71,14 @@ fi
 # Ensure the aam-backend service account has the realm-management roles (incl. "manage-clients") and the
 # backend has its Keycloak admin client configured. Instances enabled before the backend managed its
 # client scopes itself lack this, so API clients relying on those scopes are denied access (HTTP 403).
+# Uses the globals path and instance.
 repairBackendKeycloakAdminAccess() {
   local appEnv="$path/config/aam-backend-service/application.env"
 
   requireConfig KEYCLOAK_HOST
   requireConfig KEYCLOAK_PASSWORD
   requireConfig KEYCLOAK_USER
+  token=""   # the admin token is short-lived, get a fresh one for each instance
 
   local configComplete=true key
   for key in KEYCLOAK_SERVERURL KEYCLOAK_REALM KEYCLOAK_CLIENTID KEYCLOAK_CLIENTSECRET; do
@@ -136,6 +123,48 @@ repairBackendKeycloakAdminAccess() {
   fi
   echo "Keycloak admin access of the backend repaired."
 }
+
+if [ "$repairAll" = true ]; then
+  failedInstances=()
+  repairIfBackendEnabled() {
+    path="$1"
+    instance=$(getVar "$path/.env" INSTANCE_NAME)
+    if [ -z "$instance" ]; then
+      instance="$(basename "$path")"
+      instance="${instance#"$PREFIX"}"
+    fi
+    if ! backendEnabledCheck || ! isBackendConfigCreated; then
+      echo "[$instance] backend not enabled, skipping"
+      return 0
+    fi
+    echo "[$instance]"
+    repairBackendKeycloakAdminAccess || failedInstances+=("$instance")
+    echo ""
+  }
+  forEachInstance repairIfBackendEnabled || exit 1
+  if [ "${#failedInstances[@]}" -gt 0 ]; then
+    echo "Repair failed for: ${failedInstances[*]}"
+    exit 1
+  fi
+  exit 0
+fi
+
+##############################
+# ask for input data
+##############################
+
+if [ -n "$1" ]; then
+  instanceArg="$1"
+else
+  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
+  read -r instanceArg
+fi
+resolveInstancePath "$instanceArg" || exit 1
+instance=$(getVar "$path/.env" INSTANCE_NAME)
+if [ -z "$instance" ]; then
+  instance="$(basename "$path")"
+  instance="${instance#"$PREFIX"}"
+fi
 
 if backendEnabledCheck && isBackendConfigCreated; then
   repairBackendKeycloakAdminAccess

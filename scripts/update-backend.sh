@@ -6,10 +6,10 @@
 # ./enable-backend.sh <instance> afterwards to re-apply the instance-specific values (its repair path).
 #
 # Usage:
-#   ./update-backend-config.sh [--version <version>] <instance>
+#   ./update-backend.sh [--version <version>] <instance>
 #     --version  the aam-backend-service release (default: the latest one on GitHub). Pass it when running
 #                for many instances, to not hit GitHub's API rate limit on each:
-#                  ./for-each-instance.sh --only backend ./update-backend-config.sh --version 1.22.15
+#                  ./for-each-instance.sh --only backend ./update-backend.sh --version 1.22.15
 #
 # Can be run from any directory.
 

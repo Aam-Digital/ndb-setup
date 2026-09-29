@@ -54,8 +54,9 @@ interactive-setup.sh
 
 Each step above is a self-contained script that can also be run on its own — e.g. to re-configure
 Keycloak or recreate the databases for an existing instance. Feature toggles (`enable-backend.sh`,
-`enable-feature-notification.sh`, `enable-feature-notification-email.sh`, `enable-assets-overwrites.sh`)
-and maintenance scripts (`update-*.sh`, `prune-rollback-copies.sh`, …) follow the same conventions.
+`enable-notifications.sh`, `enable-email-notifications.sh`, `enable-sentry.sh`),
+`apply-asset-overrides.sh` (a base config's asset overrides) and maintenance scripts (`update-*.sh`,
+`backup.sh`, `prune-rollback-copies.sh`, `list-instances.sh`, …) follow the same conventions.
 
 ### 3. Shared library — `lib/`
 
@@ -90,7 +91,7 @@ appended as the last argument), keeps going on failures and lists the failed ins
 ./for-each-instance.sh --in-dir docker compose pull                     # run inside each instance dir
 ```
 
-Exceptions that keep their own loop: `version-info.sh` (one combined table) and `collect-credentials.sh`
+Exceptions that keep their own loop: `list-instances.sh` (one combined table) and `collect-credentials.sh`
 (self-contained, see below).
 
 ### Migrations are repairs of the setup scripts
@@ -110,7 +111,7 @@ Scripts that write config of a running stack restart what they changed, unless `
 Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
 open the file. Rather than duplicate that here, these notes cover only what needs extra context:
 
-- **`update-backend-config.sh`** updates aam-backend-service to a release and migrates `application.env`
+- **`update-backend.sh`** updates aam-backend-service to a release and migrates `application.env`
   to its template (current values kept, new keys added, keys no longer in the template kept and reported).
 - **`backup.sh`** creates, lists and restores the encrypted system backups (`create` is the default, for
   cron; see the [repository README](../README.md#backups)). Not to be confused with the rollback copies
@@ -133,7 +134,7 @@ open the file. Rather than duplicate that here, these notes cover only what need
   see [`keycloak/README.md`](../keycloak/README.md)). It refuses to create a new realm for an instance that
   was already set up, or to repoint one using another Keycloak. For every instance:
   `./for-each-instance.sh ./create-keycloak-realm.sh`.
-- **`enable-feature-notification.sh`** writes the frontend Firebase web config to the instance's
+- **`enable-notifications.sh`** writes the frontend Firebase web config to the instance's
   `assets/firebase-config.json` and volume-mounts it (the published ndb-core image does not contain it).
   Without BWS, provide `FIREBASE_CONFIG_JSON` as a single-quoted JSON object in `setup.env`. Re-running
   the script on an instance with notifications already enabled only adds a missing web config/mount.

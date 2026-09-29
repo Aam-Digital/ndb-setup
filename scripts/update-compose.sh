@@ -10,9 +10,9 @@
 #
 # The wholesale copy would drop any instance-local asset volume mounts, so the target
 # file is the canonical one plus a mount for every asset present in the instance's
-# assets/ folder (the same logic enable-assets-overwrites.sh uses). The up-to-date check,
+# assets/ folder (the same logic apply-asset-overrides.sh uses). The up-to-date check,
 # the preview diff and the copy all use that target, so asset mounts (e.g. the
-# assets/firebase-config.json written by enable-feature-notification.sh) are neither
+# assets/firebase-config.json written by enable-notifications.sh) are neither
 # dropped nor reported as a change on every run.
 #
 # Instances from before the Firebase web config moved to assets/ still mount
@@ -140,7 +140,7 @@ update_instance() {
         fi
     elif [ -d "$assetsFirebase" ]; then
         echo "[$instance] WARNING: assets/firebase-config.json is a directory (Docker creates one when a mounted file is"
-        echo "[$instance]          missing), so push notifications cannot register. Re-run enable-feature-notification.sh."
+        echo "[$instance]          missing), so push notifications cannot register. Re-run enable-notifications.sh."
     fi
 
     # The target file: canonical + this instance's asset mounts.

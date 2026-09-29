@@ -3,8 +3,8 @@
 # This script will enable the notification feature for an customer instance.
 
 # how to use
-# ./enable-feature-notification.sh <instance>
-# example: ./enable-feature-notification.sh qm
+# ./enable-notifications.sh <instance>
+# example: ./enable-notifications.sh qm
 #
 # Attention: on macos, see setEnv function and enable the macos line instead the linux line
 #
@@ -134,7 +134,7 @@ fi
 # interactive-setup.
 if [ "$isFeatureAlreadyEnabled" != "true" ]; then
   [ -n "$2" ] && FIREBASE_CREDENTIAL_BASE64="$2"
-  requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./enable-feature-notification.sh <instance> <credential-base64>"
+  requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./enable-notifications.sh <instance> <credential-base64>"
   configCredentialBase64="$FIREBASE_CREDENTIAL_BASE64"
 fi
 
@@ -206,11 +206,11 @@ syncPermissionCheckAuth || exit 1
 # Abort (without restarting) if the email step fails, instead of reporting success with a half-applied config.
 # Roll application.env back as well: otherwise FEATURES_NOTIFICATIONAPI_ENABLED=true would make a re-run take
 # the "already enabled" shortcut above and never retry the email step or apply the pending config.
-if ! "$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart; then
+if ! "$scriptDir/enable-email-notifications.sh" "$path" --skip-restart; then
   cp "$appEnvBeforeWrite" "$appEnv"
   echo "ERROR: Enabling email notifications failed (see above). $(basename "$appEnv") was restored to its"
   echo "       previous state and the instance was NOT restarted. Fix the issue and re-run"
-  echo "       './enable-feature-notification.sh $instance'."
+  echo "       './enable-notifications.sh $instance'."
   exit 1
 fi
 

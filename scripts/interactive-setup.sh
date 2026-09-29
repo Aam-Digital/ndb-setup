@@ -200,7 +200,7 @@ if [ "$aamBackendService" == 0 ]; then
       # Enabling the backend also enables (push + email) notifications by default. The enable script loads the
       # Firebase credentials from BWS, so this runs non-interactively. --skip-restart is passed because this
       # script restarts the stack once at the very end, after all enable-* scripts have written their config.
-      "$scriptDir/enable-feature-notification.sh" "$org" --skip-restart
+      "$scriptDir/enable-notifications.sh" "$org" --skip-restart
     fi
   fi
 fi

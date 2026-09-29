@@ -1,6 +1,9 @@
 #!/bin/bash
-
-
+# List all instances as a table: deployment type (COMPOSE_PROFILES), the pinned versions of the app,
+# replication-backend and aam-backend-service, and which backend features are enabled.
+#
+# Usage:
+#   ./list-instances.sh
 ##############################
 # setup
 ##############################

@@ -2,11 +2,11 @@
 set -euo pipefail
 
 # This script will enable email notifications for a customer instance.
-# It requires the notification feature to already be enabled (run enable-feature-notification.sh first).
+# It requires the notification feature to already be enabled (run enable-notifications.sh first).
 
 # how to use
-# ./enable-feature-notification-email.sh <instance>
-# example: ./enable-feature-notification-email.sh qm
+# ./enable-email-notifications.sh <instance>
+# example: ./enable-email-notifications.sh qm
 
 ##############################
 # setup
@@ -25,7 +25,7 @@ source "$scriptDir/lib/secrets.sh"
 ##############################
 
 # --skip-restart: do not restart docker at the end; the caller is responsible for bringing the stack up once
-# after all config is written (e.g. enable-feature-notification.sh, which restarts once for both steps, or
+# after all config is written (e.g. enable-notifications.sh, which restarts once for both steps, or
 # interactive-setup.sh). Run standalone the script restarts itself. Flags are stripped so positional args stay intact.
 skipRestart=false
 positionalArgs=()
@@ -76,7 +76,7 @@ fi
 
 isNotificationEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_ENABLED)
 if [ "$isNotificationEnabled" != "true" ]; then
-  echo "Notification feature is not enabled for instance '$instance'. Please run './enable-feature-notification.sh' first."
+  echo "Notification feature is not enabled for instance '$instance'. Please run './enable-notifications.sh' first."
   exit 1
 fi
 

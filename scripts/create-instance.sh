@@ -145,7 +145,7 @@ ensureRealValue AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 # and use an `available-configs.json` entry to make it selectable in the app
 # see https://github.com/Aam-Digital/ndb-core/blob/master/src/assets/base-configs/available-configs.json
 if [ -d "$ndbSetupDir/baseConfigs/$baseConfig/assets" ]; then
-  "$scriptDir/enable-assets-overwrites.sh" "$org" "$baseConfig"
+  "$scriptDir/apply-asset-overrides.sh" "$org" "$baseConfig"
 fi
 
 # Apply a config overlay shipped by the baseConfig. The baseConfig's `config/` folder mirrors the

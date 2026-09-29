@@ -131,7 +131,7 @@ and restart the stack **once** at the end. Run standalone (without the flag) the
 | [`common.sh`](lib/common.sh) | `.env` helpers (`getVar`, `setEnv`, `upsertEnv`, `ensureEnv`, `ensureRealValue`, `removeEnv`), `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`), `getLatestBackendVersion`, docker-compose volume-mount helpers |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig` and the `NAME → BWS UUID` map (`_bwsSecretId`) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` — bring up the database-only CouchDB init container, run authenticated requests, tear it down |
-| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole` |
+| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `ensureBackendKeycloakAdminConfig` |
 
 Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
 open the file. Rather than duplicate that here, note only the deviations from the conventions above:
@@ -142,6 +142,9 @@ open the file. Rather than duplicate that here, note only the deviations from th
   tar and restore paths are coupled), so they are not relocatable for the backup operation itself.
 - **`collect-credentials.sh`** is intentionally self-contained (meant to be copied out; takes an
   `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
+- **`enable-backend.sh`** re-run on an instance with the backend already enabled does not abort but only
+  repairs the backend's Keycloak admin access (realm-management roles incl. `manage-clients`, `KEYCLOAK_*` in
+  `application.env`), recreating the backend if something changed. See its header for a loop over all instances.
 - **`enable-feature-notification.sh`** writes the frontend Firebase web config to the instance's
   `assets/firebase-config.json` and volume-mounts it (the published ndb-core image does not contain it).
   Without BWS, provide `FIREBASE_CONFIG_JSON` as a single-quoted JSON object in `setup.env`. Re-running

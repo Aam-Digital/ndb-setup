@@ -148,6 +148,22 @@ serviceAccountHasRealmManagementRole() {
     -H "Authorization: Bearer $token" | jq -e --arg r "$roleName" 'any(.[]; .name == $r)' >/dev/null
 }
 
+# Configure aam-backend-service's Keycloak admin access (KEYCLOAK_* in application.env) with the aam-backend
+# client. The backend uses it to provision the client scopes its API checks and to look up user emails.
+# Existing server URL and realm are kept; client ID and secret are always set, so they match each other.
+# Args: appEnvFile, serverUrl (e.g. https://keycloak.example.com), realm, clientSecret
+ensureBackendKeycloakAdminConfig() {
+  local appEnvFile="$1"
+  local serverUrl="$2"
+  local realm="$3"
+  local clientSecret="$4"
+
+  ensureRealValue "KEYCLOAK_SERVERURL" "$serverUrl" "$appEnvFile"
+  ensureRealValue "KEYCLOAK_REALM" "$realm" "$appEnvFile"
+  upsertEnv "KEYCLOAK_CLIENTID" "aam-backend" "$appEnvFile"
+  upsertEnv "KEYCLOAK_CLIENTSECRET" "$clientSecret" "$appEnvFile"
+}
+
 ##############################
 # Carbone render client helpers
 ##############################
@@ -297,7 +313,8 @@ _assignManageRealmRole() {
     return 1
   fi
 
-  local rolesToAssign=("manage-realm" "query-users" "view-users" "manage-users")
+  # manage-clients: aam-backend-service creates and assigns the client scopes its API endpoints check
+  local rolesToAssign=("manage-realm" "manage-clients" "query-users" "view-users" "manage-users")
   local rolePayload="[]"
   local roleName roleResponse
 
@@ -320,7 +337,7 @@ _assignManageRealmRole() {
       echo "  ERROR: Failed to assign realm-management roles to aam-backend service account in realm '$realm'."
       return 1
     fi
-    echo "  Ensured realm-management roles on aam-backend service account: manage-realm, query-users, view-users, manage-users."
+    echo "  Ensured realm-management roles on aam-backend service account: ${rolesToAssign[*]}."
   else
     echo "  WARNING: No realm-management roles could be assigned to aam-backend service account."
   fi

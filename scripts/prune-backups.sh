@@ -1,6 +1,7 @@
 #!/bin/bash
-# Prune backup files left behind by migration / update scripts across all
-# instances: docker-compose.yml, .env and the backend config (application.env).
+# Prune backup files left behind by migration / update scripts in an instance:
+# docker-compose.yml, .env and the backend config (application.env).
+# For all instances: ./for-each-instance.sh ./prune-backups.sh [--yes]
 #
 # These backups are created by backupFile() in scripts/lib/common.sh
 # (named "<file>.bak-<timestamp>") and by older scripts as
@@ -20,8 +21,8 @@ ASSUME_YES=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes] [instance]"
-    echo "  instance  prune only this instance (default: all ${PREFIX}* instances)"
+    echo "Usage: $0 [--yes] <instance>"
+    echo "  instance  instance name or directory (for all: ./for-each-instance.sh $0 [--yes])"
     echo "  --yes     delete without asking for confirmation"
     exit 1
 }
@@ -35,7 +36,7 @@ for arg in "$@"; do
     esac
 done
 
-# Collect every backup file across the selected instance(s).
+# Collect every backup file of the instance.
 backups=()
 collect_backups() {
     local D="$1"
@@ -49,7 +50,13 @@ collect_backups() {
         -type f -print0)
 }
 
-forEachInstance collect_backups "$INSTANCE"
+[ -n "$INSTANCE" ] || usage
+resolveInstancePath "$INSTANCE" || exit 1
+if [ ! -d "$path" ]; then
+    echo "Instance directory not found: $path"
+    exit 1
+fi
+collect_backups "$path"
 
 if [ "${#backups[@]}" -eq 0 ]; then
     echo "No backup files found."

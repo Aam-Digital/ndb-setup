@@ -1,10 +1,10 @@
 #!/bin/bash
-# Update the docker-compose.yml of every instance to match the canonical
-# ndb-setup/docker-compose.yml.
+# Update the docker-compose.yml of an instance to match the canonical
+# ndb-setup/docker-compose.yml. For all instances: ./for-each-instance.sh ./update-compose.sh
 #
 # Instances get a *copy* of docker-compose.yml at setup time, so structural
 # changes to the canonical file (new service, changed volume, etc.) do not
-# propagate automatically. This script previews the diff for each instance,
+# propagate automatically. This script previews the diff for the instance,
 # asks for confirmation, backs up the old file, copies the new one and
 # redeploys the instance ('docker compose pull' + 'docker compose up -d').
 #
@@ -40,9 +40,9 @@ ASSUME_YES=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes] [instance]"
-    echo "  instance  update only this instance (default: all ${PREFIX}* instances)"
-    echo "  --yes     skip per-instance confirmation (still skips unchanged)"
+    echo "Usage: $0 [--yes] <instance>"
+    echo "  instance  instance name or directory (for all: ./for-each-instance.sh $0 [--yes])"
+    echo "  --yes     skip the confirmation (still skips unchanged)"
     exit 1
 }
 
@@ -65,9 +65,6 @@ if [ ! -f "$CANONICAL" ]; then
     echo "Canonical compose file not found: $CANONICAL"
     exit 1
 fi
-
-updated=0
-skipped=0
 
 # Print the resolved compose config of instance dir $1 (empty if it does not resolve).
 resolvedComposeConfig() {
@@ -120,8 +117,7 @@ update_instance() {
 
     if [ ! -f "$target" ]; then
         echo "[$instance] no docker-compose.yml, skipping"
-        skipped=$((skipped + 1))
-        return
+        return 0
     fi
 
     # Carry over a legacy root-level Firebase web config (see header) - only a valid one, as
@@ -134,8 +130,7 @@ update_instance() {
         # Without jq every config would look invalid and its mount be dropped silently.
         if ! command -v jq >/dev/null 2>&1; then
             echo "[$instance] ERROR: jq is required to check ./firebase-config.json before its mount is dropped, skipping"
-            skipped=$((skipped + 1))
-            return
+            return 0
         fi
         if isValidFirebaseWebConfig "$(cat "$legacyFirebase")"; then
             migrateFirebase=1
@@ -163,8 +158,7 @@ update_instance() {
         if [ "$migrateFirebase" -eq 0 ]; then
             rm -f "$expected"
             echo "[$instance] already up to date"
-            skipped=$((skipped + 1))
-            return
+            return 0
         fi
         # docker-compose.yml may already mount assets/firebase-config.json (e.g. an earlier run was
         # interrupted before the copy) while the file itself is still missing - complete that copy.
@@ -197,7 +191,7 @@ update_instance() {
         read -r -p "Apply this change to [$instance]? [y/N] " reply < /dev/tty
         case "$reply" in
             [yY]|[yY][eE][sS]) ;;
-            *) echo "[$instance] skipped"; rm -f "$expected"; skipped=$((skipped + 1)); return ;;
+            *) echo "[$instance] skipped"; rm -f "$expected"; return 0 ;;
         esac
     fi
 
@@ -205,8 +199,7 @@ update_instance() {
         if ! writeFirebaseWebConfig "$assetsFirebase" "$(cat "$legacyFirebase")"; then
             echo "[$instance] skipped (could not copy firebase-config.json to assets/)"
             rm -f "$expected"
-            skipped=$((skipped + 1))
-            return
+            return 0
         fi
         echo "[$instance] copied firebase-config.json to assets/"
     fi
@@ -214,8 +207,7 @@ update_instance() {
     if [ "$composeChanged" -eq 0 ]; then
         rm -f "$expected"
         echo "[$instance] run 'docker compose up -d' in $D if the app container predates the mount"
-        updated=$((updated + 1))
-        return
+        return 0
     fi
 
     backupFile "$target"
@@ -307,10 +299,12 @@ update_instance() {
         return 1
     fi
     echo "[$instance] redeployed"
-    updated=$((updated + 1))
 }
 
-forEachInstance update_instance "$INSTANCE"
-
-echo
-echo "Done. $updated updated, $skipped skipped."
+[ -n "$INSTANCE" ] || usage
+resolveInstancePath "$INSTANCE" || exit 1
+if [ ! -d "$path" ]; then
+    echo "Instance directory not found: $path"
+    exit 1
+fi
+update_instance "$path"

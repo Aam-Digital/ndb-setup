@@ -14,7 +14,6 @@
 #
 # Usage:
 #   ./create-couchdb.sh <instance> [--with-permissions]
-#   ./create-couchdb.sh --repair-all
 #
 # <instance>           an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
 #                      instance directory (e.g. "." when run from inside it, or /any/path/to/instance)
@@ -25,8 +24,9 @@
 #                      is detected from COMPOSE_PROFILES in the instance .env (the flag is needed while
 #                      setting up an instance whose profile is not switched yet). Database-only mode
 #                      (CouchDB exposed directly) applies the "user_app" _security and the JWT signing key.
-# --repair-all         run this for every instance with replication-backend (database-only instances are
-#                      skipped); takes no other arguments
+#
+# To repair all instances with replication-backend:
+#   ./for-each-instance.sh --only replication-backend ./create-couchdb.sh
 
 ##############################
 # setup
@@ -46,47 +46,14 @@ source "$scriptDir/lib/couchdb.sh"
 ##############################
 
 withPermissions=false
-repairAll=false
 positionalArgs=()
 for arg in "$@"; do
   case "$arg" in
     --with-permissions) withPermissions=true ;;
-    --repair-all) repairAll=true ;;
     *) positionalArgs+=("$arg") ;;
   esac
 done
 set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
-
-##############################
-# --repair-all
-##############################
-
-# Each instance runs in its own subprocess: the per-instance path exits on errors and sets globals, which
-# must neither abort the loop nor leak into the next instance.
-if [ "$repairAll" = true ]; then
-  if [ "$#" -gt 0 ] || [ "$withPermissions" = true ]; then
-    echo "ERROR: --repair-all repairs all instances with replication-backend and takes no other arguments (got: $*)."
-    echo "  To repair a single instance, run: $0 <instance>"
-    exit 1
-  fi
-  failedInstances=()
-  repairInstance() {
-    local dir="$1"
-    if ! profileDeploysReplicationBackend "$(getVar "$dir/.env" COMPOSE_PROFILES)"; then
-      echo "[$(basename "$dir")] database-only, skipping"
-      return 0
-    fi
-    echo "[$(basename "$dir")]"
-    "$0" "$dir" || failedInstances+=("$(basename "$dir")")
-    echo ""
-  }
-  forEachInstance repairInstance || exit 1
-  if [ "${#failedInstances[@]}" -gt 0 ]; then
-    echo "Repair failed for: ${failedInstances[*]}"
-    exit 1
-  fi
-  exit 0
-fi
 
 ##############################
 # input

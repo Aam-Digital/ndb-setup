@@ -1,10 +1,11 @@
 #!/bin/bash
-# Update the pinned image version for a service across instances.
+# Update the pinned image version for a service of an instance.
 #
 # Each instance pins its service versions in .env (APP_VERSION,
 # AAM_REPLICATION_BACKEND_VERSION, AAM_BACKEND_SERVICE_VERSION). This script
-# bumps that variable from old_version to new_version for every instance
-# currently on old_version (others are skipped), then pulls and redeploys.
+# bumps that variable from old_version to new_version if the instance is
+# currently on old_version (otherwise it is skipped), then pulls and redeploys.
+# For all instances: ./for-each-instance.sh ./update-version.sh <service> <old> <new>
 # With --skip-restart only .env is updated; the instances pick the new version up
 # on their next 'docker compose pull && docker compose up -d'.
 #
@@ -18,14 +19,14 @@ source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 usage() {
-    echo "Usage: $0 [--skip-restart] <service> <old_version> <new_version> [instance]"
+    echo "Usage: $0 [--skip-restart] <service> <old_version> <new_version> <instance>"
     echo "  service         ndb-core | replication-backend | aam-services"
-    echo "  old_version     only update instances currently on this version"
+    echo "  old_version     only update the instance if it is currently on this version"
     echo "  new_version     version to set"
-    echo "  instance        update only this instance (default: all ${PREFIX}* instances)"
+    echo "  instance        instance name or directory (for all: ./for-each-instance.sh $0 <service> <old> <new>)"
     echo "  --skip-restart  only update .env, do not pull or redeploy"
     echo
-    echo "Example: $0 ndb-core 3.5.0 3.6.0"
+    echo "Example: $0 ndb-core 3.5.0 3.6.0 acme"
     exit 1
 }
 
@@ -40,14 +41,14 @@ for arg in "$@"; do
     esac
 done
 
-if [ "${#positional[@]}" -lt 3 ] || [ "${#positional[@]}" -gt 4 ]; then
+if [ "${#positional[@]}" -ne 4 ]; then
     usage
 fi
 
 SERVICE="${positional[0]}"
 OLD_VERSION="${positional[1]}"
 NEW_VERSION="${positional[2]}"
-INSTANCE="${positional[3]:-}"
+INSTANCE="${positional[3]}"
 
 case "$SERVICE" in
     ndb-core)             VAR="APP_VERSION" ;;
@@ -56,9 +57,6 @@ case "$SERVICE" in
     *) echo "Invalid service name. Use ndb-core, replication-backend, aam-services."; exit 1 ;;
 esac
 
-updated=0
-skipped=0
-
 update_instance() {
     local D="$1"
     local instance="${D##*/}"
@@ -66,8 +64,7 @@ update_instance() {
 
     if [ ! -f "$envFile" ]; then
         echo "[$instance] no .env, skipping"
-        skipped=$((skipped + 1))
-        return
+        return 0
     fi
 
     local current
@@ -75,8 +72,7 @@ update_instance() {
 
     if [ "$current" != "$OLD_VERSION" ]; then
         echo "[$instance] $VAR=${current:-<unset>} (not $OLD_VERSION), skipping"
-        skipped=$((skipped + 1))
-        return
+        return 0
     fi
 
     echo
@@ -86,8 +82,7 @@ update_instance() {
 
     if [ "$SKIP_RESTART" -eq 1 ]; then
         echo "[$instance] updated .env (not redeployed)"
-        updated=$((updated + 1))
-        return
+        return 0
     fi
 
     echo "[$instance] redeploying..."
@@ -99,10 +94,11 @@ update_instance() {
         return 1
     fi
     echo "[$instance] redeployed"
-    updated=$((updated + 1))
 }
 
-forEachInstance update_instance "$INSTANCE"
-
-echo
-echo "Done. $updated updated, $skipped skipped."
+resolveInstancePath "$INSTANCE" || exit 1
+if [ ! -d "$path" ]; then
+    echo "Instance directory not found: $path"
+    exit 1
+fi
+update_instance "$path"

@@ -110,8 +110,23 @@ the org/realm name is then read from that directory's `.env` (`INSTANCE_NAME`).
 cd /srv/instances/c-acme && …/create-couchdb.sh .   # "." from inside the folder
 ```
 
-`forEachInstance <callback> [instance]` iterates every instance, or a single one (name or path) when the
-argument is given.
+### All instances — `for-each-instance.sh`
+
+Scripts operate on **one** instance; to run one for every instance, use the wrapper instead of a
+per-script loop. It runs the command once per instance (in its own process, with the instance directory
+appended as the last argument), keeps going on failures and lists the failed instances at the end:
+
+```bash
+./for-each-instance.sh ./update-compose.sh --yes
+./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0
+./for-each-instance.sh --only replication-backend ./create-couchdb.sh   # skip instances without it
+./for-each-instance.sh --only backend ./enable-backend.sh               # skip instances without aam-backend-service
+./for-each-instance.sh --in-dir docker compose pull                     # run inside each instance dir
+```
+
+Exceptions that keep their own loop: `version-info.sh` (one combined table), `collect-credentials.sh`
+(self-contained, see below) and the historical `migrate-*.sh` one-offs (via `forEachInstance` in
+`lib/common.sh`).
 
 ### Idempotency
 
@@ -144,12 +159,13 @@ open the file. Rather than duplicate that here, note only the deviations from th
   `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
 - **`enable-backend.sh`** re-run on an instance with the backend already enabled does not abort but only
   repairs the backend's Keycloak admin access (realm-management roles incl. `manage-clients`, `KEYCLOAK_*` in
-  `application.env`), recreating the backend if something changed. `--repair-all` does this for every instance
-  with the backend enabled.
+  `application.env`), recreating the backend if something changed. For every instance with the backend:
+  `./for-each-instance.sh --only backend ./enable-backend.sh`.
 - **`create-couchdb.sh`** is safe to re-run on a live instance and doubles as the repair for CouchDB's
   security config: it detects the mode from `COMPOSE_PROFILES`, reuses a running CouchDB (restarting it only
   if `couchdb.ini` changed) and re-applies `_security`, the JWT config and — with replication-backend —
-  rejecting anonymous requests. `--repair-all` does this for every instance with replication-backend.
+  rejecting anonymous requests. For every instance with replication-backend:
+  `./for-each-instance.sh --only replication-backend ./create-couchdb.sh`.
 - **`migrate-account-manager-manage-realm.sh`** adds the realm-management roles the `account_manager`
   realm role needs (incl. `manage-realm`) so its members can manage roles in the app's admin UI. Unlike the
   other Keycloak repairs this runs on *every* instance, since that UI calls Keycloak from the frontend and

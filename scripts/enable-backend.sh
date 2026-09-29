@@ -17,8 +17,8 @@
 #
 # Re-running it on an instance with the backend already enabled only repairs the backend's Keycloak admin
 # access (realm-management roles incl. "manage-clients", KEYCLOAK_* in application.env) and recreates the
-# backend if something changed. To do this for all instances that have the backend enabled (others are skipped):
-#   ./enable-backend.sh --repair-all
+# backend if something changed. To do this for all instances that have the backend enabled:
+#   ./for-each-instance.sh --only backend ./enable-backend.sh
 #
 # Requires: CARBONE_HOST and KEYCLOAK_HOST set in setup.env (environment-specific):
 #   Environment  KEYCLOAK_HOST                  CARBONE_HOST
@@ -51,14 +51,11 @@ source "$scriptDir/lib/keycloak.sh"
 # --skip-restart: do not restart docker at the end; the caller (e.g. interactive-setup.sh) is responsible
 # for bringing the stack up once, after all enable-* scripts have written their config. Run standalone
 # (without the flag) the script restarts itself. Flags are stripped here so positional args stay intact.
-# --repair-all: only repair the backend's Keycloak admin access of every instance with the backend enabled.
 skipRestart=false
-repairAll=false
 positionalArgs=()
 for arg in "$@"; do
   case "$arg" in
     --skip-restart) skipRestart=true ;;
-    --repair-all) repairAll=true ;;
     *) positionalArgs+=("$arg") ;;
   esac
 done
@@ -145,36 +142,6 @@ repairBackendKeycloakAdminAccess() {
   fi
   echo "Keycloak admin access of the backend repaired."
 }
-
-if [ "$repairAll" = true ]; then
-  if [ "$#" -gt 0 ]; then
-    echo "ERROR: --repair-all repairs all instances and takes no instance argument (got: $*)."
-    echo "  To repair a single instance, run: $0 <instance>"
-    exit 1
-  fi
-  failedInstances=()
-  repairIfBackendEnabled() {
-    path="$1"
-    instance=$(getVar "$path/.env" INSTANCE_NAME)
-    if [ -z "$instance" ]; then
-      instance="$(basename "$path")"
-      instance="${instance#"$PREFIX"}"
-    fi
-    if ! backendEnabledCheck || ! isBackendConfigCreated; then
-      echo "[$instance] backend not enabled, skipping"
-      return 0
-    fi
-    echo "[$instance]"
-    repairBackendKeycloakAdminAccess || failedInstances+=("$instance")
-    echo ""
-  }
-  forEachInstance repairIfBackendEnabled || exit 1
-  if [ "${#failedInstances[@]}" -gt 0 ]; then
-    echo "Repair failed for: ${failedInstances[*]}"
-    exit 1
-  fi
-  exit 0
-fi
 
 ##############################
 # ask for input data

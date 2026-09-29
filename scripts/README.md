@@ -146,7 +146,7 @@ and restart the stack **once** at the end. Run standalone (without the flag) the
 | [`common.sh`](lib/common.sh) | `.env` helpers (`getVar`, `setEnv`, `upsertEnv`, `ensureEnv`, `ensureRealValue`, `removeEnv`), `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, docker-compose volume-mount helpers |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig` and the `NAME → BWS UUID` map (`_bwsSecretId`) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart` — bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
-| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles` |
+| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles`, `ensureExactUsernameUserProfileAttribute` |
 
 Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
 open the file. Rather than duplicate that here, note only the deviations from the conventions above:
@@ -166,10 +166,12 @@ open the file. Rather than duplicate that here, note only the deviations from th
   if `couchdb.ini` changed) and re-applies `_security`, the JWT config and — with replication-backend —
   rejecting anonymous requests. For every instance with replication-backend:
   `./for-each-instance.sh --only replication-backend ./create-couchdb.sh`.
-- **`migrate-account-manager-manage-realm.sh`** adds the realm-management roles the `account_manager`
-  realm role needs (incl. `manage-realm`) so its members can manage roles in the app's admin UI. Unlike the
-  other Keycloak repairs this runs on *every* instance, since that UI calls Keycloak from the frontend and
-  does not involve the backend.
+- **`create-keycloak-realm.sh`** re-run on an existing instance reuses its realm and repairs what older
+  realm templates lack: the realm-management roles of `account_manager` (for the app's role admin UI) and
+  the admin-only `exact_username` User Profile attribute (lost by realms upgraded in place to Keycloak 26,
+  see [`keycloak/README.md`](../keycloak/README.md)). It refuses to create a new realm for an instance that
+  was already set up, or to repoint one using another Keycloak. For every instance:
+  `./for-each-instance.sh ./create-keycloak-realm.sh`.
 - **`enable-feature-notification.sh`** writes the frontend Firebase web config to the instance's
   `assets/firebase-config.json` and volume-mounts it (the published ndb-core image does not contain it).
   Without BWS, provide `FIREBASE_CONFIG_JSON` as a single-quoted JSON object in `setup.env`. Re-running

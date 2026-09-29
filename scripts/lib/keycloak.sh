@@ -489,3 +489,52 @@ ensureAccountManagerRealmManagementRoles() {
 
   echo "  Added to account_manager: $(echo "$rolePayload" | jq -r '[.[].name] | join(", ")')."
 }
+
+# The `exact_username` User Profile attribute (the entity id linked to a user account): view-able by
+# admin+user, but edit-able by admins only - a user changing their own linked id would be a
+# permission-escalation loophole. Fresh realms get it from realm_config.json; realms upgraded in place to
+# Keycloak 26 lose it, since custom User Profile attributes are outside Keycloak's automatic migration.
+EXACT_USERNAME_ATTR='{
+  "name": "exact_username",
+  "displayName": "Aam Digital user profile ID",
+  "permissions": { "view": ["admin","user"], "edit": ["admin"] },
+  "multivalued": false
+}'
+
+# Declare EXACT_USERNAME_ATTR in the realm's User Profile if missing (idempotent; existing attributes and
+# values are preserved). A profile that cannot be read (e.g. an older Keycloak without the endpoint) only
+# warns, since there is nothing to repair there.
+# Args: realm
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+# Returns: 1 only if writing the profile failed.
+ensureExactUsernameUserProfileAttribute() {
+  local realm="$1"
+
+  if [ -z "${token:-}" ] && ! getKeycloakToken; then
+    return 1
+  fi
+
+  local profile
+  profile=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/users/profile" \
+    -H "Authorization: Bearer $token")
+  if ! echo "$profile" | jq -e '.attributes' >/dev/null 2>&1; then
+    echo "  WARNING: could not read the User Profile of realm '$realm', not checking exact_username."
+    return 0
+  fi
+  if echo "$profile" | jq -e '.attributes[]?|select(.name=="exact_username")' >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local newProfile code
+  newProfile=$(echo "$profile" | jq --argjson a "$EXACT_USERNAME_ATTR" '.attributes += [$a]')
+  code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+    "https://$KEYCLOAK_HOST/admin/realms/$realm/users/profile" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "$newProfile")
+  if [[ ! "$code" =~ ^2 ]]; then
+    echo "  ERROR: adding exact_username to the User Profile of realm '$realm' failed (HTTP $code)."
+    return 1
+  fi
+  echo "  ~ added exact_username to the User Profile of realm '$realm'"
+}

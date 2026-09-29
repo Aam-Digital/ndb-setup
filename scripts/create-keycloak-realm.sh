@@ -6,14 +6,22 @@
 # see docker-compose.yml - so this script no longer needs to download and write that file itself.)
 # Idempotent: an existing realm or client is reused; the key values are (re)written each run.
 #
+# Re-running it on an existing instance repairs its realm to what the realm template sets up:
+#   - the realm-management roles of the "account_manager" realm role (view-realm, manage-users,
+#     manage-realm), needed by the app's "Roles & Permissions" admin UI - users need to log out and back in
+#   - the admin-only `exact_username` User Profile attribute, which realms upgraded in place to Keycloak 26
+#     lose (see keycloak/README.md)
+# For all instances: ./for-each-instance.sh ./create-keycloak-realm.sh
+#
 # Usage:
 #   ./create-keycloak-realm.sh <instance> [locale] [baseConfig]
 #
 # <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the instance
 #             directory (e.g. "." when run from inside it). The realm name is read from the .env INSTANCE_NAME.
+# [locale]    default language, only used (and asked for) when the realm is created
 #
 # Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD, SMTP_SERVER, SMTP_PASSWORD
+#   KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD; SMTP_SERVER, SMTP_PASSWORD (only to create the realm)
 
 ##############################
 # setup
@@ -50,20 +58,19 @@ if [ -z "$org" ]; then
 fi
 url=$org.$DOMAIN
 
-if [ -n "$2" ]; then
-  locale="$2"
-else
-  echo "Which should be the default language for Keycloak ('en', 'de', ...)?"
-  read -r locale
-fi
-
+locale="${2:-}"
 baseConfig="${3:-}"
 
 requireConfig KEYCLOAK_HOST
 requireConfig KEYCLOAK_USER
 requireConfig KEYCLOAK_PASSWORD
-requireConfig SMTP_SERVER
-requireConfig SMTP_PASSWORD
+
+# The admin credentials only reach the central Keycloak: never repoint an instance using another one.
+instanceKeycloakHost=$(getVar "$path/.env" KEYCLOAK_URL)
+if ! isPlaceholderValue "$instanceKeycloakHost" && [ "$instanceKeycloakHost" != "$KEYCLOAK_HOST" ]; then
+  echo "ERROR: '$org' uses Keycloak '$instanceKeycloakHost' (KEYCLOAK_URL in .env), not '$KEYCLOAK_HOST'. Abort."
+  exit 1
+fi
 
 ##############################
 # script
@@ -77,12 +84,23 @@ if ! getKeycloakToken; then
 fi
 
 # create the realm (idempotent: skip if it already exists)
-realmStatus=$(curl -s -o /dev/null -w "%{http_code}" -L "https://$KEYCLOAK_HOST/admin/realms/$org" \
-  -H "Authorization: Bearer $token")
+realmStatus=$(getKeycloakRealmStatus "$org")
 if [ "$realmStatus" = "200" ]; then
   echo "Keycloak realm '$org' already exists, skipping creation."
+elif [ -n "$(getVar "$path/.env" KEYCLOAK_JWT_KID)" ]; then
+  # the instance was already set up against this realm: a fresh, empty realm would lock out every user
+  echo "ERROR: Keycloak realm '$org' not found (HTTP $realmStatus), but this instance was already set up with it"
+  echo "  (KEYCLOAK_JWT_KID in .env). Not creating a new, empty realm. Abort."
+  exit 1
 else
   echo "Creating Keycloak realm '$org'..."
+  if [ -z "$locale" ]; then
+    echo "Which should be the default language for Keycloak ('en', 'de', ...)?"
+    read -r locale
+  fi
+  requireConfig SMTP_SERVER
+  requireConfig SMTP_PASSWORD
+
   # take the custom baseConfig realm file or otherwise the default from keycloak folder
   keycloakRealmFile="$ndbSetupDir/keycloak/realm_config.json"
   if [ -n "$baseConfig" ] && [ -f "$ndbSetupDir/baseConfigs/$baseConfig/realm_config.json" ]; then
@@ -137,4 +155,22 @@ fi
 upsertEnv REPLICATION_BACKEND_PUBLIC_KEY "$publicKey" "$path/.env"
 upsertEnv KEYCLOAK_JWT_KID "$kid" "$path/.env"
 
+# Repairs for realms created from an older realm template (fresh realms already have both).
+repairFailed=false
+if ! accountManagerHasRealmManagementRoles "$org" "${ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES[@]}"; then
+  echo "Adding the realm-management roles of 'account_manager'..."
+  if ensureAccountManagerRealmManagementRoles "$org" \
+    && accountManagerHasRealmManagementRoles "$org" "${ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES[@]}"; then
+    echo "  Users with the account_manager role need to log out and back in."
+  else
+    echo "  ERROR: Could not confirm the realm-management roles on 'account_manager'."
+    repairFailed=true
+  fi
+fi
+ensureExactUsernameUserProfileAttribute "$org" || repairFailed=true
+
+if [ "$repairFailed" = true ]; then
+  echo "Keycloak realm '$org' is configured, but a repair failed (see above)."
+  exit 1
+fi
 echo "Keycloak realm '$org' is configured."

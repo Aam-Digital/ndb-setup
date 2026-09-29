@@ -53,11 +53,14 @@ createBackup() {
     rm -f "$target.tar.gz"
     exit 1
   fi
-  # never leave the unencrypted archive behind
-  # the passphrase goes through a file descriptor, so it never shows in the process list
-  if ! gpg -c --batch --yes --pinentry-mode loopback --passphrase-fd 3 "$target.tar.gz" 3<<<"$passphrase"; then
+  # Never leave the unencrypted archive behind. Encrypt to a temporary file first, so a failed run neither
+  # leaves a broken archive nor replaces a good one of the same day.
+  # The passphrase goes through a file descriptor, so it never shows in the process list.
+  if ! gpg -c --batch --yes --pinentry-mode loopback --passphrase-fd 3 \
+    --output "$target.tar.gz.gpg.tmp" "$target.tar.gz" 3<<<"$passphrase" \
+    || ! mv -f "$target.tar.gz.gpg.tmp" "$target.tar.gz.gpg"; then
     echo "ERROR: encrypting the archive failed."
-    rm -f "$target.tar.gz"
+    rm -f "$target.tar.gz" "$target.tar.gz.gpg.tmp"
     exit 1
   fi
   rm -f "$target.tar.gz"

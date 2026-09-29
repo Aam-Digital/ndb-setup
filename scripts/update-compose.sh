@@ -10,7 +10,7 @@
 #
 # The wholesale copy would drop any instance-local asset volume mounts, so the target
 # file is the canonical one plus a mount for every asset present in the instance's
-# assets/ folder (the same logic apply-asset-overrides.sh uses). The up-to-date check,
+# assets/ folder (the same logic update-assets.sh uses). The up-to-date check,
 # the preview diff and the copy all use that target, so asset mounts (e.g. the
 # assets/firebase-config.json written by enable-notifications.sh) are neither
 # dropped nor reported as a change on every run.

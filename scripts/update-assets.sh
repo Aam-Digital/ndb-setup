@@ -1,11 +1,12 @@
 #!/bin/bash
 
-# This script applies sub-folders of the /assets from a baseConfig to an instance,
-# including the adjustment to docker-compose.yml to add volumes.
+# Update the assets/ folder of an instance to the one of a baseConfig: replaces the instance's assets/
+# (the previous folder is kept as an "assets.rollback-<timestamp>" copy) and adjusts docker-compose.yml
+# to volume-mount each asset into the app container.
 
 # how to use
-# ./apply-asset-overrides.sh <instance> <baseConfig>
-# example: ./apply-asset-overrides.sh my-system basic
+# ./update-assets.sh <instance> <baseConfig>
+# example: ./update-assets.sh my-system basic
 
 ##############################
 # setup

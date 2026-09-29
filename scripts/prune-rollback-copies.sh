@@ -1,7 +1,7 @@
 #!/bin/bash
 # Delete the rollback copies scripts leave behind in an instance: the "<file>.rollback-<timestamp>" copies
 # saveRollbackCopy (scripts/lib/common.sh) makes before changing .env, docker-compose.yml, application.env,
-# ..., the "assets.rollback-<timestamp>" folders apply-asset-overrides.sh makes, and the older names of both
+# ..., the "assets.rollback-<timestamp>" folders update-assets.sh makes, and the older names of both
 # (".bak-<timestamp>", ".bak", "_backup", "-old"). Lists every match and asks for confirmation first.
 # (These are not backups: system backups are backup.sh's encrypted archives.)
 #

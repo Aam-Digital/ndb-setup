@@ -54,9 +54,9 @@ interactive-setup.sh
 
 Each step above is a self-contained script that can also be run on its own — e.g. to re-configure
 Keycloak or recreate the databases for an existing instance. Feature toggles (`enable-backend.sh`,
-`enable-notifications.sh`, `enable-email-notifications.sh`, `enable-sentry.sh`),
-`apply-asset-overrides.sh` (a base config's asset overrides) and maintenance scripts (`update-*.sh`,
-`backup.sh`, `prune-rollback-copies.sh`, `list-instances.sh`, …) follow the same conventions.
+`enable-notifications.sh`, `enable-email-notifications.sh`, `enable-sentry.sh`) and maintenance scripts
+(`update-*.sh`, including `update-assets.sh` for a base config's asset overrides, `backup.sh`,
+`prune-rollback-copies.sh`, `list-instances.sh`, …) follow the same conventions.
 
 ### 3. Shared library — `lib/`
 

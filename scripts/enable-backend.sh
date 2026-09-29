@@ -80,13 +80,17 @@ repairBackendKeycloakAdminAccess() {
   requireConfig KEYCLOAK_USER
   token=""   # the admin token is short-lived, get a fresh one for each instance
 
-  local configComplete=true key
-  for key in KEYCLOAK_SERVERURL KEYCLOAK_REALM KEYCLOAK_CLIENTID KEYCLOAK_CLIENTSECRET; do
-    if isPlaceholderValue "$(getVar "$appEnv" "$key")"; then
-      configComplete=false
-    fi
-  done
-  if [ "$configComplete" = true ] && serviceAccountHasRealmManagementRole "$instance" "manage-clients"; then
+  # up-to-date only if the config matches the aam-backend client of this realm and it has all roles
+  local keycloakSecret replicationBackendSecret
+  keycloakSecret=$(getKeycloakBackendClientSecret "$instance")
+  replicationBackendSecret=$(getVar "$path/.env" REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET)
+  if [ -n "$keycloakSecret" ] \
+    && ! isPlaceholderValue "$(getVar "$appEnv" KEYCLOAK_SERVERURL)" \
+    && [ "$(getVar "$appEnv" KEYCLOAK_REALM)" == "$instance" ] \
+    && [ "$(getVar "$appEnv" KEYCLOAK_CLIENTID)" == "aam-backend" ] \
+    && [ "$(getVar "$appEnv" KEYCLOAK_CLIENTSECRET)" == "$keycloakSecret" ] \
+    && { [ -z "$replicationBackendSecret" ] || [ "$replicationBackendSecret" == "$keycloakSecret" ]; } \
+    && serviceAccountHasRealmManagementRole "$instance" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; then
     echo "Backend already enabled for '$instance', including its Keycloak admin access. Nothing to do."
     return 0
   fi
@@ -99,8 +103,8 @@ repairBackendKeycloakAdminAccess() {
     return 1
   fi
   # createKeycloakBackendClient returns 0 even if the role assignment only warned
-  if ! serviceAccountHasRealmManagementRole "$instance" "manage-clients"; then
-    echo "ERROR: Could not confirm the realm-management 'manage-clients' role on the aam-backend service account."
+  if ! serviceAccountHasRealmManagementRole "$instance" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; then
+    echo "ERROR: Could not confirm the realm-management roles (${AAM_BACKEND_REALM_MANAGEMENT_ROLES[*]}) on the aam-backend service account."
     return 1
   fi
 
@@ -109,9 +113,7 @@ repairBackendKeycloakAdminAccess() {
 
   # keep .env in sync, the replication-backend uses the same client
   local servicesToRecreate=("aam-backend-service")
-  local currentSecret
-  currentSecret=$(getVar "$path/.env" REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET)
-  if [ -n "$currentSecret" ] && [ "$currentSecret" != "$clientSecret" ]; then
+  if [ -n "$replicationBackendSecret" ] && [ "$replicationBackendSecret" != "$clientSecret" ]; then
     backupFile "$path/.env"
     setEnv REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET "$clientSecret" "$path/.env"
     servicesToRecreate+=("replication-backend")
@@ -119,12 +121,20 @@ repairBackendKeycloakAdminAccess() {
 
   if [ "$skipRestart" != "true" ]; then
     # force-recreate: also when only the role changed, the backend must restart to run its startup provisioning
-    (cd "$path" && docker compose up -d --force-recreate "${servicesToRecreate[@]}")
+    if ! (cd "$path" && docker compose up -d --force-recreate "${servicesToRecreate[@]}"); then
+      echo "ERROR: Failed to recreate ${servicesToRecreate[*]} for '$instance'. Recreate it manually to apply the repair."
+      return 1
+    fi
   fi
   echo "Keycloak admin access of the backend repaired."
 }
 
 if [ "$repairAll" = true ]; then
+  if [ "$#" -gt 0 ]; then
+    echo "ERROR: --repair-all repairs all instances and takes no instance argument (got: $*)."
+    echo "  To repair a single instance, run: $0 <instance>"
+    exit 1
+  fi
   failedInstances=()
   repairIfBackendEnabled() {
     path="$1"

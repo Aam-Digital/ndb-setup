@@ -15,6 +15,10 @@ fi
 # Keycloak helpers
 ##############################
 
+# realm-management roles the aam-backend service account needs
+# (manage-clients: aam-backend-service creates and assigns the client scopes its API endpoints check)
+AAM_BACKEND_REALM_MANAGEMENT_ROLES=("manage-realm" "manage-clients" "query-users" "view-users" "manage-users")
+
 # Obtain a Keycloak admin access token.
 # Requires: KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD
 # Sets: token (global)
@@ -118,13 +122,14 @@ createKeycloakBackendClient() {
   _assignManageRealmRole "$realm" "$clientUuid"
 }
 
-# Returns 0 if the aam-backend service account has the given (effective) realm-management role, else 1.
+# Returns 0 if the aam-backend service account has all the given (effective) realm-management roles, else 1.
+# Args: realm, roleName...
 # Use this to verify role assignment actually stuck: createKeycloakBackendClient returns 0 even when
 # _assignManageRealmRole only printed warnings, so its exit code is not proof the role is present.
 # Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
 serviceAccountHasRealmManagementRole() {
   local realm="$1"
-  local roleName="$2"
+  shift
 
   if [ -z "${token:-}" ] && ! getKeycloakToken; then
     return 1
@@ -144,13 +149,34 @@ serviceAccountHasRealmManagementRole() {
   [ -z "$realmMgmtClientUuid" ] && return 1
 
   # query effective (composite) role-mappings so manage-users (which contains view-users) also counts
-  curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid/composite" \
-    -H "Authorization: Bearer $token" | jq -e --arg r "$roleName" 'any(.[]; .name == $r)' >/dev/null
+  local effectiveRoles roleName
+  effectiveRoles=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/users/$serviceAccountUserId/role-mappings/clients/$realmMgmtClientUuid/composite" \
+    -H "Authorization: Bearer $token")
+  for roleName in "$@"; do
+    echo "$effectiveRoles" | jq -e --arg r "$roleName" 'any(.[]; .name == $r)' >/dev/null || return 1
+  done
+}
+
+# Prints the client secret of the aam-backend client in the realm (nothing if the client does not exist).
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+getKeycloakBackendClientSecret() {
+  local realm="$1"
+
+  if [ -z "${token:-}" ] && ! getKeycloakToken; then
+    return 1
+  fi
+
+  local clientUuid
+  clientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=aam-backend" \
+    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
+  [ -z "$clientUuid" ] && return 1
+  curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$clientUuid/client-secret" \
+    -H "Authorization: Bearer $token" | jq -r '.value // empty'
 }
 
 # Configure aam-backend-service's Keycloak admin access (KEYCLOAK_* in application.env) with the aam-backend
 # client. The backend uses it to provision the client scopes its API checks and to look up user emails.
-# Existing server URL and realm are kept; client ID and secret are always set, so they match each other.
+# An existing server URL is kept; realm, client ID and secret are always set, so they match each other.
 # Args: appEnvFile, serverUrl (e.g. https://keycloak.example.com), realm, clientSecret
 ensureBackendKeycloakAdminConfig() {
   local appEnvFile="$1"
@@ -159,7 +185,7 @@ ensureBackendKeycloakAdminConfig() {
   local clientSecret="$4"
 
   ensureRealValue "KEYCLOAK_SERVERURL" "$serverUrl" "$appEnvFile"
-  ensureRealValue "KEYCLOAK_REALM" "$realm" "$appEnvFile"
+  upsertEnv "KEYCLOAK_REALM" "$realm" "$appEnvFile"
   upsertEnv "KEYCLOAK_CLIENTID" "aam-backend" "$appEnvFile"
   upsertEnv "KEYCLOAK_CLIENTSECRET" "$clientSecret" "$appEnvFile"
 }
@@ -313,8 +339,7 @@ _assignManageRealmRole() {
     return 1
   fi
 
-  # manage-clients: aam-backend-service creates and assigns the client scopes its API endpoints check
-  local rolesToAssign=("manage-realm" "manage-clients" "query-users" "view-users" "manage-users")
+  local rolesToAssign=("${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}")
   local rolePayload="[]"
   local roleName roleResponse
 

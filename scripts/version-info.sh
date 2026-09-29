@@ -10,22 +10,6 @@ baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup chec
 source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
-getComposeProfiles() {
-  local raw_value="$1"
-
-  case "$raw_value" in
-      "replication-backend")
-          echo "with-permissions"
-          ;;
-      "replication-backend,aam-backend-service")
-          echo "full-stack"
-          ;;
-      *)
-          echo "Unbekannter Wert: $raw_value"
-          ;;
-  esac
-}
-
 {
 echo -e "instance-name \t deployment-type \t app-version \t replication-backend \t backend-version \t export-api \t skilllab-api \t notification-api \t change-detection"
 echo -e "------------- \t --------------- \t ----------- \t ------------------- \t --------------- \t ---------- \t ------------ \t ---------------- \t ----------------"

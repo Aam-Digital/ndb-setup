@@ -4,7 +4,7 @@
 # realm's signing key into the instance .env for CouchDB / replication-backend JWT auth.
 # (The app container generates its own keycloak.json at start from KEYCLOAK_URL/KEYCLOAK_REALM -
 # see docker-compose.yml - so this script no longer needs to download and write that file itself.)
-# Idempotent: an existing realm or client is reused; the key values are (re)written each run.
+# Idempotent: an existing realm or client is reused; the key values are written when missing or changed.
 #
 # Re-running it on an existing instance repairs its realm to what the realm template sets up:
 #   - the realm-management roles of the "account_manager" realm role (view-realm, manage-users,
@@ -76,21 +76,34 @@ fi
 # script
 ##############################
 
-setEnv KEYCLOAK_URL "$KEYCLOAK_HOST" "$path/.env"
+[ "$instanceKeycloakHost" == "$KEYCLOAK_HOST" ] || setEnv KEYCLOAK_URL "$KEYCLOAK_HOST" "$path/.env"
 
 if ! getKeycloakToken; then
   echo "ERROR: could not authenticate against Keycloak. Abort."
   exit 1
 fi
 
-# create the realm (idempotent: skip if it already exists)
+# Whether this instance was already set up against a realm. KEYCLOAK_JWT_KID is only in .env since mid-2026,
+# so older instances are recognised by their public key or their CouchDB data.
+instanceWasSetUp() {
+  ! isPlaceholderValue "$(getVar "$path/.env" KEYCLOAK_JWT_KID)" \
+    || ! isPlaceholderValue "$(getVar "$path/.env" REPLICATION_BACKEND_PUBLIC_KEY)" \
+    || [ -n "$(ls -A "$path/couchdb/data" 2>/dev/null)" ]
+}
+
+# create the realm (idempotent: skip if it already exists). Only a 404 means "missing": a timeout or an
+# error status must not lead to creating a realm.
 realmStatus=$(getKeycloakRealmStatus "$org")
 if [ "$realmStatus" = "200" ]; then
   echo "Keycloak realm '$org' already exists, skipping creation."
-elif [ -n "$(getVar "$path/.env" KEYCLOAK_JWT_KID)" ]; then
-  # the instance was already set up against this realm: a fresh, empty realm would lock out every user
-  echo "ERROR: Keycloak realm '$org' not found (HTTP $realmStatus), but this instance was already set up with it"
-  echo "  (KEYCLOAK_JWT_KID in .env). Not creating a new, empty realm. Abort."
+elif [ "$realmStatus" != "404" ]; then
+  echo "ERROR: could not check Keycloak realm '$org' (HTTP $realmStatus). Abort."
+  exit 1
+elif instanceWasSetUp; then
+  # a fresh, empty realm would lock out every user
+  echo "ERROR: Keycloak realm '$org' not found, but this instance was already set up with a realm"
+  echo "  (KEYCLOAK_JWT_KID / REPLICATION_BACKEND_PUBLIC_KEY in .env, or CouchDB data). Not creating a new,"
+  echo "  empty realm. Check that INSTANCE_NAME matches the realm name. Abort."
   exit 1
 else
   echo "Creating Keycloak realm '$org'..."
@@ -122,10 +135,14 @@ else
      | .smtpServer.password = $password' \
     "$keycloakRealmFile")
 
-  curl -X "POST" "https://$KEYCLOAK_HOST/admin/realms" \
+  createStatus=$(curl -s -o /dev/null -w "%{http_code}" -X "POST" "https://$KEYCLOAK_HOST/admin/realms" \
        -H "Authorization: Bearer $token" \
        -H "Content-Type: application/json" \
-       -d "$keycloakRealmJson"
+       -d "$keycloakRealmJson")
+  if [ "$createStatus" != "201" ]; then
+    echo "ERROR: failed to create Keycloak realm '$org' (HTTP $createStatus). Abort."
+    exit 1
+  fi
 fi
 
 # create the "app" client (idempotent: reuse existing)
@@ -152,8 +169,9 @@ if ! getKeycloakRealmKey "$org"; then
   echo "ERROR: could not read realm signing key. Abort."
   exit 1
 fi
-upsertEnv REPLICATION_BACKEND_PUBLIC_KEY "$publicKey" "$path/.env"
-upsertEnv KEYCLOAK_JWT_KID "$kid" "$path/.env"
+# also adds them to instances set up before they were kept in .env
+[ "$(getVar "$path/.env" REPLICATION_BACKEND_PUBLIC_KEY)" == "$publicKey" ] || upsertEnv REPLICATION_BACKEND_PUBLIC_KEY "$publicKey" "$path/.env"
+[ "$(getVar "$path/.env" KEYCLOAK_JWT_KID)" == "$kid" ] || upsertEnv KEYCLOAK_JWT_KID "$kid" "$path/.env"
 
 # Repairs for realms created from an older realm template (fresh realms already have both).
 repairFailed=false

@@ -153,8 +153,9 @@ A script that only ran once at setup time now runs on every instance, unattended
 from real problems found while turning migrations into repairs:
 
 - **Never create a replacement for something that should exist.** If an instance was set up with a
-  Keycloak realm (`KEYCLOAK_JWT_KID` in `.env`) and the realm is gone, stop with an error. Creating a new,
-  empty realm would lock out every user.
+  Keycloak realm (its key in `.env`, or CouchDB data) and the realm is gone, stop with an error. Creating a
+  new, empty realm would lock out every user. Only a definite "not found" (HTTP 404) counts as missing: a
+  timeout or an error status must abort, not lead to creating it.
 - **Never repoint an instance to another system.** If `.env` points to another Keycloak than `KEYCLOAK_HOST`,
   refuse instead of overwriting `KEYCLOAK_URL`.
 - **Everything that can fail happens before anything is stopped or written.** Download and validate

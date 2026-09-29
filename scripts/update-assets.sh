@@ -63,6 +63,14 @@ if [ -d "$instancePath/assets" ]; then
 fi
 cp -r "$baseConfigPath/assets" "$instancePath/assets"
 
+# Keep the Firebase web config enable-notifications.sh writes to assets/: it is not part of the baseConfig,
+# and without it (and its volume mount, re-added below) push notifications stop working.
+# Only a regular file: Docker creates a directory there when the mounted file is missing.
+if [ -n "$assetsCopy" ] && [ -f "$instancePath/$assetsCopy/firebase-config.json" ]; then
+  cp "$instancePath/$assetsCopy/firebase-config.json" "$instancePath/assets/firebase-config.json"
+  echo "  kept assets/firebase-config.json (push notifications config)"
+fi
+
 # add one volume mount to docker-compose.yml for each asset present in the assets folder
 ensureAssetVolumeMountsFromDir "$instancePath/docker-compose.yml" "$instancePath/assets"
 

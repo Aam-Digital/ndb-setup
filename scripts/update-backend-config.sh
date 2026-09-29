@@ -2,7 +2,8 @@
 # Update an instance's aam-backend-service to a release and migrate its application.env to that release's
 # config template: keys still in the template keep their current value, new keys get the template default.
 # Keys no longer in the template are kept too (and reported), so nothing written by the setup scripts gets
-# lost. application.env is backed up first.
+# lost. application.env is backed up first. Since new keys only have the template's defaults, re-run
+# ./enable-backend.sh <instance> afterwards to re-apply the instance-specific values (its repair path).
 #
 # Usage:
 #   ./update-backend-config.sh [--version <version>] <instance>
@@ -20,7 +21,7 @@ source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
 
 usage() {
-  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 1
 }
 

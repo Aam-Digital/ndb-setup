@@ -111,14 +111,22 @@ renderApiConfigUpToDate() {
   ! grep -q "^AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT=.*/realms/aam-digital/" "$appEnv" 2>/dev/null
 }
 
+# Whether the instance's docker-compose.yml defines (and so overrides) the replication-backend BASEPATH -
+# only then is a value in application.env dead config. Older compose files rely on application.env.
+# Args: instance dir
+composeDefinesReplicationBackendBasePath() {
+  grep -q "AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH:" "$1/docker-compose.yml" 2>/dev/null
+}
+
 # Write the CouchDB credentials the backend uses for replication-backend (permission checks), CouchDB and
-# SQS. BASEPATH is defined (and overridden) by docker-compose, so a value in application.env is dead
-# config. Args: application.env, instance .env
+# SQS, and drop a BASEPATH that docker-compose overrides anyway. Args: application.env, instance .env, instance dir
 writeCouchdbClientCredentials() {
-  local appEnv="$1" envFile="$2" couchUser couchPass
+  local appEnv="$1" envFile="$2" instanceDir="$3" couchUser couchPass
   couchUser=$(getVar "$envFile" COUCHDB_USER)
   couchPass=$(getVar "$envFile" COUCHDB_PASSWORD)
-  removeEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "$appEnv"
+  if composeDefinesReplicationBackendBasePath "$instanceDir"; then
+    removeEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "$appEnv"
+  fi
   upsertEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv"
   upsertEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "$couchPass" "$appEnv"
   upsertEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv"
@@ -128,12 +136,15 @@ writeCouchdbClientCredentials() {
 }
 
 # Whether writeCouchdbClientCredentials would change nothing. A missing or wrong value makes every
-# permission check fail with 401. Args: application.env, instance .env
+# permission check fail with 401. Args: application.env, instance .env, instance dir
 couchdbClientCredentialsUpToDate() {
-  local appEnv="$1" envFile="$2" couchUser couchPass prefix
+  local appEnv="$1" envFile="$2" instanceDir="$3" couchUser couchPass prefix
   couchUser=$(getVar "$envFile" COUCHDB_USER)
   couchPass=$(getVar "$envFile" COUCHDB_PASSWORD)
-  grep -q "^AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH=" "$appEnv" 2>/dev/null && return 1
+  if composeDefinesReplicationBackendBasePath "$instanceDir" \
+    && grep -q "^AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH=" "$appEnv" 2>/dev/null; then
+    return 1
+  fi
   for prefix in AAMREPLICATIONBACKENDCLIENTCONFIGURATION COUCHDBCLIENTCONFIGURATION SQSCLIENTCONFIGURATION; do
     [ "$(getVar "$appEnv" "${prefix}_BASICAUTHUSERNAME")" == "$couchUser" ] || return 1
     [ "$(getVar "$appEnv" "${prefix}_BASICAUTHPASSWORD")" == "$couchPass" ] || return 1
@@ -204,7 +215,7 @@ repairBackendConfig() {
     || [ "$(getVar "$envFile" REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET)" != "$keycloakSecret" ]; then
     repairs+=(replication-backend-client)
   fi
-  couchdbClientCredentialsUpToDate "$appEnv" "$envFile" || repairs+=(couchdb-credentials)
+  couchdbClientCredentialsUpToDate "$appEnv" "$envFile" "$path" || repairs+=(couchdb-credentials)
   renderApiConfigUpToDate "$appEnv" || repairs+=(render-api)
 
   if [ "${#repairs[@]}" -eq 0 ]; then
@@ -247,7 +258,7 @@ repairBackendConfig() {
     ensureBackendKeycloakAdminConfig "$appEnv" "https://$(getVar "$envFile" KEYCLOAK_URL "$KEYCLOAK_HOST")" "$instance" "$backendSecret"
   fi
   if needs couchdb-credentials; then
-    writeCouchdbClientCredentials "$appEnv" "$envFile"
+    writeCouchdbClientCredentials "$appEnv" "$envFile" "$path"
   fi
   if needs render-api; then
     writeRenderApiConfig "$appEnv" "carbone-${instance}" "$carboneSecret"
@@ -366,7 +377,7 @@ setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HO
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
 
-writeCouchdbClientCredentials "$path/config/aam-backend-service/application.env" "$path/.env"
+writeCouchdbClientCredentials "$path/config/aam-backend-service/application.env" "$path/.env" "$path"
 
 # Create a per-instance Carbone render client in the aam-platform realm
 carboneClientId="carbone-${instance}"

@@ -48,8 +48,12 @@ while [ "$#" -gt 0 ]; do
 done
 [ "$#" -gt 0 ] || usage
 
+if ! command -v "$1" >/dev/null 2>&1; then
+  echo "ERROR: command not found: $1 (relative paths are resolved from the current directory)."
+  exit 1
+fi
 # A relative command path (e.g. ./create-couchdb.sh) must still resolve after changing into an instance dir.
-if [[ "$1" == */* ]] && [ -e "$1" ]; then
+if [[ "$1" == */* ]]; then
   set -- "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" "${@:2}"
 fi
 

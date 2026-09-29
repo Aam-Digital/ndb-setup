@@ -16,7 +16,7 @@ get fixed or updated:
 | CouchDB config, databases, `_security` | `create-couchdb.sh` | re-applies the config for the current mode |
 | aam-backend-service | `enable-backend.sh` | repairs the backend config |
 | Other features | `enable-*.sh` | re-applies the feature's config, adds what's missing |
-| Versions, compose file, backend config template | `update-*.sh` | brings the instance to the given version / the current template |
+| Versions, compose file | `update-*.sh` | brings the instance to the given version / the canonical compose file |
 
 So there are **no separate `migrate-*.sh` scripts**. When the correct setup changes, change the script that
 creates that part so that it also brings an existing instance up to date, then roll it out:
@@ -27,6 +27,11 @@ creates that part so that it also brings an existing instance up to date, then r
 
 This way the first run and the repair can't drift apart: they're the same code. A migration script, on
 the other hand, copies the setup logic, goes stale once it has run, and stays around to be run by mistake.
+
+A new aam-backend-service setting with the same value on every instance doesn't need a script at all: it
+gets its default in the backend's `application.yaml`, so updating the version is enough. Only an
+instance-specific value or a secret needs a repair in `enable-backend.sh`. The `application.env` template
+is copied once, when the backend is enabled, and never merged into an existing instance.
 
 ## Anatomy of a setup script
 

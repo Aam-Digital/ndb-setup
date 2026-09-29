@@ -114,8 +114,6 @@ Scripts that write config of a running stack restart what they changed, unless `
 Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
 open the file. Rather than duplicate that here, these notes cover only what needs extra context:
 
-- **`update-backend.sh`** updates aam-backend-service to a release and migrates `application.env`
-  to its template (current values kept, new keys added, keys no longer in the template kept and reported).
 - **`backup.sh`** creates, lists and restores the encrypted system backups (`create` is the default, for
   cron; see the [repository README](../README.md#backups)). Not to be confused with the rollback copies
   scripts save before changing a file, which `prune-rollback-copies.sh` deletes.

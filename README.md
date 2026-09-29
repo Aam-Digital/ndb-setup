@@ -46,7 +46,7 @@ Running the setup script will create a new folder in the same parent folder, nex
 1. Clone this repository
 2. Set up local environment by copying setup.example.env file and editing the `setup.env`
 3. Then run the script and follow the questions in the console to generate the required .env and other files:
-   > ./scripts/interactive_setup.sh
+   > ./scripts/interactive-setup.sh
 
 The following things can be automatically done
 
@@ -76,8 +76,9 @@ Check the documentation in the comments at the top of each file for usage instru
 the instance, set up Keycloak, set up CouchDB, create the initial user, …) can also be run on its own — by
 instance name or path — and, apart from the interactive orchestrator itself, without Bitwarden access.
 
-See **[scripts/README.md](./scripts/README.md)** for the architecture, the shared conventions (config
-resolution, name-or-path instance targeting, idempotency) and how to run or extend the scripts.
+See **[scripts/README.md](./scripts/README.md)** for the architecture and how to run the scripts (by
+name or path, for all instances, re-running as a repair). To change or add a script, see
+**[scripts/DEVELOPING.md](./scripts/DEVELOPING.md)**.
 
 ### Docker Compose Profiles
 

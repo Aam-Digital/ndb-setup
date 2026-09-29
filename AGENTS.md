@@ -12,6 +12,11 @@ generalized insights instead (e.g. "a large production instance", "an external w
 consumer"). Scrub quoted log or monitoring output before posting. Links to access-restricted
 internal tools (e.g. Sentry issues) are acceptable.
 
+## Scripts
+
+Follow [scripts/DEVELOPING.md](scripts/DEVELOPING.md) when changing or adding scripts. In particular, don't
+add `migrate-*.sh` scripts: make the setup script that owns that part repair existing instances when re-run.
+
 ## Scripts: Config and Secrets
 
 Never call the `bws` (Bitwarden Secrets Manager) CLI directly in scripts. Source `scripts/lib/secrets.sh`

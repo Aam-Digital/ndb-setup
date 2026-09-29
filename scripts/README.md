@@ -1,11 +1,11 @@
 # ndb-setup scripts
 
 Shell scripts that provision and maintain Aam Digital instances on a server. This document explains how
-they fit together so both **developers** (extending them) and **admins** (running them) can work with
-confidence.
+they fit together and how to run them.
 
-For the higher-level deployment walkthrough, see the [repository README](../README.md); this file focuses
-on the scripts' architecture and shared conventions.
+- **Changing or adding a script?** See [DEVELOPING.md](DEVELOPING.md): conventions, how a change reaches
+  existing instances (instead of migration scripts), helpers and testing.
+- For the higher-level deployment walkthrough, see the [repository README](../README.md).
 
 ## Directory layout & assumptions
 
@@ -59,43 +59,9 @@ and maintenance scripts (`update-*.sh`, `prune-backups.sh`, …) follow the same
 
 ### 3. Shared library — `lib/`
 
-Sourced by scripts, never executed directly. See [lib reference](#lib-reference) below.
+Sourced by scripts, never executed directly. See the [lib reference](DEVELOPING.md#lib-reference).
 
-## Shared conventions
-
-Every non-trivial script follows these. When you write a new one, follow them too.
-
-### Standard header (relocatable — no hard-coded paths)
-
-`baseDirectory` is **derived from the script's own location**, never hard-coded, so the checkout can live
-anywhere:
-
-```bash
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
-source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"   # if it needs secrets
-```
-
-Root-level scripts (one directory up, in the checkout root) use `baseDirectory="$(cd "$scriptDir/.." && pwd)"`.
-
-### Config & secrets — `getConfig` / `requireConfig`
-
-Scripts never call `bws` directly. They resolve values through [`lib/secrets.sh`](lib/secrets.sh), which
-**hides where a value comes from**:
-
-1. an already-set environment variable / `setup.env` value, else
-2. the Bitwarden Secrets Manager — **only** when `BWS_ACCESS_TOKEN` is set and the key has a known UUID.
-
-```bash
-requireConfig KEYCLOAK_HOST      # aborts with a clear message if unresolved; exports $KEYCLOAK_HOST
-value=$(getConfig SMTP_SERVER)   # returns non-zero if unresolved (caller decides)
-```
-
-**Consequence:** the standalone scripts run **without BWS** — just put the needed values in `setup.env`
-or the environment. Only `interactive-setup.sh` requires a
-token. To add a new BWS-backed value, add its `NAME → UUID` mapping to `_bwsSecretId` in `lib/secrets.sh`.
+## Running the scripts
 
 ### Instance targeting — name **or** path
 
@@ -131,31 +97,18 @@ Exceptions that keep their own loop: `version-info.sh` (one combined table) and 
 
 There are no separate migration scripts: when the setup of an instance changes, the setup script that
 creates that part also repairs existing instances when re-run (see the notes below), and the change is
-rolled out with `for-each-instance.sh`. That keeps the "how it should be" in one place for new and
-existing instances.
+rolled out with `for-each-instance.sh`. See [DEVELOPING.md](DEVELOPING.md#changing-the-setup-of-existing-instances).
 
-### Idempotency
+### Re-running, `--skip-restart`
 
-Scripts are safe to re-run. They preserve existing files and generated secrets (never regenerate a
-CouchDB password or bump a pinned version on re-run — see `ensureRealValue`), skip already-created
-Keycloak realms/clients/users and CouchDB databases, and only send onboarding email on first creation.
+Scripts are safe to re-run: they keep existing files and generated secrets, and skip what already exists.
+Scripts that write config of a running stack restart what they changed, unless `--skip-restart` is passed
+(then restart the instance yourself, e.g. `docker compose up -d` in its folder).
 
-### `--skip-restart`
-
-Feature scripts that write config accept `--skip-restart` so an orchestrator can write all config first
-and restart the stack **once** at the end. Run standalone (without the flag) they restart themselves.
-
-## lib reference
-
-| File | Provides |
-| --- | --- |
-| [`common.sh`](lib/common.sh) | `.env` helpers (`getVar`, `setEnv`, `upsertEnv`, `ensureEnv`, `ensureRealValue`, `removeEnv`), `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, docker-compose volume-mount helpers |
-| [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig` and the `NAME → BWS UUID` map (`_bwsSecretId`) |
-| [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart` — bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
-| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles`, `ensureExactUsernameUserProfileAttribute` |
+## Script notes
 
 Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
-open the file. Rather than duplicate that here, note only the deviations from the conventions above:
+open the file. Rather than duplicate that here, these notes cover only what needs extra context:
 
 - **`update-backend-config.sh`** updates aam-backend-service to a release and migrates `application.env`
   to its template (current values kept, new keys added, keys no longer in the template kept and reported).
@@ -195,14 +148,3 @@ KEYCLOAK_HOST=keycloak.example.com KEYCLOAK_USER=admin KEYCLOAK_PASSWORD=… \
 ```
 
 If a required value is missing, `requireConfig` prints exactly which one and how to supply it.
-
-## Adding a new script
-
-1. Start from the [standard header](#standard-header-relocatable--no-hard-coded-paths); source only the
-   lib files you use.
-2. Take the instance as `$1`; resolve it with `resolveInstancePath` and read the org from
-   `getVar "$path/.env" INSTANCE_NAME` (or accept a name for creation-time scripts).
-3. Resolve any secret with `requireConfig NAME` (add its UUID to `lib/secrets.sh` if BWS-backed).
-4. Make every effect idempotent (guard creates, use `ensureRealValue` for generated values).
-5. If it writes config for a running stack, support `--skip-restart`.
-6. Document its arguments and purpose in a header comment (the single source of truth for per-script docs).

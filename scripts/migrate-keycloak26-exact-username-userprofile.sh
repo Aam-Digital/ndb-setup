@@ -57,9 +57,8 @@
 #   ./migrate-keycloak26-exact-username-userprofile.sh --realm acme --apply
 #   ./migrate-keycloak26-exact-username-userprofile.sh --include-master --apply
 #
-# Credentials: set KEYCLOAK_HOST / KEYCLOAK_USER / KEYCLOAK_PASSWORD in the
-# environment to run ad-hoc; otherwise they are fetched from Bitwarden (BWS),
-# same as the other migration scripts (requires BWS_ACCESS_TOKEN).
+# Credentials: set KEYCLOAK_HOST / KEYCLOAK_USER / KEYCLOAK_PASSWORD in setup.env or the
+# environment; otherwise they are fetched from Bitwarden (requires BWS_ACCESS_TOKEN).
 #
 # Requires: bash, curl, jq
 
@@ -68,6 +67,7 @@ set -uo pipefail
 baseDirectory="${baseDirectory:-/var/docker}"
 [ -f "$baseDirectory/ndb-setup/setup.env" ] && source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"
 source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 
 ##############################
@@ -89,19 +89,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 ##############################
-# credentials (env override, else BWS like the sibling scripts)
+# credentials (setup.env / environment, else Bitwarden via BWS_ACCESS_TOKEN)
 ##############################
 
-if [[ -z "${KEYCLOAK_HOST:-}" || -z "${KEYCLOAK_USER:-}" || -z "${KEYCLOAK_PASSWORD:-}" ]]; then
-  if [[ -z "${BWS_ACCESS_TOKEN:-}" ]]; then
-    echo "ERROR: set KEYCLOAK_HOST/KEYCLOAK_USER/KEYCLOAK_PASSWORD, or BWS_ACCESS_TOKEN for Bitwarden." >&2
-    exit 1
-  fi
-  bws config server-base https://vault.bitwarden.eu
-  KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
-  KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
-  KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
-fi
+requireConfig KEYCLOAK_HOST
+requireConfig KEYCLOAK_USER
+requireConfig KEYCLOAK_PASSWORD
 
 # The attribute to declare. admin+user may VIEW; only admin may EDIT.
 EXACT_USERNAME_ATTR='{

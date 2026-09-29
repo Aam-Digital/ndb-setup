@@ -7,25 +7,19 @@
 
 set -u
 
-# Load PREFIX, BWS_ACCESS_TOKEN (and other setup.env vars).
+# Load PREFIX (and other setup.env vars).
 scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
+source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"
 
 if [ -z "${PREFIX:-}" ]; then
     echo "ERROR: PREFIX is not set in ndb-setup/setup.env"
     exit 1
 fi
 
-if [ -z "${BWS_ACCESS_TOKEN:-}" ]; then
-    echo "ERROR: BWS_ACCESS_TOKEN is not set in ndb-setup/setup.env"
-    exit 1
-fi
-
-# set server-base to EU instance (matches interactive-setup.sh)
-bws config server-base https://vault.bitwarden.eu
-
-SENTRY_DSN_REPLICATION_BACKEND=$(bws secret -t "$BWS_ACCESS_TOKEN" get "359ea1c0-798e-4e17-ae44-b2e20153051d" | jq -r .value)
+requireConfig SENTRY_DSN_REPLICATION_BACKEND
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 

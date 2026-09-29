@@ -48,6 +48,10 @@ getConfig() {
 
   # 2) Bitwarden Secrets Manager (optional)
   if [ -n "${BWS_ACCESS_TOKEN:-}" ] && _isBwsBackedKey "$key"; then
+    if ! command -v bws &>/dev/null; then
+      echo "WARNING: BWS_ACCESS_TOKEN is set but the bws CLI is not installed (see install-dependencies.sh), cannot load '$key' from Bitwarden." >&2
+      return 1
+    fi
     _ensureBwsServer
     local value
     if value=$(getBwsSecretByKey "$key"); then

@@ -32,6 +32,7 @@ scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
 source "$baseDirectory/ndb-setup/setup.env"
 source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"
 source "$baseDirectory/ndb-setup/scripts/lib/keycloak.sh"
 
 ##############################
@@ -50,21 +51,12 @@ if [[ -z "${CARBONE_HOST:-}" ]]; then
 fi
 
 ##############################
-# BWS secrets (skipped if KEYCLOAK_HOST/USER/PASSWORD are already set in setup.env)
+# credentials (setup.env / environment, else Bitwarden via BWS_ACCESS_TOKEN)
 ##############################
 
-if [[ -z "${KEYCLOAK_HOST:-}" ]] || [[ -z "${KEYCLOAK_USER:-}" ]] || [[ -z "${KEYCLOAK_PASSWORD:-}" ]]; then
-  if [[ -z "${BWS_ACCESS_TOKEN:-}" ]]; then
-    echo "BWS_ACCESS_TOKEN is not set and KEYCLOAK_HOST/KEYCLOAK_USER/KEYCLOAK_PASSWORD are not all set. Abort."
-    exit 1
-  fi
-
-  bws config server-base https://vault.bitwarden.eu
-
-  KEYCLOAK_HOST=$(bws secret -t "$BWS_ACCESS_TOKEN" get "3db87144-76c9-4690-8f59-b22600c8c927" | jq -r .value)
-  KEYCLOAK_PASSWORD=$(bws secret -t "$BWS_ACCESS_TOKEN" get "c5f42f09-b1c8-43a8-ae75-b22600c8f2e5" | jq -r .value)
-  KEYCLOAK_USER=$(bws secret -t "$BWS_ACCESS_TOKEN" get "fbe4ba07-538d-49e2-92dd-b22600c8d9d2" | jq -r .value)
-fi
+requireConfig KEYCLOAK_HOST
+requireConfig KEYCLOAK_USER
+requireConfig KEYCLOAK_PASSWORD
 
 ##############################
 # Preflight: confirm `aam-platform` realm exists on the central Keycloak

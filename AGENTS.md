@@ -11,3 +11,11 @@ server hostnames, external partner URLs, user identifiers, or real record data. 
 generalized insights instead (e.g. "a large production instance", "an external webhook
 consumer"). Scrub quoted log or monitoring output before posting. Links to access-restricted
 internal tools (e.g. Sentry issues) are acceptable.
+
+## Scripts: Config and Secrets
+
+Never call the `bws` (Bitwarden Secrets Manager) CLI directly in scripts. Source `scripts/lib/secrets.sh`
+(after `scripts/lib/common.sh`) and resolve values with `requireConfig KEY` / `getConfig KEY`. These take
+the value from `setup.env` / the environment first and only fall back to Bitwarden when `BWS_ACCESS_TOKEN`
+is set, so scripts also work on servers without the `bws` CLI or a token. New Bitwarden-backed keys must
+be added to `_isBwsBackedKey` in `secrets.sh` (secrets are looked up by name, not by ID).

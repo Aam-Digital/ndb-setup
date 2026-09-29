@@ -158,9 +158,10 @@ open the file. Rather than duplicate that here, note only the deviations from th
 - **`collect-credentials.sh`** is intentionally self-contained (meant to be copied out; takes an
   `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
 - **`enable-backend.sh`** re-run on an instance with the backend already enabled does not abort but only
-  repairs the backend's Keycloak admin access (realm-management roles incl. `manage-clients`, `KEYCLOAK_*` in
-  `application.env`), recreating the backend if something changed. For every instance with the backend:
-  `./for-each-instance.sh --only backend ./enable-backend.sh`.
+  repairs its config with the same functions the first run uses: the Keycloak admin access (realm-management
+  roles incl. `manage-clients`, `KEYCLOAK_*` in `application.env`), replication-backend's permission-check
+  client and CouchDB credentials, and the Carbone render API client. It recreates only the services whose
+  config changed. For every instance with the backend: `./for-each-instance.sh --only backend ./enable-backend.sh`.
 - **`create-couchdb.sh`** is safe to re-run on a live instance and doubles as the repair for CouchDB's
   security config: it detects the mode from `COMPOSE_PROFILES`, reuses a running CouchDB (restarting it only
   if `couchdb.ini` changed) and re-applies `_security`, the JWT config and — with replication-backend —

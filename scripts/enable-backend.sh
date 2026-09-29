@@ -152,28 +152,16 @@ if [ "$repairAll" = true ]; then
     echo "  To repair a single instance, run: $0 <instance>"
     exit 1
   fi
-  failedInstances=()
-  repairIfBackendEnabled() {
-    path="$1"
-    instance=$(getVar "$path/.env" INSTANCE_NAME)
-    if [ -z "$instance" ]; then
-      instance="$(basename "$path")"
-      instance="${instance#"$PREFIX"}"
-    fi
-    if ! backendEnabledCheck || ! isBackendConfigCreated; then
-      echo "[$instance] backend not enabled, skipping"
-      return 0
-    fi
-    echo "[$instance]"
-    repairBackendKeycloakAdminAccess || failedInstances+=("$instance")
-    echo ""
-  }
-  forEachInstance repairIfBackendEnabled || exit 1
-  if [ "${#failedInstances[@]}" -gt 0 ]; then
-    echo "Repair failed for: ${failedInstances[*]}"
-    exit 1
-  fi
-  exit 0
+  # resolved (and exported) once here, so each per-instance run does not fetch them from BWS again
+  requireConfig KEYCLOAK_HOST
+  requireConfig KEYCLOAK_PASSWORD
+  requireConfig KEYCLOAK_USER
+  backendEnabledAt() { local path="$1"; backendEnabledCheck && isBackendConfigCreated; }
+  # re-running this script on an instance with the backend enabled only repairs it (see above)
+  repairArgs=()
+  [ "$skipRestart" = true ] && repairArgs+=(--skip-restart)
+  runForEachInstance backendEnabledAt "backend not enabled" "$0" "${repairArgs[@]+"${repairArgs[@]}"}"
+  exit $?
 fi
 
 ##############################

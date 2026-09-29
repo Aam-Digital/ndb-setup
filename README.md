@@ -338,7 +338,7 @@ To restore manually:
 2. Go to the `BACKUP_DIR` folder.
 3. Decrypt a backup using
    ```bash
-   gpg --passphrase <passphrase> -o output -d <YYYYMMDD>.tar.gz.gpg
+   gpg --pinentry-mode loopback -o output -d <YYYYMMDD>.tar.gz.gpg   # prompts for the passphrase
    ```
 4. Decompress the backup
    ```bash

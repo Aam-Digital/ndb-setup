@@ -218,7 +218,7 @@ Nothing here has automated tests, so test by running the script:
    prompt fails instead of hanging.
 
    ```bash
-   T="$TMPDIR/test"; mkdir -p "$T/bin" "$T/ndb-setup" "$T/c-acme"
+   T="$(mktemp -d)"; mkdir -p "$T/bin" "$T/ndb-setup" "$T/c-acme"
    cp -r scripts "$T/ndb-setup/"
    printf 'PREFIX=c-\nKEYCLOAK_HOST=kc.example\n' > "$T/ndb-setup/setup.env"
    printf 'INSTANCE_NAME=acme\nCOMPOSE_PROFILES=full-stack\n' > "$T/c-acme/.env"

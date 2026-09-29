@@ -55,7 +55,8 @@ createBackup() {
     exit 1
   fi
   # never leave the unencrypted archive behind
-  if ! gpg -c --batch --yes --passphrase "$passphrase" "$target.tar.gz"; then
+  # the passphrase goes through a file descriptor, so it never shows in the process list
+  if ! gpg -c --batch --yes --pinentry-mode loopback --passphrase-fd 3 "$target.tar.gz" 3<<<"$passphrase"; then
     echo "ERROR: encrypting the archive failed."
     rm -f "$target.tar.gz"
     exit 1
@@ -106,7 +107,7 @@ restoreBackup() {
   local unpackDir="$baseDirectory/_backup_$date"
   local decrypted="$backupRoot/.restore-$date.tar.gz"
   echo "decrypting backup ..."
-  if ! echo "$passphrase" | gpg --batch --yes --passphrase-fd 0 -o "$decrypted" -d "$archive"; then
+  if ! echo "$passphrase" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 -o "$decrypted" -d "$archive"; then
     echo "ERROR: decrypting $archive failed."
     rm -f "$decrypted"
     exit 1
@@ -142,13 +143,33 @@ restoreBackup() {
     exit 1
   fi
 
-  local replacedData
-  replacedData="couchdb.before-restore-$(date +%Y%m%d%H%M%S)"
+  local timestamp replacedData
+  timestamp=$(date +%Y%m%d%H%M%S)
+  replacedData="couchdb.before-restore-$timestamp"
   cd "$path" || exit 1
-  docker compose down
-  mv couchdb "$replacedData"
-  mv "$backedUpData" ./couchdb
-  docker compose up -d
+  # CouchDB must be stopped before its data is moved
+  if ! docker compose down; then
+    echo "ERROR: stopping $folder failed. Nothing changed."
+    exit 1
+  fi
+  if ! mv couchdb "$replacedData"; then
+    echo "ERROR: moving the current CouchDB data aside failed. Nothing changed, restarting $folder."
+    docker compose up -d
+    exit 1
+  fi
+  if ! { mv "$backedUpData" ./couchdb && docker compose up -d; }; then
+    echo "ERROR: installing the backed-up data or restarting $folder failed. Putting the previous data back ..."
+    docker compose down
+    [ ! -e couchdb ] || mv couchdb "couchdb.failed-restore-$timestamp"
+    if ! mv "$replacedData" couchdb; then
+      echo "  ERROR: rolling back failed, too. The previous data is in $path/$replacedData."
+    elif ! docker compose up -d; then
+      echo "  ERROR: the previous data is back in place, but restarting $folder failed."
+    else
+      echo "  The previous data is back in place and $folder restarted."
+    fi
+    exit 1
+  fi
   echo "Backup of $date restored for $folder, and the instance restarted."
   echo "  The replaced CouchDB data is in $path/$replacedData - delete it once the restore is verified."
   echo "  The unpacked backup is in $unpackDir - delete it when done."

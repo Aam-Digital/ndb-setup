@@ -128,7 +128,7 @@ and restart the stack **once** at the end. Run standalone (without the flag) the
 
 | File | Provides |
 | --- | --- |
-| [`common.sh`](lib/common.sh) | `.env` helpers (`getVar`, `setEnv`, `upsertEnv`, `ensureEnv`, `ensureRealValue`, `removeEnv`), `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`), `getLatestBackendVersion`, docker-compose volume-mount helpers |
+| [`common.sh`](lib/common.sh) | `.env` helpers (`getVar`, `setEnv`, `upsertEnv`, `ensureEnv`, `ensureRealValue`, `removeEnv`), `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, docker-compose volume-mount helpers |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig` and the `NAME → BWS UUID` map (`_bwsSecretId`) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart` — bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
 | [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles` |

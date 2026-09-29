@@ -72,10 +72,10 @@ if [ "$repairAll" = true ]; then
   failedInstances=()
   repairInstance() {
     local dir="$1"
-    case "$(getVar "$dir/.env" COMPOSE_PROFILES)" in
-      with-permissions | full-stack | full-stack-without-sqs) ;;
-      *) echo "[$(basename "$dir")] database-only, skipping"; return 0 ;;
-    esac
+    if ! profileDeploysReplicationBackend "$(getVar "$dir/.env" COMPOSE_PROFILES)"; then
+      echo "[$(basename "$dir")] database-only, skipping"
+      return 0
+    fi
     echo "[$(basename "$dir")]"
     "$0" "$dir" || failedInstances+=("$(basename "$dir")")
     echo ""
@@ -105,11 +105,7 @@ if [ ! -d "$path" ]; then
 fi
 org=$(getVar "$path/.env" INSTANCE_NAME)
 
-# The profiles that deploy replication-backend; unset/empty behaves like database-only (no profile active).
-composeProfiles=$(getVar "$path/.env" COMPOSE_PROFILES)
-case "$composeProfiles" in
-  with-permissions | full-stack | full-stack-without-sqs) withPermissions=true ;;
-esac
+replicationBackendEnabledCheck && withPermissions=true
 if [ "$withPermissions" = true ]; then
   echo "Configuring CouchDB for '$org' (with-permissions: replication-backend enforces access)"
 else

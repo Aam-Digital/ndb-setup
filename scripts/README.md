@@ -131,7 +131,7 @@ and restart the stack **once** at the end. Run standalone (without the flag) the
 | [`common.sh`](lib/common.sh) | `.env` helpers (`getVar`, `setEnv`, `upsertEnv`, `ensureEnv`, `ensureRealValue`, `removeEnv`), `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`), `getLatestBackendVersion`, docker-compose volume-mount helpers |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig` and the `NAME → BWS UUID` map (`_bwsSecretId`) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` — bring up the database-only CouchDB init container, run authenticated requests, tear it down |
-| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig` |
+| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles` |
 
 Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
 open the file. Rather than duplicate that here, note only the deviations from the conventions above:
@@ -146,6 +146,10 @@ open the file. Rather than duplicate that here, note only the deviations from th
   repairs the backend's Keycloak admin access (realm-management roles incl. `manage-clients`, `KEYCLOAK_*` in
   `application.env`), recreating the backend if something changed. `--repair-all` does this for every instance
   with the backend enabled.
+- **`migrate-account-manager-manage-realm.sh`** adds the realm-management roles the `account_manager`
+  realm role needs (incl. `manage-realm`) so its members can manage roles in the app's admin UI. Unlike the
+  other Keycloak repairs this runs on *every* instance, since that UI calls Keycloak from the frontend and
+  does not involve the backend.
 - **`enable-feature-notification.sh`** writes the frontend Firebase web config to the instance's
   `assets/firebase-config.json` and volume-mounts it (the published ndb-core image does not contain it).
   Without BWS, provide `FIREBASE_CONFIG_JSON` as a single-quoted JSON object in `setup.env`. Re-running

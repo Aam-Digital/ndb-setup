@@ -380,3 +380,104 @@ _assignManageRealmRole() {
     echo "  WARNING: Could not find 'roles' client scope in realm '$realm'."
   fi
 }
+
+##############################
+# account_manager realm role
+##############################
+
+# realm-management roles the "account_manager" realm role must grant its members.
+# manage-realm is what lets the app's "Roles & Permissions" admin UI create and delete realm roles;
+# Keycloak has no narrower built-in role for that.
+ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES=("view-realm" "manage-users" "manage-realm")
+
+# Returns 0 if the "account_manager" realm role already grants all the given realm-management roles.
+# Args: realm, roleName...
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+accountManagerHasRealmManagementRoles() {
+  local realm="$1"
+  shift
+
+  if [ -z "${token:-}" ] && ! getKeycloakToken; then
+    return 1
+  fi
+
+  local realmMgmtClientUuid
+  realmMgmtClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=realm-management" \
+    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty' 2>/dev/null)
+  [ -z "$realmMgmtClientUuid" ] && return 1
+
+  local composites roleName
+  composites=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/roles/account_manager/composites/clients/$realmMgmtClientUuid" \
+    -H "Authorization: Bearer $token")
+  echo "$composites" | jq -e 'type == "array"' >/dev/null 2>&1 || return 1
+
+  for roleName in "$@"; do
+    echo "$composites" | jq -e --arg r "$roleName" 'any(.[]; .name == $r)' >/dev/null || return 1
+  done
+}
+
+# Add any missing ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES to the "account_manager" realm role (idempotent).
+# Args: realm
+# Requires: KEYCLOAK_HOST, token (call getKeycloakToken first or let this function call it)
+ensureAccountManagerRealmManagementRoles() {
+  local realm="$1"
+
+  if [ -z "${token:-}" ] && ! getKeycloakToken; then
+    return 1
+  fi
+
+  local accountManagerRole
+  accountManagerRole=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/roles/account_manager" \
+    -H "Authorization: Bearer $token")
+  if [ "$(echo "$accountManagerRole" | jq -r '.name // empty' 2>/dev/null)" != "account_manager" ]; then
+    echo "  ERROR: Realm '$realm' has no 'account_manager' role."
+    return 1
+  fi
+
+  local realmMgmtClientUuid
+  realmMgmtClientUuid=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients?clientId=realm-management" \
+    -H "Authorization: Bearer $token" | jq -r '.[0].id // empty' 2>/dev/null)
+  if [ -z "$realmMgmtClientUuid" ]; then
+    echo "  ERROR: Could not find realm-management client in realm '$realm'."
+    return 1
+  fi
+
+  local existing
+  existing=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/roles/account_manager/composites/clients/$realmMgmtClientUuid" \
+    -H "Authorization: Bearer $token")
+  if ! echo "$existing" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    echo "  ERROR: Could not read composites of 'account_manager' in realm '$realm'."
+    return 1
+  fi
+
+  local rolePayload="[]"
+  local roleName roleResponse
+  for roleName in "${ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES[@]}"; do
+    if echo "$existing" | jq -e --arg r "$roleName" 'any(.[]; .name == $r)' >/dev/null; then
+      continue
+    fi
+    roleResponse=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$realm/clients/$realmMgmtClientUuid/roles/$roleName" \
+      -H "Authorization: Bearer $token")
+    if [ "$(echo "$roleResponse" | jq -r '.name // empty')" = "$roleName" ]; then
+      rolePayload=$(echo "$rolePayload" | jq --argjson role "$roleResponse" '. + [$role]')
+    else
+      echo "  ERROR: Could not resolve realm-management role '$roleName' in realm '$realm'."
+      return 1
+    fi
+  done
+
+  if [ "$(echo "$rolePayload" | jq 'length')" -eq 0 ]; then
+    echo "  account_manager already grants: ${ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES[*]}."
+    return 0
+  fi
+
+  if ! curl -fsS -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$realm/roles/account_manager/composites" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "$rolePayload"; then
+    echo "  ERROR: Failed to add realm-management roles to 'account_manager' in realm '$realm'."
+    return 1
+  fi
+
+  echo "  Added to account_manager: $(echo "$rolePayload" | jq -r '[.[].name] | join(", ")')."
+}

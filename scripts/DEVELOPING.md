@@ -125,9 +125,7 @@ Say instances need a new setting, a new Keycloak role or a corrected value. Inst
    `repairBackendConfig` in [`enable-backend.sh`](enable-backend.sh) is the full example.
 
    ```bash
-   repairs=()
-   fooConfigUpToDate "$appEnv" || repairs+=(foo)
-   if [ "${#repairs[@]}" -eq 0 ]; then
+   if fooConfigUpToDate "$appEnv"; then
      echo "Nothing to do."
      exit 0
    fi
@@ -154,10 +152,13 @@ from real problems found while turning migrations into repairs:
   new, empty realm would lock out every user. Only a definite "not found" (HTTP 404) counts as missing: a
   timeout or an error status must abort, not lead to creating it.
 - **Never repoint an instance to another system.** If `.env` points to another Keycloak than `KEYCLOAK_HOST`,
-  refuse instead of overwriting `KEYCLOAK_URL`.
+  refuse instead of overwriting `KEYCLOAK_URL` (`requireCentralKeycloak`).
 - **Everything that can fail happens before anything is stopped or written.** Download and validate
-  templates first (`downloadBackendConfigTemplate` uses `curl -f` and checks the content). Before that was
-  fixed, a failed download replaced the live `application.env` with an error page.
+  templates first (`downloadBackendConfigTemplate` uses `curl -f` and checks the content), and set up the
+  Keycloak clients before `docker compose down`. Before that was fixed, a failed download replaced the live
+  `application.env` with an error page.
+- **One failed precondition shouldn't block unrelated repairs.** If a repair can't run (e.g. the instance's
+  realm is not on this Keycloak), report it, do the other repairs and exit 1 at the end.
 - **Don't take a running instance down to change its config.** Reuse the running container
   (`couchdbInitStart` does), change the files, and restart only the service that has to re-read them.
 - **Only ask for input that creating something needs.** A re-run must not prompt (e.g. for a locale),
@@ -171,9 +172,10 @@ from real problems found while turning migrations into repairs:
 
 ## Shell pitfalls in this code base
 
-- **Helpers return values in globals.** `createKeycloakBackendClient` and `createCarboneRenderClient` both set
-  `$clientSecret`; `resolveInstancePath` sets `$path`; `saveRollbackCopy` sets `$ROLLBACK_COPY`. Copy the value into
-  your own variable right after the call, before calling the next helper.
+- **Some helpers return values in globals.** `requireInstance` sets `$path` and `$org`; `saveRollbackCopy` sets
+  `$ROLLBACK_COPY`; `getKeycloakRealmKey` sets `$kid` / `$publicKey`. Copy the value into your own variable right
+  after the call, before calling the next helper. The Keycloak `ensure*Client` helpers print the secret instead
+  (`secret=$(ensureKeycloakBackendClient "$org") || exit 1`), with their progress on stderr.
 - **A bare `return` returns the status of the previous command.** Use `return 0` for "skipped, not failed",
   or the caller counts a harmless skip as a failure.
 - **`setEnv` only replaces an existing key.** When the key is missing, it prints a warning and changes
@@ -191,7 +193,7 @@ from real problems found while turning migrations into repairs:
 | [`common.sh`](lib/common.sh) | see the `.env` helpers below; `generate_password`, `saveRollbackCopy` (rollback copies of files a script changes; see `prune-rollback-copies.sh`), instance resolution (`requireInstance`, `resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, `downloadBackendConfigTemplate`, docker-compose volume-mount helpers |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig`, and `_isBwsBackedKey` (which keys may come from Bitwarden) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart`: bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
-| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmStatus`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `createCarboneRenderClient`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles`, `ensureExactUsernameUserProfileAttribute` |
+| [`keycloak.sh`](lib/keycloak.sh) | `kcApi METHOD path [json]` / `kcCreate path json` for any admin API call (they get and refresh the admin token themselves), `getKeycloakToken` (to fail early), `requireCentralKeycloak`, `getKeycloakRealmStatus`, `getKeycloakRealmKey`, `getKeycloakClientUuid` / `getKeycloakClientSecret`, `ensureKeycloakBackendClient` / `ensureCarboneRenderClient` (print the secret), `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `ensureAccountManagerRealmManagementRoles`, `ensureExactUsernameUserProfileAttribute` |
 
 The `.env` helpers (they work on any `KEY=value` file, e.g. `application.env`):
 

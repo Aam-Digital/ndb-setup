@@ -49,18 +49,13 @@ requireConfig KEYCLOAK_HOST
 requireConfig KEYCLOAK_USER
 requireConfig KEYCLOAK_PASSWORD
 
-# The admin credentials only reach the central Keycloak: never repoint an instance using another one.
-instanceKeycloakHost=$(getVar "$path/.env" KEYCLOAK_URL)
-if ! isPlaceholderValue "$instanceKeycloakHost" && [ "$instanceKeycloakHost" != "$KEYCLOAK_HOST" ]; then
-  echo "ERROR: '$org' uses Keycloak '$instanceKeycloakHost' (KEYCLOAK_URL in .env), not '$KEYCLOAK_HOST'. Abort."
-  exit 1
-fi
+requireCentralKeycloak "$path/.env" || exit 1
 
 ##############################
 # script
 ##############################
 
-[ "$instanceKeycloakHost" == "$KEYCLOAK_HOST" ] || setEnv KEYCLOAK_URL "$KEYCLOAK_HOST" "$path/.env"
+[ "$(getVar "$path/.env" KEYCLOAK_URL)" == "$KEYCLOAK_HOST" ] || upsertEnv KEYCLOAK_URL "$KEYCLOAK_HOST" "$path/.env"
 
 if ! getKeycloakToken; then
   echo "ERROR: could not authenticate against Keycloak. Abort."
@@ -119,30 +114,18 @@ else
      | .smtpServer.password = $password' \
     "$keycloakRealmFile")
 
-  createStatus=$(curl -s -o /dev/null -w "%{http_code}" -X "POST" "https://$KEYCLOAK_HOST/admin/realms" \
-       -H "Authorization: Bearer $token" \
-       -H "Content-Type: application/json" \
-       -d "$keycloakRealmJson")
-  if [ "$createStatus" != "201" ]; then
-    echo "ERROR: failed to create Keycloak realm '$org' (HTTP $createStatus). Abort."
+  if ! kcCreate "" "$keycloakRealmJson" >/dev/null; then
+    echo "ERROR: failed to create Keycloak realm '$org'. Abort."
     exit 1
   fi
 fi
 
 # create the "app" client (idempotent: reuse existing)
-client=$(curl -s -L "https://$KEYCLOAK_HOST/admin/realms/$org/clients?clientId=app" \
-  -H "Authorization: Bearer $token" | jq -r '.[0].id // empty')
-if [ -n "$client" ]; then
+if client=$(getKeycloakClientUuid "$org" app); then
   echo "Keycloak 'app' client already exists ($client), skipping creation."
 else
   echo "Creating Keycloak 'app' client..."
-  clientResponse=$(curl -s -D - -o /dev/null -X POST "https://$KEYCLOAK_HOST/admin/realms/$org/clients" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d "$(jq --arg url "https://$url" '.baseUrl = $url' "$ndbSetupDir/keycloak/client_config.json")")
-  location=$(echo "$clientResponse" | grep -i "^location:")
-  client=$(echo "$location" | sed -n 's#.*\([a-f0-9]\{8\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{4\}-[a-f0-9]\{12\}\).*#\1#p')
-  if [ -z "$client" ]; then
+  if ! kcCreate "$org/clients" "$(jq --arg url "https://$url" '.baseUrl = $url' "$ndbSetupDir/keycloak/client_config.json")" >/dev/null; then
     echo "ERROR: failed to create Keycloak 'app' client. Abort."
     exit 1
   fi
@@ -159,16 +142,7 @@ fi
 
 # Repairs for realms created from an older realm template (fresh realms already have both).
 repairFailed=false
-if ! accountManagerHasRealmManagementRoles "$org" "${ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES[@]}"; then
-  echo "Adding the realm-management roles of 'account_manager'..."
-  if ensureAccountManagerRealmManagementRoles "$org" \
-    && accountManagerHasRealmManagementRoles "$org" "${ACCOUNT_MANAGER_REALM_MANAGEMENT_ROLES[@]}"; then
-    echo "  Users with the account_manager role need to log out and back in."
-  else
-    echo "  ERROR: Could not confirm the realm-management roles on 'account_manager'."
-    repairFailed=true
-  fi
-fi
+ensureAccountManagerRealmManagementRoles "$org" || repairFailed=true
 ensureExactUsernameUserProfileAttribute "$org" || repairFailed=true
 
 if [ "$repairFailed" = true ]; then

@@ -174,16 +174,15 @@ fi
 # loudly, because a lingering 403 is otherwise silent.
 keycloakRolesEnsured=false
 if [ "$adminCredsAvailable" == "true" ]; then
-  if createKeycloakBackendClient "$org" && [ -n "$clientSecret" ]; then
-    keycloakClientSecret="$clientSecret"
+  if secret=$(ensureKeycloakBackendClient "$org"); then
+    keycloakClientSecret="$secret"
     # keep .env in sync — the replication-backend uses the same client
     if grep -q '^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=' "$path/.env"; then
-      setEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$clientSecret" "$path/.env"
+      setEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$secret" "$path/.env"
     fi
   else
-    echo "  WARNING: Could not create/fetch the aam-backend Keycloak client; using the secret from .env."
+    echo "  WARNING: Could not set up the aam-backend Keycloak client; using the secret from .env."
   fi
-  # Verify the role actually stuck — createKeycloakBackendClient returns 0 even if assignment only warned.
   if serviceAccountHasRealmManagementRole "$org" "view-users"; then
     keycloakRolesEnsured=true
     echo "  Verified: aam-backend service account has the realm-management 'view-users' role."

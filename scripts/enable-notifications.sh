@@ -13,13 +13,7 @@
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 # FIREBASE_CONFIG_JSON / FIREBASE_CREDENTIAL_BASE64 are resolved via getConfig/requireConfig
 # (setup.env/environment, falling back to Bitwarden Secrets Manager - see lib/secrets.sh). They hold
@@ -50,18 +44,7 @@ set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 # ask for input data
 ##############################
 
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-instance=$(getVar "$path/.env" INSTANCE_NAME)
-if [ -z "$instance" ]; then
-  instance="$(basename "$path")"
-  instance="${instance#"$PREFIX"}"
-fi
+requireInstance "${1:-}"
 
 ##############################
 # variables
@@ -96,12 +79,12 @@ syncPermissionCheckAuth() {
 
 # check if backend is already enabled for this instance
 if ! backendEnabledCheck; then
-  echo "No backend found for instance '$instance'. Please run './enable-backend.sh' first."
+  echo "No backend found for instance '$org'. Please run './enable-backend.sh' first."
   exit 1
 fi
 
 if ! isBackendConfigCreated; then
-  echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
+  echo "No backend configuration found for instance '$org'. Please run './enable-backend.sh' first."
   exit 1
 fi
 
@@ -195,14 +178,14 @@ cp "$appEnv" "$appEnvBeforeWrite"
 # upsertEnv (not setEnv): application.env files created from older aam-backend-service templates may lack
 # some of these keys (LINKBASEURL is not in the template at all), so they have to be added if missing.
 upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredentialBase64" "$appEnv" || exit 1
-upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$appEnv" || exit 1
+upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$org.$DOMAIN" "$appEnv" || exit 1
 upsertEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$appEnv" || exit 1
 upsertEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv" || exit 1
 syncPermissionCheckAuth || exit 1
 
 # Enable email notifications by default. Always pass --skip-restart: the email step writes its config but does
 # not restart, so the single restart below applies both the notification and email config in one cycle.
-# Pass $path (not $instance) so a custom instance location (outside the standard layout) is preserved.
+# Pass $path (not $org) so a custom instance location (outside the standard layout) is preserved.
 # Abort (without restarting) if the email step fails, instead of reporting success with a half-applied config.
 # Roll application.env back as well: otherwise FEATURES_NOTIFICATIONAPI_ENABLED=true would make a re-run take
 # the "already enabled" shortcut above and never retry the email step or apply the pending config.
@@ -210,7 +193,7 @@ if ! "$scriptDir/enable-email-notifications.sh" "$path" --skip-restart; then
   cp "$appEnvBeforeWrite" "$appEnv"
   echo "ERROR: Enabling email notifications failed (see above). $(basename "$appEnv") was restored to its"
   echo "       previous state and the instance was NOT restarted. Fix the issue and re-run"
-  echo "       './enable-notifications.sh $instance'."
+  echo "       './enable-notifications.sh $org'."
   exit 1
 fi
 

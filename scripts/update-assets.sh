@@ -12,25 +12,15 @@
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 ##############################
 # ask for input data
 ##############################
 
-if [ -n "$1" ]; then
-  instance="$1"
-else
-  echo "What is the name of the instance?"
-  read -r instance
-fi
+requireInstance "${1:-}"
 
-if [ -n "$2" ]; then
+if [ -n "${2:-}" ]; then
   baseConfig="$2"
 else
   echo "What baseConfig should be applied?"
@@ -41,9 +31,6 @@ fi
 # script
 ##############################
 
-resolveInstancePath "$instance" || exit 1
-instancePath="$path"
-
 # abort if no assets folder for baseConfig exists
 baseConfigPath="$ndbSetupDir/baseConfigs/$baseConfig"
 if [ ! -d "$baseConfigPath/assets" ]; then
@@ -51,30 +38,31 @@ if [ ! -d "$baseConfigPath/assets" ]; then
   exit 1
 fi
 
-saveRollbackCopy "$instancePath/docker-compose.yml"
+saveRollbackCopy "$path/docker-compose.yml"
 
 # copy assets from baseConfig to instance
-if [ -d "$instancePath/assets" ]; then
+assetsCopy=""
+if [ -d "$path/assets" ]; then
   assetsCopy="assets.rollback-$(date +%Y%m%d%H%M%S)"
   echo "  rollback copy: $assetsCopy/ (the previous assets folder)"
-  mv "$instancePath/assets" "$instancePath/$assetsCopy"
+  mv "$path/assets" "$path/$assetsCopy"
   # remove any volume mounts for the existing assets folder in docker-compose.yml
-  sed -i '/assets\/.*:\/usr\/share\/nginx\/html\/assets/d' "$instancePath/docker-compose.yml"
+  sed -i '/assets\/.*:\/usr\/share\/nginx\/html\/assets/d' "$path/docker-compose.yml"
 fi
-cp -r "$baseConfigPath/assets" "$instancePath/assets"
+cp -r "$baseConfigPath/assets" "$path/assets"
 
 # Keep the Firebase web config enable-notifications.sh writes to assets/: it is not part of the baseConfig,
 # and without it (and its volume mount, re-added below) push notifications stop working.
 # Only a regular file: Docker creates a directory there when the mounted file is missing.
-if [ -n "$assetsCopy" ] && [ -f "$instancePath/$assetsCopy/firebase-config.json" ]; then
-  cp "$instancePath/$assetsCopy/firebase-config.json" "$instancePath/assets/firebase-config.json"
+if [ -n "$assetsCopy" ] && [ -f "$path/$assetsCopy/firebase-config.json" ]; then
+  cp "$path/$assetsCopy/firebase-config.json" "$path/assets/firebase-config.json"
   echo "  kept assets/firebase-config.json (push notifications config)"
 fi
 
 # add one volume mount to docker-compose.yml for each asset present in the assets folder
-ensureAssetVolumeMountsFromDir "$instancePath/docker-compose.yml" "$instancePath/assets"
+ensureAssetVolumeMountsFromDir "$path/docker-compose.yml" "$path/assets"
 
 # restart docker if a third arg ($3) is "y" or "true"
 if [ "$3" == "y" ] || [ "$3" == "true" ]; then
-  (cd "$instancePath" && docker compose down && docker compose up -d)
+  (cd "$path" && docker compose up -d)
 fi

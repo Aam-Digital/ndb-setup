@@ -12,15 +12,14 @@
 #
 # Can be run from any directory.
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 usage() {
   sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-  exit 1
+  exit "${1:-1}"
 }
+
+case "${1:-}" in -h | --help) usage 0 ;; esac
 
 backupRoot="${BACKUP_DIR:-}"
 passphrase="${BACKUP_PASSPHRASE:-}"
@@ -128,10 +127,8 @@ restoreBackup() {
       echo "Archive unpacked to $unpackDir. Stopping here."
       exit 0
     fi
-    echo "For which instance do you want to import the backup?"
-    read -r instanceArg
   fi
-  resolveInstancePath "$instanceArg" || exit 1
+  requireInstance "$instanceArg"
   local folder
   folder=$(basename "$path")
 
@@ -184,6 +181,5 @@ case "${1:-create}" in
   --keep) createBackup "$@" ;;
   list) listBackups ;;
   restore) shift; restoreBackup "$@" ;;
-  -h | --help) usage ;;
   *) usage ;;
 esac

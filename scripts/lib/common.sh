@@ -1,7 +1,6 @@
 #!/bin/bash
 # Shared utility functions for ndb-setup scripts.
-# Source this file in any script that needs these helpers:
-#   source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+# Loaded by lib/init.sh, which every script sources first.
 
 ##############################
 # Environment helpers
@@ -303,37 +302,38 @@ resolveInstancePath() {
   esac
 }
 
+# The instance a script works on, from its argument (a name or a path, see resolveInstancePath), or asked for
+# when the argument is empty. Sets the globals `path` (the instance directory) and `org` (INSTANCE_NAME from
+# its .env, or the folder name without the PREFIX). Exits the script if the directory does not exist.
+# Usage: requireInstance "${1:-}"
+requireInstance() {
+  local arg="$1"
+  if [ -z "$arg" ]; then
+    echo "Which instance? (name, or path to the instance directory, e.g. '.')"
+    read -r arg
+  fi
+  resolveInstancePath "$arg" || exit 1
+  if [ ! -d "$path" ]; then
+    echo "ERROR: instance directory not found: $path (run create-instance.sh first). Abort."
+    exit 1
+  fi
+  org=$(getVar "$path/.env" INSTANCE_NAME)
+  if [ -z "$org" ]; then
+    org=$(basename "$path")
+    org="${org#"$PREFIX"}"
+  fi
+}
+
 ##############################
 # Instance iteration
 ##############################
 
-# Run a callback for one or all instances.
-# Usage: forEachInstance <callback> [instance]
-#   <callback>  name of a function; called once per instance with the absolute
-#               instance directory as its first argument
-#   [instance]  optional single instance — an instance NAME (with or without the PREFIX) or a PATH to
-#               the instance directory (incl. "."); see resolveInstancePath. When omitted, iterates
-#               every "$baseDirectory/${PREFIX}*" directory.
+# Run a callback for every instance: each "$baseDirectory/${PREFIX}*" directory, passed as the callback's
+# first argument. To run a script for all instances, use for-each-instance.sh instead.
 # Requires: $baseDirectory and $PREFIX set (from setup.env).
-# Returns: non-zero if a named instance is missing or PREFIX is unset.
+# Returns: non-zero if PREFIX is unset.
 forEachInstance() {
   local callback="$1"
-  local single="${2:-}"
-
-  if [ -n "$single" ]; then
-    # single instance mode: resolve a name or a path, then capture into a local so callbacks that use a
-    # global `path` are not affected by resolveInstancePath writing to the global `path`.
-    resolveInstancePath "$single" || return 1
-    local dir="$path"
-    if [ ! -d "$dir" ]; then
-      echo "Instance directory not found: $dir"
-      return 1
-    fi
-    "$callback" "$dir"
-    return
-  fi
-
-  # all instances
   if [ -z "${PREFIX:-}" ]; then
     echo "ERROR: PREFIX is not set. Aborting to avoid operating on all directories."
     return 1

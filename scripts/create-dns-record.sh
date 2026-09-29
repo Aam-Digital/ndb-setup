@@ -22,13 +22,7 @@
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 ##############################
 # input

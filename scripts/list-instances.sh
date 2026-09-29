@@ -4,38 +4,25 @@
 #
 # Usage:
 #   ./list-instances.sh
-##############################
-# setup
-##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+
+# one row per instance; "-" for a value that is not set, so the columns stay aligned
+printInstanceRow() {
+  local dir="$1" appEnv="$1/config/aam-backend-service/application.env" key
+  local row=("$(basename "$dir")")
+  for key in COMPOSE_PROFILES APP_VERSION AAM_REPLICATION_BACKEND_VERSION AAM_BACKEND_SERVICE_VERSION; do
+    row+=("$(getVar "$dir/.env" "$key" -)")
+  done
+  for key in FEATURES_EXPORTAPI_ENABLED FEATURES_SKILLAPI_MODE FEATURES_NOTIFICATIONAPI_ENABLED DATABASECHANGEDETECTION_ENABLED; do
+    row+=("$(getVar "$appEnv" "$key" -)")
+  done
+  printf '%s\t' "${row[@]}"
+  echo
+}
 
 {
-echo -e "instance-name \t deployment-type \t app-version \t replication-backend \t backend-version \t export-api \t skilllab-api \t notification-api \t change-detection"
-echo -e "------------- \t --------------- \t ----------- \t ------------------- \t --------------- \t ---------- \t ------------ \t ---------------- \t ----------------"
-
-cd "$baseDirectory" || exit
-for D in *; do
-        if [ -d "${D}" ] && [[ $D == "$PREFIX"* ]]; then
-                cd "$D" || exit;
-                instance_name="${D}"
-
-                echo -e -n "$instance_name \t"
-                echo -e -n "$(getVar .env COMPOSE_PROFILES) \t"
-                echo -e -n "$(getVar .env APP_VERSION) \t"
-                echo -e -n "$(getVar .env AAM_REPLICATION_BACKEND_VERSION -) \t"
-                echo -e -n "$(getVar .env AAM_BACKEND_SERVICE_VERSION -) \t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_EXPORTAPI_ENABLED -)\t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_SKILLAPI_MODE -)\t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env FEATURES_NOTIFICATIONAPI_ENABLED -)\t"
-                echo -e -n "$(getVar config/aam-backend-service/application.env DATABASECHANGEDETECTION_ENABLED -)\t"
-                echo "" # new row
-
-                cd ..
-        fi
-done
-
+  echo -e "instance-name\tdeployment-type\tapp-version\treplication-backend\tbackend-version\texport-api\tskilllab-api\tnotification-api\tchange-detection"
+  echo -e "-------------\t---------------\t-----------\t-------------------\t---------------\t----------\t------------\t----------------\t----------------"
+  forEachInstance printInstanceRow
 } | column -t

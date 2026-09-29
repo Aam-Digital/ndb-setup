@@ -6,10 +6,10 @@
 #   ./for-each-instance.sh [--only replication-backend|backend] [--] <command> [args...]
 #
 # How the command runs, always inside each instance's directory:
-#   a script path (contains "/"): gets the instance directory appended as its last argument, which fits
-#       every script here taking an <instance> argument
+#   a script path (contains "/"): gets the instance directory as its first argument, before [args...],
+#       which fits every script here that takes <instance> as its first argument
 #         ./for-each-instance.sh --only backend ./enable-backend.sh
-#         ./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0
+#         ./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0   # runs: update-version.sh <dir> ndb-core ...
 #   any other command: runs as given
 #         ./for-each-instance.sh docker compose pull
 #   one quoted string with spaces: runs with bash, so &&, | and variables work
@@ -21,14 +21,11 @@
 #
 # Can be run from any directory.
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 usage() {
   sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-  exit 1
+  exit "${1:-1}"
 }
 
 only=""
@@ -41,7 +38,7 @@ while [ "$#" -gt 0 ]; do
       esac
       shift 2
       ;;
-    -h | --help) usage ;;
+    -h | --help) usage 0 ;;
     --) shift; break ;;
     -*) echo "ERROR: unknown option '$1' (put the command after '--' if it starts with '-')."; usage ;;
     *) break ;;
@@ -87,7 +84,7 @@ runForInstance() {
   local rc=0
   case "$mode" in
     shell) (cd "$dir" && bash -c "${cmd[0]}") || rc=$? ;;
-    script) (cd "$dir" && "${cmd[@]}" "$dir") || rc=$? ;;
+    script) (cd "$dir" && "${cmd[0]}" "$dir" "${cmd[@]:1}") || rc=$? ;;
     command) (cd "$dir" && "${cmd[@]}") || rc=$? ;;
   esac
   [ "$rc" -eq 0 ] || failed+=("$name")

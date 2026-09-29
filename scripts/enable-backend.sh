@@ -35,13 +35,7 @@
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"
 
 ##############################
@@ -185,29 +179,29 @@ repairBackendConfig() {
   local instanceKeycloakHost
   instanceKeycloakHost=$(getVar "$envFile" KEYCLOAK_URL "$KEYCLOAK_HOST")
   if [ "$instanceKeycloakHost" != "$KEYCLOAK_HOST" ]; then
-    echo "ERROR: '$instance' uses Keycloak '$instanceKeycloakHost' (KEYCLOAK_URL in .env), not '$KEYCLOAK_HOST'. Cannot repair it with these admin credentials."
+    echo "ERROR: '$org' uses Keycloak '$instanceKeycloakHost' (KEYCLOAK_URL in .env), not '$KEYCLOAK_HOST'. Cannot repair it with these admin credentials."
     return 1
   fi
   if ! getKeycloakToken; then
     return 1
   fi
   local realmStatus
-  realmStatus=$(getKeycloakRealmStatus "$instance")
+  realmStatus=$(getKeycloakRealmStatus "$org")
   if [ "$realmStatus" != "200" ]; then
-    echo "ERROR: Realm '$instance' not accessible on $KEYCLOAK_HOST (HTTP $realmStatus). Check the realm exists (and matches INSTANCE_NAME)."
+    echo "ERROR: Realm '$org' not accessible on $KEYCLOAK_HOST (HTTP $realmStatus). Check the realm exists (and matches INSTANCE_NAME)."
     return 1
   fi
 
   # what is out of date
   local repairs=()
   local keycloakSecret
-  keycloakSecret=$(getKeycloakBackendClientSecret "$instance")
+  keycloakSecret=$(getKeycloakBackendClientSecret "$org")
   if ! { [ -n "$keycloakSecret" ] \
     && ! isPlaceholderValue "$(getVar "$appEnv" KEYCLOAK_SERVERURL)" \
-    && [ "$(getVar "$appEnv" KEYCLOAK_REALM)" == "$instance" ] \
+    && [ "$(getVar "$appEnv" KEYCLOAK_REALM)" == "$org" ] \
     && [ "$(getVar "$appEnv" KEYCLOAK_CLIENTID)" == "aam-backend" ] \
     && [ "$(getVar "$appEnv" KEYCLOAK_CLIENTSECRET)" == "$keycloakSecret" ] \
-    && serviceAccountHasRealmManagementRole "$instance" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; }; then
+    && serviceAccountHasRealmManagementRole "$org" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; }; then
     repairs+=(keycloak-admin)
   fi
   if isPlaceholderValue "$(getVar "$envFile" REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID)" \
@@ -219,31 +213,31 @@ repairBackendConfig() {
   renderApiConfigUpToDate "$appEnv" || repairs+=(render-api)
 
   if [ "${#repairs[@]}" -eq 0 ]; then
-    echo "Backend already enabled for '$instance' and its config is up to date. Nothing to do."
+    echo "Backend already enabled for '$org' and its config is up to date. Nothing to do."
     return 0
   fi
-  echo "Backend already enabled for '$instance'. Repairing: ${repairs[*]}"
+  echo "Backend already enabled for '$org'. Repairing: ${repairs[*]}"
   needs() { [[ " ${repairs[*]} " == *" $1 "* ]]; }
 
   # Keycloak first, so a failure does not leave a config pointing at a client without the needed access.
   # Both clients' secrets are copied right away: the create* helpers return them in the same global.
   local backendSecret="" carboneSecret=""
   if needs keycloak-admin || needs replication-backend-client; then
-    if ! createKeycloakBackendClient "$instance" || [ -z "$clientSecret" ]; then
-      echo "ERROR: Failed to create/get the aam-backend Keycloak client (or its secret) for '$instance'."
+    if ! createKeycloakBackendClient "$org" || [ -z "$clientSecret" ]; then
+      echo "ERROR: Failed to create/get the aam-backend Keycloak client (or its secret) for '$org'."
       return 1
     fi
     backendSecret="$clientSecret"
     # createKeycloakBackendClient returns 0 even if the role assignment only warned
-    if ! serviceAccountHasRealmManagementRole "$instance" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; then
+    if ! serviceAccountHasRealmManagementRole "$org" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; then
       echo "ERROR: Could not confirm the realm-management roles (${AAM_BACKEND_REALM_MANAGEMENT_ROLES[*]}) on the aam-backend service account."
       return 1
     fi
   fi
   if needs render-api; then
     checkCarbonePrerequisites || return 1
-    if ! createCarboneRenderClient "$CARBONE_REALM" "carbone-${instance}" || [ -z "$clientSecret" ]; then
-      echo "ERROR: Failed to create/get the Keycloak render client (or its secret) for '$instance'."
+    if ! createCarboneRenderClient "$CARBONE_REALM" "carbone-${org}" || [ -z "$clientSecret" ]; then
+      echo "ERROR: Failed to create/get the Keycloak render client (or its secret) for '$org'."
       return 1
     fi
     carboneSecret="$clientSecret"
@@ -255,13 +249,13 @@ repairBackendConfig() {
     servicesToRecreate+=("aam-backend-service")
   fi
   if needs keycloak-admin; then
-    ensureBackendKeycloakAdminConfig "$appEnv" "https://$(getVar "$envFile" KEYCLOAK_URL "$KEYCLOAK_HOST")" "$instance" "$backendSecret"
+    ensureBackendKeycloakAdminConfig "$appEnv" "https://$(getVar "$envFile" KEYCLOAK_URL "$KEYCLOAK_HOST")" "$org" "$backendSecret"
   fi
   if needs couchdb-credentials; then
     writeCouchdbClientCredentials "$appEnv" "$envFile" "$path"
   fi
   if needs render-api; then
-    writeRenderApiConfig "$appEnv" "carbone-${instance}" "$carboneSecret"
+    writeRenderApiConfig "$appEnv" "carbone-${org}" "$carboneSecret"
   fi
   if needs replication-backend-client; then
     saveRollbackCopy "$envFile"
@@ -272,7 +266,7 @@ repairBackendConfig() {
   if [ "$skipRestart" != "true" ]; then
     # force-recreate: also when only the role changed, the backend must restart to run its startup provisioning
     if ! (cd "$path" && docker compose up -d --force-recreate "${servicesToRecreate[@]}"); then
-      echo "ERROR: Failed to recreate ${servicesToRecreate[*]} for '$instance'. Recreate it manually to apply the repair."
+      echo "ERROR: Failed to recreate ${servicesToRecreate[*]} for '$org'. Recreate it manually to apply the repair."
       return 1
     fi
   fi
@@ -283,18 +277,7 @@ repairBackendConfig() {
 # ask for input data
 ##############################
 
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-instance=$(getVar "$path/.env" INSTANCE_NAME)
-if [ -z "$instance" ]; then
-  instance="$(basename "$path")"
-  instance="${instance#"$PREFIX"}"
-fi
+requireInstance "${1:-}"
 
 if backendEnabledCheck && isBackendConfigCreated; then
   repairBackendConfig
@@ -333,12 +316,12 @@ echo "Latest backendVersion available: $backendVersion"
 
 # check if backend is already enabled for this instance
 if backendEnabledCheck; then
-  echo "Backend already enabled for '$instance'. Abort."
+  echo "Backend already enabled for '$org'. Abort."
   exit 1
 fi
 
 if isBackendConfigCreated; then
-  echo "Backend config already created for '$instance'. Abort."
+  echo "Backend config already created for '$org'. Abort."
   exit 1
 fi
 
@@ -373,53 +356,53 @@ mkdir -p "$path/config/aam-backend-service"
 cp "$templateFile" "$path/config/aam-backend-service/application.env"
 
 setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$path/config/aam-backend-service/application.env"
-setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$instance" "$path/config/aam-backend-service/application.env"
+setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$org" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$path/.env" COUCHDB_USER)" "$path/config/aam-backend-service/application.env"
 setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$path/.env" COUCHDB_PASSWORD)" "$path/config/aam-backend-service/application.env"
 
 writeCouchdbClientCredentials "$path/config/aam-backend-service/application.env" "$path/.env" "$path"
 
 # Create a per-instance Carbone render client in the aam-platform realm
-carboneClientId="carbone-${instance}"
+carboneClientId="carbone-${org}"
 if ! createCarboneRenderClient "$CARBONE_REALM" "$carboneClientId"; then
-  echo "ERROR: Failed to create or fetch Keycloak render client for '$instance'. Aborting."
+  echo "ERROR: Failed to create or fetch Keycloak render client for '$org'. Aborting."
   exit 1
 fi
 carboneClientSecret="$clientSecret"
 if [ -z "$carboneClientSecret" ]; then
-  echo "ERROR: Carbone render client created/fetched but secret could not be retrieved for '$instance'. Aborting."
+  echo "ERROR: Carbone render client created/fetched but secret could not be retrieved for '$org'. Aborting."
   exit 1
 fi
 
 writeRenderApiConfig "$path/config/aam-backend-service/application.env" "$carboneClientId" "$carboneClientSecret"
 setEnv SENTRY_AUTH_TOKEN "$SENTRY_AUTH_TOKEN" "$path/config/aam-backend-service/application.env"
 setEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$path/config/aam-backend-service/application.env"
-setEnv SENTRY_SERVER_NAME "$instance.$DOMAIN" "$path/config/aam-backend-service/application.env"
+setEnv SENTRY_SERVER_NAME "$org.$DOMAIN" "$path/config/aam-backend-service/application.env"
 
 # create aam-backend Keycloak client for permission checks
-if ! createKeycloakBackendClient "$instance"; then
-  echo "ERROR: Failed to create/get Keycloak backend client for '$instance'. Aborting."
+if ! createKeycloakBackendClient "$org"; then
+  echo "ERROR: Failed to create/get Keycloak backend client for '$org'. Aborting."
   exit 1
 fi
 if [ -z "$clientSecret" ]; then
-  echo "ERROR: Keycloak client created but secret could not be retrieved for '$instance'. Aborting."
+  echo "ERROR: Keycloak client created but secret could not be retrieved for '$org'. Aborting."
   exit 1
 fi
 
 # the backend also uses this client for Keycloak admin access (e.g. provisioning the client scopes of its API)
-ensureBackendKeycloakAdminConfig "$path/config/aam-backend-service/application.env" "https://$KEYCLOAK_HOST" "$instance" "$clientSecret"
+ensureBackendKeycloakAdminConfig "$path/config/aam-backend-service/application.env" "https://$KEYCLOAK_HOST" "$org" "$clientSecret"
 
 writeReplicationBackendKeycloakClient "$path/.env" "$clientSecret"
 
 setEnv COMPOSE_PROFILES "full-stack" "$path/.env"
 # the app container's /db now needs to reach replication-backend instead of CouchDB directly
-upsertEnv DB_ENTRYPOINT_URL "http://${instance}-replication-backend:5984" "$path/.env"
+upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$path/.env"
 # ...and its /api now needs to reach aam-backend-service, which this profile also deploys
-upsertEnv API_BACKEND_URL "http://${instance}-aam-backend-service:8080" "$path/.env"
+upsertEnv API_BACKEND_URL "http://${org}-aam-backend-service:8080" "$path/.env"
 
 # ensure CouchDB is locked down for replication-backend (admin-only _security, no JWT auth, no anonymous access)
 if ! "$scriptDir/create-couchdb.sh" "$path" --with-permissions; then
-  echo "ERROR: Failed to lock down CouchDB for '$instance'. Fix it and re-run create-couchdb.sh before starting the stack."
+  echo "ERROR: Failed to lock down CouchDB for '$org'. Fix it and re-run create-couchdb.sh before starting the stack."
   exit 1
 fi
 

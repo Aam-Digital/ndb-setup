@@ -6,7 +6,7 @@
 # (These are not backups: system backups are backup.sh's encrypted archives.)
 #
 # Usage:
-#   ./prune-rollback-copies.sh [--yes] <instance>
+#   ./prune-rollback-copies.sh <instance> [--yes]
 #     --yes  delete without asking for confirmation
 # For all instances: ./for-each-instance.sh ./prune-rollback-copies.sh [--yes]
 #
@@ -14,34 +14,27 @@
 
 set -euo pipefail
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 ASSUME_YES=0
 INSTANCE=""
 
 usage() {
     sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-    exit 1
+    exit "${1:-1}"
 }
 
 for arg in "$@"; do
     case "$arg" in
         --yes)     ASSUME_YES=1 ;;
-        -h|--help) usage ;;
+        -h|--help) usage 0 ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)  INSTANCE="$arg" ;;
     esac
 done
 
 [ -n "$INSTANCE" ] || usage
-resolveInstancePath "$INSTANCE" || exit 1
-if [ ! -d "$path" ]; then
-    echo "Instance directory not found: $path"
-    exit 1
-fi
+requireInstance "$INSTANCE"
 
 # Collect the rollback copies of the instance (the CouchDB data and service storage are not searched).
 copies=()

@@ -68,8 +68,9 @@ Sourced by scripts, never executed directly. See the [lib reference](DEVELOPING.
 
 Scripts that operate on an existing instance accept their `<instance>` argument as either an instance
 **name** (resolved to `$baseDirectory/$PREFIX<name>`) or a **path** to the instance directory, including
-`.` when run from inside the folder. This is handled by `resolveInstancePath` (sets the global `path`);
-the org/realm name is then read from that directory's `.env` (`INSTANCE_NAME`).
+`.` when run from inside the folder. `<instance>` is always the first argument. This is handled by
+`requireInstance` (sets the globals `path` and `org`); the org/realm name is read from that directory's
+`.env` (`INSTANCE_NAME`).
 
 ```bash
 ./create-couchdb.sh acme                 # by name (standard layout)
@@ -82,20 +83,21 @@ cd /srv/instances/c-acme && …/create-couchdb.sh .   # "." from inside the fold
 Scripts operate on **one** instance; to run one for every instance, use the wrapper instead of a
 per-script loop. It runs the command once per instance, in its own process inside the instance's directory,
 keeps going on failures and lists the failed instances at the end. A script path gets the instance
-directory appended as its last argument; any other command runs as given, and a single quoted string runs
-with bash:
+directory as its first argument, before the other arguments; any other command runs as given, and a single
+quoted string runs with bash:
 
 ```bash
 ./for-each-instance.sh ./update-compose.sh --yes
-./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0
+./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0     # runs update-version.sh <instance> ndb-core 3.5.0 3.6.0
+./for-each-instance.sh ./enable-sentry.sh n
 ./for-each-instance.sh --only replication-backend ./create-couchdb.sh   # skip instances without it
 ./for-each-instance.sh --only backend ./enable-backend.sh               # skip instances without aam-backend-service
 ./for-each-instance.sh docker compose pull
 ./for-each-instance.sh "docker compose down && docker compose up -d"    # restart all instances
 ```
 
-Exceptions that keep their own loop: `list-instances.sh` (one combined table) and `collect-credentials.sh`
-(self-contained, see below).
+Exceptions: `list-instances.sh` builds one combined table (with `forEachInstance`), and
+`collect-credentials.sh` keeps its own loop (self-contained, see below).
 
 ### Migrations are repairs of the setup scripts
 

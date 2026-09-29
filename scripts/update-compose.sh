@@ -29,27 +29,24 @@
 
 set -euo pipefail
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
-source "$baseDirectory/ndb-setup/scripts/lib/couchdb.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+source "$scriptDir/lib/couchdb.sh"
 
-CANONICAL="$baseDirectory/ndb-setup/docker-compose.yml"
+CANONICAL="$ndbSetupDir/docker-compose.yml"
 ASSUME_YES=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 [--yes] <instance>"
+    echo "Usage: $0 <instance> [--yes]"
     echo "  instance  instance name or directory (for all: ./for-each-instance.sh $0 [--yes])"
     echo "  --yes     skip the confirmation (still skips unchanged)"
-    exit 1
+    exit "${1:-1}"
 }
 
 for arg in "$@"; do
     case "$arg" in
         --yes)      ASSUME_YES=1 ;;
-        -h|--help)  usage ;;
+        -h|--help)  usage 0 ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)
             if [ -n "$INSTANCE" ]; then
@@ -302,9 +299,5 @@ update_instance() {
 }
 
 [ -n "$INSTANCE" ] || usage
-resolveInstancePath "$INSTANCE" || exit 1
-if [ ! -d "$path" ]; then
-    echo "Instance directory not found: $path"
-    exit 1
-fi
+requireInstance "$INSTANCE"
 update_instance "$path"

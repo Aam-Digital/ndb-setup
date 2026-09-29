@@ -32,13 +32,7 @@
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/couchdb.sh"
 
 ##############################
@@ -59,18 +53,7 @@ set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 # input
 ##############################
 
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-if [ ! -d "$path" ]; then
-  echo "ERROR: instance directory not found: $path (run create-instance.sh first). Abort."
-  exit 1
-fi
-org=$(getVar "$path/.env" INSTANCE_NAME)
+requireInstance "${1:-}"
 
 replicationBackendEnabledCheck && withPermissions=true
 if [ "$withPermissions" = true ]; then

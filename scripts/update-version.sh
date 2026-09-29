@@ -13,21 +13,18 @@
 
 set -euo pipefail
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 usage() {
-    echo "Usage: $0 [--skip-restart] <service> <old_version> <new_version> <instance>"
+    echo "Usage: $0 <instance> <service> <old_version> <new_version> [--skip-restart]"
+    echo "  instance        instance name or directory (for all: ./for-each-instance.sh $0 <service> <old> <new>)"
     echo "  service         ndb-core | replication-backend | aam-services"
     echo "  old_version     only update the instance if it is currently on this version"
     echo "  new_version     version to set"
-    echo "  instance        instance name or directory (for all: ./for-each-instance.sh $0 <service> <old> <new>)"
     echo "  --skip-restart  only update .env, do not pull or redeploy"
     echo
-    echo "Example: $0 ndb-core 3.5.0 3.6.0 acme"
-    exit 1
+    echo "Example: $0 acme ndb-core 3.5.0 3.6.0"
+    exit "${1:-1}"
 }
 
 SKIP_RESTART=0
@@ -35,7 +32,7 @@ positional=()
 for arg in "$@"; do
     case "$arg" in
         --skip-restart) SKIP_RESTART=1 ;;
-        -h|--help)  usage ;;
+        -h|--help)  usage 0 ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)  positional+=("$arg") ;;
     esac
@@ -45,10 +42,10 @@ if [ "${#positional[@]}" -ne 4 ]; then
     usage
 fi
 
-SERVICE="${positional[0]}"
-OLD_VERSION="${positional[1]}"
-NEW_VERSION="${positional[2]}"
-INSTANCE="${positional[3]}"
+INSTANCE="${positional[0]}"
+SERVICE="${positional[1]}"
+OLD_VERSION="${positional[2]}"
+NEW_VERSION="${positional[3]}"
 
 case "$SERVICE" in
     ndb-core)             VAR="APP_VERSION" ;;
@@ -96,9 +93,5 @@ update_instance() {
     echo "[$instance] redeployed"
 }
 
-resolveInstancePath "$INSTANCE" || exit 1
-if [ ! -d "$path" ]; then
-    echo "Instance directory not found: $path"
-    exit 1
-fi
+requireInstance "$INSTANCE"
 update_instance "$path"

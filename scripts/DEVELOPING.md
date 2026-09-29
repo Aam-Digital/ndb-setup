@@ -47,12 +47,9 @@ full examples):
 # Usage:
 #   ./enable-foo.sh <instance> [--skip-restart]
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"                # only the lib files you need
+# setup.env, lib/common.sh, lib/secrets.sh, and $scriptDir / $ndbSetupDir / $baseDirectory
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+source "$scriptDir/lib/keycloak.sh"                # other lib files only if you need them
 
 # flags first, stripped so the positional args stay intact
 skipRestart=false
@@ -65,9 +62,8 @@ for arg in "$@"; do
 done
 set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 
-# the instance: a name or a path; sets the global $path
-resolveInstancePath "$1" || exit 1
-org=$(getVar "$path/.env" INSTANCE_NAME)
+# the instance: a name or a path, asked for if missing; sets the globals $path and $org
+requireInstance "${1:-}"
 
 requireConfig FOO_API_TOKEN                        # from setup.env / environment, else Bitwarden
 
@@ -80,9 +76,10 @@ fi
 
 Conventions behind it:
 
-- **Relocatable.** Derive every path from the script's location, never hard-code `/var/docker`.
-- **One instance per run.** The instance is the last positional argument, so `for-each-instance.sh` can
-  append it. Don't write your own loop over instances.
+- **Relocatable.** Build paths from `$ndbSetupDir` / `$baseDirectory` (set by `lib/init.sh` from the script's
+  location), never hard-code `/var/docker` or the checkout's folder name.
+- **One instance per run.** The instance is the first positional argument, so `for-each-instance.sh` can
+  pass it in front of the other arguments. Don't write your own loop over instances.
 - **Config and secrets** come from `requireConfig` / `getConfig` ([`lib/secrets.sh`](lib/secrets.sh)), never
   from `bws` directly. They read `setup.env` / the environment first and only fall back to Bitwarden when
   `BWS_ACCESS_TOKEN` is set, so scripts also run on servers without it. A new Bitwarden-backed key goes into
@@ -190,7 +187,8 @@ from real problems found while turning migrations into repairs:
 
 | File | Provides |
 | --- | --- |
-| [`common.sh`](lib/common.sh) | see the `.env` helpers below; `generate_password`, `saveRollbackCopy` (rollback copies of files a script changes; see `prune-rollback-copies.sh`), instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, `downloadBackendConfigTemplate`, docker-compose volume-mount helpers |
+| [`init.sh`](lib/init.sh) | sourced first by every script: sets `$scriptDir`, `$ndbSetupDir`, `$baseDirectory`, loads `setup.env`, `common.sh` and `secrets.sh` |
+| [`common.sh`](lib/common.sh) | see the `.env` helpers below; `generate_password`, `saveRollbackCopy` (rollback copies of files a script changes; see `prune-rollback-copies.sh`), instance resolution (`requireInstance`, `resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, `downloadBackendConfigTemplate`, docker-compose volume-mount helpers |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig`, and `_isBwsBackedKey` (which keys may come from Bitwarden) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart`: bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
 | [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmStatus`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `createCarboneRenderClient`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles`, `ensureExactUsernameUserProfileAttribute` |

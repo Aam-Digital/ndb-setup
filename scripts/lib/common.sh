@@ -344,39 +344,6 @@ forEachInstance() {
   done
 }
 
-# Run a command once per instance, each as its own process with the instance directory appended as its last
-# argument, and report which instances failed. A separate process keeps one instance's `exit` or globals from
-# aborting the loop or leaking into the next instance.
-# Usage: runForEachInstance <filter> <skipLabel> <command> [args...]
-#   <filter>     name of a function called with the instance directory; instances it rejects are skipped
-#                and reported as "<skipLabel>, skipping". Pass "" to run for every instance.
-#   <command>    e.g. "$0" to re-run the calling script per instance
-# Example: runForEachInstance instanceDeploysReplicationBackend "database-only" "$0"
-# Returns: 1 if the command failed for any instance (or PREFIX is unset), 0 otherwise.
-runForEachInstance() {
-  local filter="$1" skipLabel="$2"
-  shift 2
-  local cmd=("$@") failed=()
-  forEachInstance _runForEachInstanceStep || return 1
-  if [ "${#failed[@]}" -gt 0 ]; then
-    echo "Failed for: ${failed[*]}"
-    return 1
-  fi
-}
-
-# forEachInstance callback of runForEachInstance; reads/updates its locals (filter, skipLabel, cmd, failed).
-_runForEachInstanceStep() {
-  local dir="$1" name
-  name=$(basename "$dir")
-  if [ -n "$filter" ] && ! "$filter" "$dir"; then
-    echo "[$name] $skipLabel, skipping"
-    return 0
-  fi
-  echo "[$name]"
-  "${cmd[@]}" "$dir" || failed+=("$name")
-  echo ""
-}
-
 ##############################
 # Backend / instance checks
 ##############################
@@ -395,14 +362,6 @@ profileDeploysBackend() {
     full-stack | full-stack-without-sqs) return 0 ;;
     *) return 1 ;;
   esac
-}
-
-# Same, for the instance directory given as $1 (e.g. as a runForEachInstance filter).
-instanceDeploysReplicationBackend() {
-  profileDeploysReplicationBackend "$(getVar "$1/.env" COMPOSE_PROFILES)"
-}
-instanceDeploysBackend() {
-  profileDeploysBackend "$(getVar "$1/.env" COMPOSE_PROFILES)"
 }
 
 # Check if aam-backend-service is enabled (COMPOSE_PROFILES full-stack or full-stack-without-sqs).

@@ -374,16 +374,15 @@ EXACT_USERNAME_ATTR='{
 }'
 
 # Declare EXACT_USERNAME_ATTR in the realm's User Profile if missing (idempotent; existing attributes and
-# values are preserved). A profile that cannot be read (e.g. an older Keycloak without the endpoint) only
-# warns, since there is nothing to repair there.
+# values are preserved).
 # Args: realm
-# Returns: 1 only if writing the profile failed.
+# Returns: 1 if the profile could not be read or written.
 ensureExactUsernameUserProfileAttribute() {
   local realm="$1" profile
   profile=$(kcApi GET "$realm/users/profile")
   if ! echo "$profile" | jq -e '.attributes' >/dev/null 2>&1; then
-    echo "  WARNING: could not read the User Profile of realm '$realm', not checking exact_username."
-    return 0
+    echo "  ERROR: could not read the User Profile of realm '$realm', not checking exact_username."
+    return 1
   fi
   if echo "$profile" | jq -e 'any(.attributes[]?; .name == "exact_username")' >/dev/null 2>&1; then
     return 0

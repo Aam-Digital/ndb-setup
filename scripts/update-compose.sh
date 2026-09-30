@@ -194,9 +194,9 @@ update_instance() {
 
     if [ "$migrateFirebase" -eq 1 ]; then
         if ! writeFirebaseWebConfig "$assetsFirebase" "$(cat "$legacyFirebase")"; then
-            echo "[$instance] skipped (could not copy firebase-config.json to assets/)"
+            echo "[$instance] ERROR: could not copy firebase-config.json to assets/, nothing changed"
             rm -f "$expected"
-            return 0
+            return 1
         fi
         echo "[$instance] copied firebase-config.json to assets/"
     fi

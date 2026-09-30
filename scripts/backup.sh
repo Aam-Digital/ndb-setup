@@ -46,8 +46,9 @@ createBackup() {
   target="$backupRoot/$(date +%Y%m%d)"
   echo "Creating backup $target.tar.gz.gpg ($(date '+%Y-%m-%d %H:%M:%S')) ..."
 
-  # tar exits with 1 if files changed while being read (live databases), which still is a usable archive
-  tar zcf "$target.tar.gz" "$baseDirectory"
+  # tar exits with 1 if files changed while being read (live databases), which still is a usable archive.
+  # Backups unpacked by "restore" are left out, so they don't pile up in later backups.
+  tar zcf "$target.tar.gz" --exclude="$baseDirectory/_backup_*" "$baseDirectory"
   if [ "$?" -gt 1 ]; then
     echo "ERROR: creating the archive failed."
     rm -f "$target.tar.gz"
@@ -101,7 +102,7 @@ restoreBackup() {
     read -r date
   fi
   local archive="$backupRoot/$date.tar.gz.gpg"
-  if [ ! -f "$archive" ]; then
+  if [[ ! "$date" =~ ^[0-9]{8}$ ]] || [ ! -f "$archive" ]; then
     echo "ERROR: no backup $archive. Available: $(listBackups | cut -f1 | tr '\n' ' ')"
     exit 1
   fi
@@ -115,6 +116,8 @@ restoreBackup() {
     exit 1
   fi
   echo "unpacking backup to $unpackDir ..."
+  # into an empty directory, so no files of an earlier unpacking of that date can end up being restored
+  rm -rf "$unpackDir"
   mkdir -p "$unpackDir"
   tar -xzf "$decrypted" --directory "$unpackDir"
   local rc=$?

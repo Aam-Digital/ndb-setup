@@ -341,8 +341,10 @@ fi
 saveRollbackCopy "$envFile"
 setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile"
 
-mkdir -p "$(dirname "$appEnv")"
-printf '%s\n' "$template" > "$appEnv"
+if ! mkdir -p "$(dirname "$appEnv")" || ! printf '%s\n' "$template" > "$appEnv"; then
+  echo "ERROR: Could not write $appEnv. Abort (the instance '$org' is stopped)."
+  exit 1
+fi
 setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv"
 setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$org" "$appEnv"
 setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$envFile" COUCHDB_USER)" "$appEnv"

@@ -86,7 +86,10 @@ writeRenderApiConfig() {
   upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT "https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token" "$appEnv"
   upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE "client_credentials" "$appEnv"
   upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE "openid" "$appEnv"
-  upsertEnv FEATURES_EXPORT_API_ENABLED "true" "$appEnv"
+  upsertEnv FEATURES_EXPORTAPI_ENABLED "true" "$appEnv"
+  # misspelled key written by earlier versions of this script: the backend reads it as a fallback only, so a
+  # FEATURES_EXPORTAPI_ENABLED=false from the template overrides it
+  removeEnv FEATURES_EXPORT_API_ENABLED "$appEnv"
 }
 
 # Whether the render API config is complete: the per-instance values are set, the static ones match, and
@@ -101,7 +104,8 @@ renderApiConfigUpToDate() {
   done
   grep -q "^AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE=client_credentials$" "$appEnv" 2>/dev/null || return 1
   grep -q "^AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE=openid$" "$appEnv" 2>/dev/null || return 1
-  grep -q "^FEATURES_EXPORT_API_ENABLED=true$" "$appEnv" 2>/dev/null || return 1
+  grep -q "^FEATURES_EXPORTAPI_ENABLED=true$" "$appEnv" 2>/dev/null || return 1
+  ! grep -q "^FEATURES_EXPORT_API_ENABLED=" "$appEnv" 2>/dev/null || return 1
   ! grep -q "^AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT=.*/realms/aam-digital/" "$appEnv" 2>/dev/null
 }
 

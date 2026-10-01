@@ -20,7 +20,8 @@
 #                      instance directory (e.g. "." when run from inside it, or /any/path/to/instance)
 # --with-permissions   the replication-backend enforces access, so CouchDB stays internal: _security is
 #                      reset to admin-only, anonymous requests are rejected (except /_up, for the
-#                      healthcheck) and couchdb-with-permissions.ini omits the JWT signing key - CouchDB's own
+#                      healthcheck; 401s carry a Basic-auth challenge so browsers prompt for credentials
+#                      and Fauxton at /db/couchdb/_utils/ stays usable) and couchdb-with-permissions.ini omits the JWT signing key - CouchDB's own
 #                      JWT auth is dead config once nothing talks to it directly. Without the flag, the mode
 #                      is detected from COMPOSE_PROFILES in the instance .env (the flag is needed while
 #                      setting up an instance whose profile is not switched yet). Database-only mode

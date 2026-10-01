@@ -109,7 +109,17 @@ rolled out with `for-each-instance.sh`. See [DEVELOPING.md](DEVELOPING.md#changi
 
 Scripts are safe to re-run: they keep existing files and generated secrets, and skip what already exists.
 Scripts that write config of a running stack restart what they changed, unless `--skip-restart` is passed
-(then restart the instance yourself, e.g. `docker compose up -d` in its folder).
+(then restart the instance yourself — the script prints the command to run, e.g. `docker compose up -d` in
+its folder).
+
+`--skip-restart` is accepted by every script, in any argument position, from the shared
+[`lib/skip-restart.sh`](lib/skip-restart.sh) — including the scripts that restart nothing, where it is simply
+ignored, so it can be passed to a whole `for-each-instance.sh` run without knowing which scripts restart.
+Put it after the script, where `for-each-instance.sh` passes it on
+(`./for-each-instance.sh ./update-compose.sh --skip-restart`); before the script it is rejected as an
+unknown option of `for-each-instance.sh` itself. `backup.sh` rejects the flag, because restoring a backup
+has to stop and start the instance, and the self-contained `collect-credentials.sh` /
+`install-dependencies.sh` don't use `lib/` at all.
 
 ## Script notes
 

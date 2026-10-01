@@ -6,7 +6,7 @@
 # sent when the Keycloak user is newly created, so re-running never re-sends onboarding mail.
 #
 # Usage:
-#   ./create-initial-user.sh <instance> <email> <name>
+#   ./create-initial-user.sh <instance> <email> <name> [--skip-restart]
 #
 # <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the instance
 #             directory (e.g. "." when run from inside it). The realm name is read from the .env INSTANCE_NAME.
@@ -21,6 +21,9 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"
 source "$scriptDir/lib/couchdb.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # input

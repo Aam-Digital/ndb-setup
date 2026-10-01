@@ -3,7 +3,7 @@
 # This script will enable the notification feature for an customer instance.
 
 # how to use
-# ./enable-notifications.sh <instance>
+# ./enable-notifications.sh <instance> [--skip-restart]
 # example: ./enable-notifications.sh qm
 #
 # Attention: on macos, see setEnv function and enable the macos line instead the linux line
@@ -22,23 +22,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 #     The published ndb-core image does not contain it (the file is gitignored there), so it is written to
 #     the instance's assets/ folder and volume-mounted into the app container.
 #   - the backend service-account credential (base64) the aam-backend-service uses to send pushes
-
-##############################
-# parse flags
-##############################
-
-# --skip-restart: do not restart docker at the end; the caller (e.g. interactive-setup.sh) restarts the stack
-# once after all enable-* scripts have written their config. Run standalone the script restarts itself.
-# Flags are stripped here so positional args stay intact.
-skipRestart=false
-positionalArgs=()
-for arg in "$@"; do
-  case "$arg" in
-    --skip-restart) skipRestart=true ;;
-    *) positionalArgs+=("$arg") ;;
-  esac
-done
-set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # ask for input data
@@ -158,7 +143,7 @@ if [ "$isFeatureAlreadyEnabled" == "true" ]; then
     backendConfigChanged=true
   fi
   if [ "$frontendConfigChanged" == "true" ] || [ "$backendConfigChanged" == "true" ]; then
-    if [ "$skipRestart" != "true" ]; then
+    if ! skipRestartNote "docker compose up -d" "$path"; then
       (cd "$path" && docker compose up -d)
     fi
     echo "Feature was already enabled; added the missing config."
@@ -199,7 +184,7 @@ fi
 
 # Restart once, here, after both this script and the email step have written their config — unless the caller
 # asked to skip it (interactive-setup restarts the stack itself after all enable-* scripts have run).
-if [ "$skipRestart" != "true" ]; then
+if ! skipRestartNote "docker compose down && docker compose up -d" "$path"; then
   (cd "$path" && docker compose down && docker compose up -d)
 fi
 

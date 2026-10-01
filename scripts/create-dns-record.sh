@@ -4,7 +4,7 @@
 # Idempotent: if a CNAME with the instance name already exists in the zone, it is left untouched.
 #
 # Usage:
-#   ./create-dns-record.sh <instance>
+#   ./create-dns-record.sh <instance> [--skip-restart]
 #
 # Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
 #   DNS_HETZNER_API_TOKEN   (BWS-backed) A Hetzner Cloud API token (console.hetzner.com ->
@@ -23,6 +23,9 @@
 ##############################
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # input

@@ -21,6 +21,18 @@ usage() {
 
 case "${1:-}" in -h | --help) usage 0 ;; esac
 
+# backup.sh deliberately has no --skip-restart (lib/skip-restart.sh): restoring is a stop / replace the
+# data / start cycle, so skipping the restart would just leave the instance down. Reject the flag instead
+# of letting it be read as a date or an instance name.
+for arg in "$@"; do
+  case "$arg" in
+    --skip-restart)
+      echo "ERROR: backup.sh does not support --skip-restart: a restore has to stop and start the instance."
+      exit 1
+      ;;
+  esac
+done
+
 backupRoot="${BACKUP_DIR:-}"
 passphrase="${BACKUP_PASSPHRASE:-}"
 if [ -z "$backupRoot" ] || [ -z "$passphrase" ]; then

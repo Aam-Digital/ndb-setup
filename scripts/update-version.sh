@@ -14,6 +14,8 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 usage() {
     echo "Usage: $0 <instance> <service> <old_version> <new_version> [--skip-restart]"
@@ -27,11 +29,9 @@ usage() {
     exit "${1:-1}"
 }
 
-SKIP_RESTART=0
 positional=()
 for arg in "$@"; do
     case "$arg" in
-        --skip-restart) SKIP_RESTART=1 ;;
         -h|--help)  usage 0 ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)  positional+=("$arg") ;;
@@ -77,7 +77,7 @@ update_instance() {
 
     setEnv "$VAR" "$NEW_VERSION" "$envFile"
 
-    if [ "$SKIP_RESTART" -eq 1 ]; then
+    if [ "$skipRestart" = true ]; then
         echo "[$instance] updated .env (not redeployed)"
         return 0
     fi

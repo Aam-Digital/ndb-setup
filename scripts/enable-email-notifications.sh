@@ -5,7 +5,7 @@ set -euo pipefail
 # It requires the notification feature to already be enabled (run enable-notifications.sh first).
 
 # how to use
-# ./enable-email-notifications.sh <instance>
+# ./enable-email-notifications.sh <instance> [--skip-restart]
 # example: ./enable-email-notifications.sh qm
 
 ##############################
@@ -13,23 +13,8 @@ set -euo pipefail
 ##############################
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
-
-##############################
-# parse flags
-##############################
-
-# --skip-restart: do not restart docker at the end; the caller is responsible for bringing the stack up once
-# after all config is written (e.g. enable-notifications.sh, which restarts once for both steps, or
-# interactive-setup.sh). Run standalone the script restarts itself. Flags are stripped so positional args stay intact.
-skipRestart=false
-positionalArgs=()
-for arg in "$@"; do
-  case "$arg" in
-    --skip-restart) skipRestart=true ;;
-    *) positionalArgs+=("$arg") ;;
-  esac
-done
-set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # ask for input data
@@ -264,7 +249,7 @@ upsertEnv "KEYCLOAK_CLIENTSECRET" "$keycloakClientSecret" "$appEnv"
 # a failure during the file I/O above aborts before this line, so the instance is never taken down with
 # a partially written application.env — it keeps running on its previous, working config.
 # Skipped with --skip-restart when a caller restarts the stack itself after this step.
-if [ "$skipRestart" != "true" ]; then
+if ! skipRestartNote "docker compose down && docker compose up -d" "$path"; then
   (cd "$path" && docker compose down && docker compose up -d)
 fi
 

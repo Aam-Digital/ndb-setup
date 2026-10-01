@@ -31,15 +31,18 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/couchdb.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 CANONICAL="$ndbSetupDir/docker-compose.yml"
 ASSUME_YES=0
 INSTANCE=""
 
 usage() {
-    echo "Usage: $0 <instance> [--yes]"
-    echo "  instance  instance name or directory (for all: ./for-each-instance.sh $0 [--yes])"
-    echo "  --yes     skip the confirmation (still skips unchanged)"
+    echo "Usage: $0 <instance> [--yes] [--skip-restart]"
+    echo "  instance        instance name or directory (for all: ./for-each-instance.sh $0 [--yes])"
+    echo "  --yes           skip the confirmation (still skips unchanged)"
+    echo "  --skip-restart  only update docker-compose.yml, do not pull or redeploy"
     exit "${1:-1}"
 }
 
@@ -245,6 +248,11 @@ update_instance() {
     fi
 
     echo "[$instance] updated"
+
+    if skipRestartNote "docker compose pull && docker compose up -d --remove-orphans" "$D"; then
+        echo "[$instance] docker-compose.yml updated (not redeployed)"
+        return 0
+    fi
 
     echo "[$instance] redeploying..."
     # The merged "couchdb" service inherits container_name "${INSTANCE_NAME}-database" from the

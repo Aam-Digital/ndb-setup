@@ -13,7 +13,7 @@
 # reused (not removed) and only restarted if couchdb.ini actually changed.
 #
 # Usage:
-#   ./create-couchdb.sh <instance> [--with-permissions]
+#   ./create-couchdb.sh <instance> [--with-permissions] [--skip-restart]
 #
 # <instance>           an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
 #                      instance directory (e.g. "." when run from inside it, or /any/path/to/instance)
@@ -38,6 +38,9 @@ source "$scriptDir/lib/couchdb.sh"
 ##############################
 # parse flags
 ##############################
+
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 withPermissions=false
 positionalArgs=()
@@ -125,8 +128,10 @@ couchdbInitStart || exit 1
 
 # A reused, already-running CouchDB only reads couchdb.ini on startup.
 if [ "$DB_REUSED_RUNNING" = true ] && [ "$iniChanged" = true ]; then
-  echo "  ~ restarting the running CouchDB to apply couchdb.ini"
-  couchdbRestart || exit 1
+  if ! skipRestartNote "docker compose restart couchdb" "$path"; then
+    echo "  ~ restarting the running CouchDB to apply couchdb.ini"
+    couchdbRestart || exit 1
+  fi
 fi
 
 # create the required databases (201 = created, 412 = already exists; anything else is a real failure)

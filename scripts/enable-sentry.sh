@@ -4,7 +4,7 @@
 # Idempotent: just (re)writes the relevant .env values.
 #
 # Usage:
-#   ./enable-sentry.sh <instance> [y|n]
+#   ./enable-sentry.sh <instance> [y|n] [--skip-restart]
 #     y (default) -> set the Sentry DSNs and enable logging for app + replication-backend
 #     n           -> disable backend Sentry logging (SENTRY_LOGGING_ENABLED=false)
 #
@@ -16,6 +16,9 @@
 ##############################
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # input

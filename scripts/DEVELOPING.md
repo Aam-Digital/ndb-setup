@@ -51,16 +51,8 @@ full examples):
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"                # other lib files only if you need them
 
-# flags first, stripped so the positional args stay intact
-skipRestart=false
-positionalArgs=()
-for arg in "$@"; do
-  case "$arg" in
-    --skip-restart) skipRestart=true ;;
-    *) positionalArgs+=("$arg") ;;
-  esac
-done
-set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 # the instance: a name or a path, asked for if missing; sets the globals $path and $org
 requireInstance "${1:-}"
@@ -69,7 +61,7 @@ requireConfig FOO_API_TOKEN                        # from setup.env / environmen
 
 # ... check what is out of date, fix only that (see below) ...
 
-if [ "$skipRestart" != true ]; then
+if ! skipRestartNote "docker compose up -d --force-recreate foo-service" "$path"; then
   (cd "$path" && docker compose up -d --force-recreate foo-service)
 fi
 ```
@@ -84,8 +76,17 @@ Conventions behind it:
   from `bws` directly. They read `setup.env` / the environment first and only fall back to Bitwarden when
   `BWS_ACCESS_TOKEN` is set, so scripts also run on servers without it. A new Bitwarden-backed key goes into
   `_isBwsBackedKey` (secrets are looked up by name).
-- **`--skip-restart`** for scripts that write config of a running stack, so `interactive-setup.sh` can write
-  everything first and restart once. Without the flag, the script restarts what it changed.
+- **`--skip-restart`** comes from [`lib/skip-restart.sh`](lib/skip-restart.sh), which **every** script sources
+  — also the ones that restart nothing, where the flag is a no-op but must not be read as a positional
+  argument. Source it at the top level (never inside a function) and before the script's own option parsing:
+  sourced without arguments it sees the script's `"$@"`, sets `$skipRestart` and `set --`s the flag away.
+  Guard every restart with it, so `interactive-setup.sh` can write everything first and restart once.
+  Without the flag, the script restarts what it changed. `skipRestartNote <command> [dir]` returns 0 when the
+  restart is to be skipped and prints what the caller has to run instead.
+  Pass it on to a nested script with `${skipRestartArg[@]+"${skipRestartArg[@]}"}`.
+  Three deliberate exceptions: `for-each-instance.sh` must pass the flag on to the script it runs;
+  `backup.sh` rejects it, since a restore is a stop / replace the data / start cycle with nothing to skip;
+  and `collect-credentials.sh` / `install-dependencies.sh` don't use `lib/` at all.
 - **Exit code.** Exit non-zero when something failed. `for-each-instance.sh` lists those instances at the
   end, and a failure that's only printed gets lost in the output of a long run.
 - **Output.** Say what changes (`~ updated X`, `+ added X` from the `.env` helpers); print "Nothing to do"
@@ -191,6 +192,7 @@ from real problems found while turning migrations into repairs:
 | --- | --- |
 | [`init.sh`](lib/init.sh) | sourced first by every script: sets `$scriptDir`, `$ndbSetupDir`, `$baseDirectory`, loads `setup.env`, `common.sh` and `secrets.sh` |
 | [`common.sh`](lib/common.sh) | see the `.env` helpers below; `generate_password`, `saveRollbackCopy` (rollback copies of files a script changes; see `prune-rollback-copies.sh`), instance resolution (`requireInstance`, `resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, `downloadBackendConfigTemplate`, docker-compose volume-mount helpers |
+| [`skip-restart.sh`](lib/skip-restart.sh) | sourced by every script after `init.sh`: the shared `--skip-restart` flag (`$skipRestart`, `skipRestartNote`) |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig`, and `_isBwsBackedKey` (which keys may come from Bitwarden) |
 | [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart`: bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
 | [`keycloak.sh`](lib/keycloak.sh) | `kcApi METHOD path [json]` / `kcCreate path json` for any admin API call (they get and refresh the admin token themselves), `getKeycloakToken` (to fail early), `requireCentralKeycloak`, `getKeycloakRealmStatus`, `getKeycloakRealmKey`, `getKeycloakClientUuid` / `getKeycloakClientSecret`, `ensureKeycloakBackendClient` / `ensureCarboneRenderClient` (print the secret), `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `ensureAccountManagerRealmManagementRoles`, `ensureExactUsernameUserProfileAttribute` |

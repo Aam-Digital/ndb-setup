@@ -10,7 +10,7 @@
 #
 # make sure to install the dependencies: ./install-dependencies.sh
 #
-# ./enable-backend.sh <instance>
+# ./enable-backend.sh <instance> [--skip-restart]
 # example: ./enable-backend.sh qm
 #   <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
 #               instance directory (e.g. "." when run from inside it)
@@ -37,23 +37,8 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"
-
-##############################
-# parse flags
-##############################
-
-# --skip-restart: do not restart docker at the end; the caller (e.g. interactive-setup.sh) is responsible
-# for bringing the stack up once, after all enable-* scripts have written their config. Run standalone
-# (without the flag) the script restarts itself. Flags are stripped here so positional args stay intact.
-skipRestart=false
-positionalArgs=()
-for arg in "$@"; do
-  case "$arg" in
-    --skip-restart) skipRestart=true ;;
-    *) positionalArgs+=("$arg") ;;
-  esac
-done
-set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # backend config (shared by enabling and repairing)
@@ -252,7 +237,8 @@ repairBackendConfig() {
     servicesToRecreate+=("replication-backend")
   fi
 
-  if [ "${#servicesToRecreate[@]}" -gt 0 ] && [ "$skipRestart" != "true" ]; then
+  if [ "${#servicesToRecreate[@]}" -gt 0 ] \
+    && ! skipRestartNote "docker compose up -d --force-recreate ${servicesToRecreate[*]}" "$path"; then
     # force-recreate: also when only the role changed, the backend must restart to run its startup provisioning
     if ! (cd "$path" && docker compose up -d --force-recreate "${servicesToRecreate[@]}"); then
       echo "ERROR: Failed to recreate ${servicesToRecreate[*]} for '$org'. Recreate it manually to apply the repair."
@@ -340,13 +326,19 @@ if ! backendSecret=$(ensureKeycloakBackendClient "$org"); then
   exit 1
 fi
 
-(cd "$path" && docker compose down)
+# Take the stack down while its config is rewritten, so it comes back up on the new config. With
+# --skip-restart the caller restarts it itself (`down && up -d`), so leave it running rather than
+# handing back a stopped instance.
+if [ "$skipRestart" != "true" ]; then
+  (cd "$path" && docker compose down)
+fi
 
 saveRollbackCopy "$envFile"
 setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile"
 
 if ! mkdir -p "$(dirname "$appEnv")" || ! printf '%s\n' "$template" > "$appEnv"; then
-  echo "ERROR: Could not write $appEnv. Abort (the instance '$org' is stopped)."
+  echo "ERROR: Could not write $appEnv. Abort."
+  [ "$skipRestart" = true ] || echo "       The instance '$org' is stopped - bring it up again with 'docker compose up -d' in $path."
   exit 1
 fi
 setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv"
@@ -368,12 +360,12 @@ upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$envFile"
 upsertEnv API_BACKEND_URL "http://${org}-aam-backend-service:8080" "$envFile"
 
 # ensure CouchDB is locked down for replication-backend (admin-only _security, no JWT auth, no anonymous access)
-if ! "$scriptDir/create-couchdb.sh" "$path" --with-permissions; then
+if ! "$scriptDir/create-couchdb.sh" "$path" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"}; then
   echo "ERROR: Failed to lock down CouchDB for '$org'. Fix it and re-run create-couchdb.sh before starting the stack."
   exit 1
 fi
 
-if [ "$skipRestart" != "true" ]; then
+if ! skipRestartNote "docker compose down && docker compose up -d" "$path"; then
   if ! (cd "$path" && docker compose up -d); then
     echo "ERROR: Failed to start '$org' with the backend. Check 'docker compose logs' in $path."
     exit 1

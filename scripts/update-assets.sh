@@ -5,7 +5,7 @@
 # to volume-mount each asset into the app container.
 
 # how to use
-# ./update-assets.sh <instance> <baseConfig>
+# ./update-assets.sh <instance> <baseConfig> [y|true] [--skip-restart]
 # example: ./update-assets.sh my-system basic
 
 ##############################
@@ -13,6 +13,8 @@
 ##############################
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # ask for input data
@@ -62,7 +64,10 @@ fi
 # add one volume mount to docker-compose.yml for each asset present in the assets folder
 ensureAssetVolumeMountsFromDir "$path/docker-compose.yml" "$path/assets"
 
-# restart docker if a third arg ($3) is "y" or "true"
-if [ "$3" == "y" ] || [ "$3" == "true" ]; then
-  (cd "$path" && docker compose up -d)
+# restart docker only if a third arg ($3) asks for it (create-instance.sh calls this before the instance
+# exists as a running stack), and never with --skip-restart
+if [ "${3:-}" == "y" ] || [ "${3:-}" == "true" ]; then
+  if ! skipRestartNote "docker compose up -d" "$path"; then
+    (cd "$path" && docker compose up -d)
+  fi
 fi

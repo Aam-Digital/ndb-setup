@@ -11,7 +11,7 @@
 #
 # make sure to install the dependencies: ./install-dependencies.sh
 #
-# ./interactive-setup.sh <instance> <baseConfig> <locale> <userEmail> <userName> <withReplicationBackend> <withBackend> <unused> <enableSentry>
+# ./interactive-setup.sh <instance> <baseConfig> <locale> <userEmail> <userName> <withReplicationBackend> <withBackend> <unused> <enableSentry> [--skip-restart]
 # example: ./interactive-setup.sh qm codo de "mail@foo.bar" "Foo Bar" y y y y
 #
 # The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was
@@ -24,6 +24,8 @@
 ##############################
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 # the interactive setup relies on Bitwarden for all credentials
 if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
@@ -150,9 +152,9 @@ if [ "$app" == 0 ]; then
   "$scriptDir/create-keycloak-realm.sh" "$org" "$locale" "$baseConfig" || exit 1
 
   if [ "$withPermissions" = true ]; then
-    "$scriptDir/create-couchdb.sh" "$org" --with-permissions || exit 1
+    "$scriptDir/create-couchdb.sh" "$org" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   else
-    "$scriptDir/create-couchdb.sh" "$org" || exit 1
+    "$scriptDir/create-couchdb.sh" "$org" ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   fi
 
   "$scriptDir/create-initial-user.sh" "$org" "$userEmail" "$userName" || exit 1
@@ -165,7 +167,7 @@ if [ "$withPermissions" = true ]; then
   upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$path/.env"
   # an existing database-only instance still has the permissive "user_app" _security and CouchDB's JWT auth
   if [ "$app" != 0 ]; then
-    "$scriptDir/create-couchdb.sh" "$org" --with-permissions || exit 1
+    "$scriptDir/create-couchdb.sh" "$org" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   fi
   echo "replication-backend added"
 fi
@@ -219,6 +221,12 @@ fi
 
 # Single restart for the whole instance, after every enable-* script (run with --skip-restart) has written
 # its config. `down && up -d` (not just `up -d`) forces recreation so changed env_file/config is picked up.
-(cd "$path" && docker compose down && docker compose up -d)
+if ! skipRestartNote "docker compose down && docker compose up -d" "$path"; then
+  (cd "$path" && docker compose down && docker compose up -d)
+fi
 
-echo "DONE app is now available under https://$url"
+if [ "$skipRestart" = true ]; then
+  echo "DONE setting up '$org' - it is available under https://$url once you have restarted it."
+else
+  echo "DONE app is now available under https://$url"
+fi

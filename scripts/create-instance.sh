@@ -6,7 +6,7 @@
 # so re-running never regenerates the CouchDB password or bumps versions of an existing instance.
 #
 # Usage:
-#   ./create-instance.sh <instance> [baseConfig]
+#   ./create-instance.sh <instance> [baseConfig] [--skip-restart]
 #
 # No secrets required. Reads DOMAIN / PREFIX from setup.env.
 
@@ -15,6 +15,9 @@
 ##############################
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # input

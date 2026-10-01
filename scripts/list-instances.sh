@@ -6,6 +6,8 @@
 #   ./list-instances.sh
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart is accepted (and ignored: this script only reads)
+source "$scriptDir/lib/skip-restart.sh"
 
 # one row per instance; "-" for a value that is not set, so the columns stay aligned
 printInstanceRow() {

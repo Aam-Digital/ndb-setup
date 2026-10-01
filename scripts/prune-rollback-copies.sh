@@ -6,7 +6,7 @@
 # (These are not backups: system backups are backup.sh's encrypted archives.)
 #
 # Usage:
-#   ./prune-rollback-copies.sh <instance> [--yes]
+#   ./prune-rollback-copies.sh <instance> [--yes] [--skip-restart]
 #     --yes  delete without asking for confirmation
 # For all instances: ./for-each-instance.sh ./prune-rollback-copies.sh [--yes]
 #
@@ -15,6 +15,9 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ASSUME_YES=0
 INSTANCE=""

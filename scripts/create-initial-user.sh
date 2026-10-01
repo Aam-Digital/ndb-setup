@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Create the initial admin user for an instance, in Keycloak (with all realm roles, email 2FA, and a
-# verification email) and as a User document in CouchDB.
-# Idempotent: an existing Keycloak user or CouchDB document is reused; the verification email is only
-# sent when the Keycloak user is newly created, so re-running never re-sends onboarding mail.
+# Create the initial admin user for an instance in Keycloak (with all realm roles, email 2FA, and a
+# verification email). The app creates and links the user's User entity itself on first startup.
+# Idempotent: an existing Keycloak user is reused; the verification email is only sent when the
+# Keycloak user is newly created, so re-running never re-sends onboarding mail.
 #
 # Usage:
 #   ./create-initial-user.sh <instance> <email> <name>
@@ -26,7 +26,6 @@ source "$ndbSetupDir/setup.env"
 source "$scriptDir/lib/common.sh"
 source "$scriptDir/lib/secrets.sh"
 source "$scriptDir/lib/keycloak.sh"
-source "$scriptDir/lib/couchdb.sh"
 
 ##############################
 # input
@@ -88,8 +87,8 @@ if [ -n "$userId" ]; then
   echo "Keycloak user '$userName' already exists ($userId), reusing."
 else
   echo "Creating Keycloak user '$userName'..."
-  newUserPayload=$(jq -n --arg username "$userName" --arg email "$userEmail" --arg exactUsername "User:$userName" \
-    '{username: $username, enabled: true, email: $email, attributes: {exact_username: [$exactUsername]}, emailVerified: false, credentials: [], requiredActions: ["UPDATE_PASSWORD", "VERIFY_EMAIL"]}')
+  newUserPayload=$(jq -n --arg username "$userName" --arg email "$userEmail" \
+    '{username: $username, enabled: true, email: $email, emailVerified: false, credentials: [], requiredActions: ["UPDATE_PASSWORD", "VERIFY_EMAIL"]}')
   curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     -d "$newUserPayload" \
     "https://$KEYCLOAK_HOST/admin/realms/$org/users"
@@ -130,24 +129,5 @@ if [ "$userCreated" = true ]; then
   curl -s -X PUT -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' \
     "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app" >/dev/null
 fi
-
-##############################
-# CouchDB user document
-##############################
-
-userDocId="User:$userName"
-encodedUserDocId=$(jq -rn --arg v "$userDocId" '$v|@uri')
-
-echo "ensure user document in CouchDB..."
-couchdbInitStart || exit 1
-if [ "$(couchdbCurl -o /dev/null -w '%{http_code}' "$DB_LOCAL_URL/app/$encodedUserDocId")" = "200" ]; then
-  echo "  = $userDocId document already exists, keeping it"
-else
-  userDocPayload=$(jq -n --arg name "$userName" '{name: $name}')
-  couchdbCurl -X PUT -H 'Content-Type: application/json' -d "$userDocPayload" \
-    "$DB_LOCAL_URL/app/$encodedUserDocId" >/dev/null
-  echo "  + created $userDocId document"
-fi
-couchdbInitStop
 
 echo "Initial user '$userName' is set up for '$org'."

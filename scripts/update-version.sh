@@ -1,53 +1,45 @@
 #!/bin/bash
-# Update the pinned image version for a service across instances.
-#
-# Each instance pins its service versions in .env (APP_VERSION,
-# AAM_REPLICATION_BACKEND_VERSION, AAM_BACKEND_SERVICE_VERSION). This script
-# bumps that variable from old_version to new_version for every instance
-# currently on old_version (others are skipped), then pulls and redeploys.
-# With --skip-restart only .env is updated; the instances pick the new version up
-# on their next 'docker compose pull && docker compose up -d'.
-#
-# Can be run from any directory.
+usage() {
+  cat <<'EOF'
+Update the pinned image version of a service of an instance (APP_VERSION, AAM_REPLICATION_BACKEND_VERSION or
+AAM_BACKEND_SERVICE_VERSION in .env) from old_version to new_version, then pull and redeploy. An instance that
+is not on old_version is skipped.
+
+Usage:
+  ./update-version.sh <instance> <service> <old_version> <new_version> [--skip-restart]
+
+  service         ndb-core | replication-backend | aam-services
+  --skip-restart  only update .env; the instance picks the version up on its next
+                  'docker compose pull && docker compose up -d'
+
+Example: ./update-version.sh acme ndb-core 3.5.0 3.6.0
+For all instances: ./for-each-instance.sh ./update-version.sh <service> <old_version> <new_version>
+EOF
+  exit "${1:-1}"
+}
 
 set -euo pipefail
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
-usage() {
-    echo "Usage: $0 [--skip-restart] <service> <old_version> <new_version> [instance]"
-    echo "  service         ndb-core | replication-backend | aam-services"
-    echo "  old_version     only update instances currently on this version"
-    echo "  new_version     version to set"
-    echo "  instance        update only this instance (default: all ${PREFIX}* instances)"
-    echo "  --skip-restart  only update .env, do not pull or redeploy"
-    echo
-    echo "Example: $0 ndb-core 3.5.0 3.6.0"
-    exit 1
-}
-
-SKIP_RESTART=0
 positional=()
 for arg in "$@"; do
     case "$arg" in
-        --skip-restart) SKIP_RESTART=1 ;;
-        -h|--help)  usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)  positional+=("$arg") ;;
     esac
 done
 
-if [ "${#positional[@]}" -lt 3 ] || [ "${#positional[@]}" -gt 4 ]; then
+if [ "${#positional[@]}" -ne 4 ]; then
     usage
 fi
 
-SERVICE="${positional[0]}"
-OLD_VERSION="${positional[1]}"
-NEW_VERSION="${positional[2]}"
-INSTANCE="${positional[3]:-}"
+INSTANCE="${positional[0]}"
+SERVICE="${positional[1]}"
+OLD_VERSION="${positional[2]}"
+NEW_VERSION="${positional[3]}"
 
 case "$SERVICE" in
     ndb-core)             VAR="APP_VERSION" ;;
@@ -56,9 +48,6 @@ case "$SERVICE" in
     *) echo "Invalid service name. Use ndb-core, replication-backend, aam-services."; exit 1 ;;
 esac
 
-updated=0
-skipped=0
-
 update_instance() {
     local D="$1"
     local instance="${D##*/}"
@@ -66,8 +55,7 @@ update_instance() {
 
     if [ ! -f "$envFile" ]; then
         echo "[$instance] no .env, skipping"
-        skipped=$((skipped + 1))
-        return
+        return 0
     fi
 
     local current
@@ -75,8 +63,7 @@ update_instance() {
 
     if [ "$current" != "$OLD_VERSION" ]; then
         echo "[$instance] $VAR=${current:-<unset>} (not $OLD_VERSION), skipping"
-        skipped=$((skipped + 1))
-        return
+        return 0
     fi
 
     echo
@@ -84,10 +71,9 @@ update_instance() {
 
     setEnv "$VAR" "$NEW_VERSION" "$envFile"
 
-    if [ "$SKIP_RESTART" -eq 1 ]; then
+    if [ "$skipRestart" = true ]; then
         echo "[$instance] updated .env (not redeployed)"
-        updated=$((updated + 1))
-        return
+        return 0
     fi
 
     echo "[$instance] redeploying..."
@@ -99,10 +85,7 @@ update_instance() {
         return 1
     fi
     echo "[$instance] redeployed"
-    updated=$((updated + 1))
 }
 
-forEachInstance update_instance "$INSTANCE"
-
-echo
-echo "Done. $updated updated, $skipped skipped."
+requireInstance "$INSTANCE"
+update_instance "$path"

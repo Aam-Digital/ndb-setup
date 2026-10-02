@@ -12,10 +12,19 @@ generalized insights instead (e.g. "a large production instance", "an external w
 consumer"). Scrub quoted log or monitoring output before posting. Links to access-restricted
 internal tools (e.g. Sentry issues) are acceptable.
 
-## Scripts: Config and Secrets
+## Scripts
 
-Never call the `bws` (Bitwarden Secrets Manager) CLI directly in scripts. Source `scripts/lib/secrets.sh`
-(after `scripts/lib/common.sh`) and resolve values with `requireConfig KEY` / `getConfig KEY`. These take
-the value from `setup.env` / the environment first and only fall back to Bitwarden when `BWS_ACCESS_TOKEN`
-is set, so scripts also work on servers without the `bws` CLI or a token. New Bitwarden-backed keys must
-be added to `_isBwsBackedKey` in `secrets.sh` (secrets are looked up by name, not by ID).
+Follow [scripts/DEVELOPING.md](scripts/DEVELOPING.md) when changing or adding scripts. In particular:
+
+- Don't add `migrate-*.sh` scripts: make the setup script that owns that part repair existing instances
+  when re-run.
+- Every script starts with a `usage()` function (right after the shebang) that prints its help: what it does,
+  arguments, config, re-run behaviour and the `for-each-instance.sh` rollout command. `--help` prints it
+  (handled by `lib/init.sh`). This is the script's only user documentation: don't duplicate it in a header
+  comment or in `scripts/README.md`; developer-only notes go in comments below it.
+- Config and secrets: never call the `bws` (Bitwarden Secrets Manager) CLI directly. Scripts source
+  `scripts/lib/init.sh` (which loads `lib/common.sh` and `lib/secrets.sh`) and resolve values with
+  `requireConfig KEY` / `getConfig KEY`. These take the value from `setup.env` / the environment first and
+  only fall back to Bitwarden when `BWS_ACCESS_TOKEN` is set, so scripts also work on servers without the
+  `bws` CLI or a token. New Bitwarden-backed keys must be added to `_isBwsBackedKey` in `secrets.sh`
+  (secrets are looked up by name, not by ID).

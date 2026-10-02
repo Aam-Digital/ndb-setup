@@ -1,7 +1,6 @@
 #!/bin/bash
 # Shared utility functions for ndb-setup scripts.
-# Source this file in any script that needs these helpers:
-#   source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
+# Loaded by lib/init.sh, which every script sources first.
 
 ##############################
 # Environment helpers
@@ -34,7 +33,7 @@ setEnv() {
   # escape sed special characters in value (\, &, |)
   local escaped
   escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
-  sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+  sed -i "s|^$key=.*|$key=$escaped|g" "$file" || return 1
   echo "  ~ updated $key in $(basename "$file")"
 }
 
@@ -42,7 +41,7 @@ setEnv() {
 _ensureTrailingNewline() {
   local file="$1"
   if [ -s "$file" ] && [ -n "$(tail -c 1 "$file")" ]; then
-    echo >> "$file"
+    echo >> "$file" || return 1
   fi
 }
 
@@ -54,11 +53,11 @@ upsertEnv() {
   local escaped
   escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
-    _ensureTrailingNewline "$file"
-    echo "$key=$value" >> "$file"
+    _ensureTrailingNewline "$file" || return 1
+    echo "$key=$value" >> "$file" || return 1
     echo "  + added $key to $(basename "$file")"
   else
-    sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+    sed -i "s|^$key=.*|$key=$escaped|g" "$file" || return 1
     echo "  ~ updated $key in $(basename "$file")"
   fi
 }
@@ -69,8 +68,8 @@ ensureEnv() {
   local value="$2"
   local file="$3"
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
-    _ensureTrailingNewline "$file"
-    echo "$key=$value" >> "$file"
+    _ensureTrailingNewline "$file" || return 1
+    echo "$key=$value" >> "$file" || return 1
     echo "  + added $key to $(basename "$file")"
   else
     echo "  = $key already exists in $(basename "$file"), skipping"
@@ -108,7 +107,7 @@ ensureRealValue() {
     if [ -n "$current" ]; then
       echo "  ! $key is a placeholder ('$current') in $(basename "$file") — replacing with '$value'"
     fi
-    upsertEnv "$key" "$value" "$file"
+    upsertEnv "$key" "$value" "$file" || return 1
   else
     echo "  = $key already set to '$current' in $(basename "$file"), keeping it"
   fi
@@ -119,7 +118,7 @@ removeEnv() {
   local key="$1"
   local file="$2"
   if grep -q "^$key=" "$file" 2>/dev/null; then
-    sed -i "/^$key=/d" "$file"
+    sed -i "/^$key=/d" "$file" || return 1
     echo "  - removed $key from $(basename "$file")"
   fi
 }
@@ -135,17 +134,18 @@ removeEnvIfValue() {
   fi
 }
 
-# Create a timestamped backup of a file.
-# Sets the global BACKUP_FILE to the backup path (empty if the source file did not exist) so callers can
-# restore from it, e.g. to roll back a failed redeploy.
-backupFile() {
+# Save a rollback copy of a file before a script changes it: "<file>.rollback-<timestamp>" next to it.
+# (Not to be confused with backup.sh's system backups.) Sets the global ROLLBACK_COPY to the copy's path
+# (empty if the file did not exist) so callers can restore from it, e.g. to roll back a failed redeploy.
+# prune-rollback-copies.sh deletes them.
+saveRollbackCopy() {
   local file="$1"
-  local backup="$file.bak-$(date +%Y%m%d%H%M%S)"
-  BACKUP_FILE=""
+  local copy="$file.rollback-$(date +%Y%m%d%H%M%S)"
+  ROLLBACK_COPY=""
   if [ -f "$file" ]; then
-    cp "$file" "$backup"
-    BACKUP_FILE="$backup"
-    echo "  backup: $(basename "$backup")"
+    cp "$file" "$copy"
+    ROLLBACK_COPY="$copy"
+    echo "  rollback copy: $(basename "$copy")"
   fi
 }
 
@@ -302,37 +302,38 @@ resolveInstancePath() {
   esac
 }
 
+# The instance a script works on, from its argument (a name or a path, see resolveInstancePath), or asked for
+# when the argument is empty. Sets the globals `path` (the instance directory) and `org` (INSTANCE_NAME from
+# its .env, or the folder name without the PREFIX). Exits the script if the directory does not exist.
+# Usage: requireInstance "${1:-}"
+requireInstance() {
+  local arg="$1"
+  if [ -z "$arg" ]; then
+    echo "Which instance? (name, or path to the instance directory, e.g. '.')"
+    read -r arg
+  fi
+  resolveInstancePath "$arg" || exit 1
+  if [ ! -d "$path" ]; then
+    echo "ERROR: instance directory not found: $path (run create-instance.sh first). Abort."
+    exit 1
+  fi
+  org=$(getVar "$path/.env" INSTANCE_NAME)
+  if [ -z "$org" ]; then
+    org=$(basename "$path")
+    org="${org#"$PREFIX"}"
+  fi
+}
+
 ##############################
 # Instance iteration
 ##############################
 
-# Run a callback for one or all instances.
-# Usage: forEachInstance <callback> [instance]
-#   <callback>  name of a function; called once per instance with the absolute
-#               instance directory as its first argument
-#   [instance]  optional single instance — an instance NAME (with or without the PREFIX) or a PATH to
-#               the instance directory (incl. "."); see resolveInstancePath. When omitted, iterates
-#               every "$baseDirectory/${PREFIX}*" directory.
+# Run a callback for every instance: each "$baseDirectory/${PREFIX}*" directory, passed as the callback's
+# first argument. To run a script for all instances, use for-each-instance.sh instead.
 # Requires: $baseDirectory and $PREFIX set (from setup.env).
-# Returns: non-zero if a named instance is missing or PREFIX is unset.
+# Returns: non-zero if PREFIX is unset.
 forEachInstance() {
   local callback="$1"
-  local single="${2:-}"
-
-  if [ -n "$single" ]; then
-    # single instance mode: resolve a name or a path, then capture into a local so callbacks that use a
-    # global `path` are not affected by resolveInstancePath writing to the global `path`.
-    resolveInstancePath "$single" || return 1
-    local dir="$path"
-    if [ ! -d "$dir" ]; then
-      echo "Instance directory not found: $dir"
-      return 1
-    fi
-    "$callback" "$dir"
-    return
-  fi
-
-  # all instances
   if [ -z "${PREFIX:-}" ]; then
     echo "ERROR: PREFIX is not set. Aborting to avoid operating on all directories."
     return 1
@@ -391,6 +392,22 @@ replicationBackendEnabledCheck() {
 # `aam-backend-service/`, the git tag of the release.
 getLatestBackendVersion() {
   curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
+}
+
+# Print the application.env template of an aam-backend-service release (from the aam-services repository).
+# Fails if the download fails or returns no config. Args: version
+downloadBackendConfigTemplate() {
+  local version="$1" template
+  if [ -z "$version" ] || [ "$version" = "null" ]; then
+    echo "ERROR: no aam-backend-service version given (GitHub API rate limit?)." >&2
+    return 1
+  fi
+  if ! template=$(curl -fsSL "https://raw.githubusercontent.com/Aam-Digital/aam-services/refs/tags/aam-backend-service/$version/templates/aam-backend-service/application.template.env") \
+    || ! grep -qE '^[A-Z0-9_]+=' <<<"$template"; then
+    echo "ERROR: could not download the application.env template of aam-backend-service $version." >&2
+    return 1
+  fi
+  printf '%s\n' "$template"
 }
 
 ##############################

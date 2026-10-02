@@ -65,16 +65,16 @@ checkCarbonePrerequisites() {
 # Write the Carbone PDF render API config. Args: application.env, render client id, render client secret
 writeRenderApiConfig() {
   local appEnv="$1" clientId="$2" clientSecret="$3"
-  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH "https://$CARBONE_HOST" "$appEnv"
-  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID "$clientId" "$appEnv"
-  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET "$clientSecret" "$appEnv"
-  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT "https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token" "$appEnv"
-  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE "client_credentials" "$appEnv"
-  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE "openid" "$appEnv"
-  upsertEnv FEATURES_EXPORTAPI_ENABLED "true" "$appEnv"
+  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_BASE_PATH "https://$CARBONE_HOST" "$appEnv" || return 1
+  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_ID "$clientId" "$appEnv" || return 1
+  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_CLIENT_SECRET "$clientSecret" "$appEnv" || return 1
+  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_TOKEN_ENDPOINT "https://$KEYCLOAK_HOST/realms/$CARBONE_REALM/protocol/openid-connect/token" "$appEnv" || return 1
+  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_GRANT_TYPE "client_credentials" "$appEnv" || return 1
+  upsertEnv AAM_RENDER_API_CLIENT_CONFIGURATION_AUTH_CONFIG_SCOPE "openid" "$appEnv" || return 1
+  upsertEnv FEATURES_EXPORTAPI_ENABLED "true" "$appEnv" || return 1
   # misspelled key written by earlier versions of this script: the backend reads it as a fallback only, so a
   # FEATURES_EXPORTAPI_ENABLED=false from the template overrides it
-  removeEnv FEATURES_EXPORT_API_ENABLED "$appEnv"
+  removeEnv FEATURES_EXPORT_API_ENABLED "$appEnv" || return 1
 }
 
 # Whether the render API config is complete: the per-instance values are set, the static ones match, and
@@ -108,14 +108,14 @@ writeCouchdbClientCredentials() {
   couchUser=$(getVar "$envFile" COUCHDB_USER)
   couchPass=$(getVar "$envFile" COUCHDB_PASSWORD)
   if composeDefinesReplicationBackendBasePath "$instanceDir"; then
-    removeEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "$appEnv"
+    removeEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASEPATH "$appEnv" || return 1
   fi
-  upsertEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv"
-  upsertEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "$couchPass" "$appEnv"
-  upsertEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv"
-  upsertEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHPASSWORD "$couchPass" "$appEnv"
-  upsertEnv SQSCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv"
-  upsertEnv SQSCLIENTCONFIGURATION_BASICAUTHPASSWORD "$couchPass" "$appEnv"
+  upsertEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv" || return 1
+  upsertEnv AAMREPLICATIONBACKENDCLIENTCONFIGURATION_BASICAUTHPASSWORD "$couchPass" "$appEnv" || return 1
+  upsertEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv" || return 1
+  upsertEnv COUCHDBCLIENTCONFIGURATION_BASICAUTHPASSWORD "$couchPass" "$appEnv" || return 1
+  upsertEnv SQSCLIENTCONFIGURATION_BASICAUTHUSERNAME "$couchUser" "$appEnv" || return 1
+  upsertEnv SQSCLIENTCONFIGURATION_BASICAUTHPASSWORD "$couchPass" "$appEnv" || return 1
 }
 
 # Whether writeCouchdbClientCredentials would change nothing. A missing or wrong value makes every
@@ -138,8 +138,8 @@ couchdbClientCredentialsUpToDate() {
 # NOT_USED as client id is corrected). Args: instance .env, aam-backend client secret
 writeReplicationBackendKeycloakClient() {
   local envFile="$1" secret="$2"
-  ensureRealValue REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID "aam-backend" "$envFile"
-  upsertEnv REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET "$secret" "$envFile"
+  ensureRealValue REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID "aam-backend" "$envFile" || return 1
+  upsertEnv REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET "$secret" "$envFile" || return 1
 }
 
 ##############################
@@ -217,24 +217,30 @@ repairBackendConfig() {
     fi
   fi
 
-  local servicesToRecreate=()
+  local servicesToRecreate=() writeFailed=false
   if $fixKeycloakAdmin || $fixCouchdbCredentials || $fixRenderApi; then
     saveRollbackCopy "$appEnv"
     servicesToRecreate+=("aam-backend-service")
   fi
   if $fixKeycloakAdmin; then
-    ensureBackendKeycloakAdminConfig "$appEnv" "https://$KEYCLOAK_HOST" "$org" "$backendSecret"
+    ensureBackendKeycloakAdminConfig "$appEnv" "https://$KEYCLOAK_HOST" "$org" "$backendSecret" || writeFailed=true
   fi
   if $fixCouchdbCredentials; then
-    writeCouchdbClientCredentials "$appEnv" "$envFile" "$path"
+    writeCouchdbClientCredentials "$appEnv" "$envFile" "$path" || writeFailed=true
   fi
   if $fixRenderApi; then
-    writeRenderApiConfig "$appEnv" "carbone-${org}" "$carboneSecret"
+    writeRenderApiConfig "$appEnv" "carbone-${org}" "$carboneSecret" || writeFailed=true
   fi
   if $fixReplicationClient; then
     saveRollbackCopy "$envFile"
-    writeReplicationBackendKeycloakClient "$envFile" "$backendSecret"
+    writeReplicationBackendKeycloakClient "$envFile" "$backendSecret" || writeFailed=true
     servicesToRecreate+=("replication-backend")
+  fi
+  # a partly written config must not be loaded: leave the services running on their old config
+  if $writeFailed; then
+    echo "ERROR: Could not write the backend config of '$org'. Not recreating ${servicesToRecreate[*]}."
+    echo "       Fix the cause and re-run, or restore the rollback copies next to $appEnv / $envFile."
+    return 1
   fi
 
   if [ "${#servicesToRecreate[@]}" -gt 0 ] \
@@ -334,30 +340,35 @@ if [ "$skipRestart" != "true" ]; then
 fi
 
 saveRollbackCopy "$envFile"
-setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile"
+envRollbackCopy="$ROLLBACK_COPY"
 
-if ! mkdir -p "$(dirname "$appEnv")" || ! printf '%s\n' "$template" > "$appEnv"; then
-  echo "ERROR: Could not write $appEnv. Abort."
+# Abort on a failed config write, before CouchDB is locked down or the stack started on a partial config.
+abortConfigWrite() {
+  echo "ERROR: Could not write the backend config of '$org'. Abort."
+  [ -z "$envRollbackCopy" ] || echo "       Restore $envFile from $(basename "$envRollbackCopy") before starting it again."
   [ "$skipRestart" = true ] || echo "       The instance '$org' is stopped - bring it up again with 'docker compose up -d' in $path."
   exit 1
-fi
-setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv"
-setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$org" "$appEnv"
-setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$envFile" COUCHDB_USER)" "$appEnv"
-setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$envFile" COUCHDB_PASSWORD)" "$appEnv"
-writeCouchdbClientCredentials "$appEnv" "$envFile" "$path"
-writeRenderApiConfig "$appEnv" "$carboneClientId" "$carboneSecret"
-setEnv SENTRY_AUTH_TOKEN "$SENTRY_AUTH_TOKEN" "$appEnv"
-setEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$appEnv"
-setEnv SENTRY_SERVER_NAME "$org.$DOMAIN" "$appEnv"
-ensureBackendKeycloakAdminConfig "$appEnv" "https://$KEYCLOAK_HOST" "$org" "$backendSecret"
+}
 
-writeReplicationBackendKeycloakClient "$envFile" "$backendSecret"
-setEnv COMPOSE_PROFILES "full-stack" "$envFile"
+setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile" || abortConfigWrite
+mkdir -p "$(dirname "$appEnv")" && printf '%s\n' "$template" > "$appEnv" || abortConfigWrite
+setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv" || abortConfigWrite
+setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$org" "$appEnv" || abortConfigWrite
+setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$envFile" COUCHDB_USER)" "$appEnv" || abortConfigWrite
+setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$envFile" COUCHDB_PASSWORD)" "$appEnv" || abortConfigWrite
+writeCouchdbClientCredentials "$appEnv" "$envFile" "$path" || abortConfigWrite
+writeRenderApiConfig "$appEnv" "$carboneClientId" "$carboneSecret" || abortConfigWrite
+setEnv SENTRY_AUTH_TOKEN "$SENTRY_AUTH_TOKEN" "$appEnv" || abortConfigWrite
+setEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$appEnv" || abortConfigWrite
+setEnv SENTRY_SERVER_NAME "$org.$DOMAIN" "$appEnv" || abortConfigWrite
+ensureBackendKeycloakAdminConfig "$appEnv" "https://$KEYCLOAK_HOST" "$org" "$backendSecret" || abortConfigWrite
+
+writeReplicationBackendKeycloakClient "$envFile" "$backendSecret" || abortConfigWrite
+setEnv COMPOSE_PROFILES "full-stack" "$envFile" || abortConfigWrite
 # the app container's /db now needs to reach replication-backend instead of CouchDB directly
-upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$envFile"
+upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$envFile" || abortConfigWrite
 # ...and its /api now needs to reach aam-backend-service, which this profile also deploys
-upsertEnv API_BACKEND_URL "http://${org}-aam-backend-service:8080" "$envFile"
+upsertEnv API_BACKEND_URL "http://${org}-aam-backend-service:8080" "$envFile" || abortConfigWrite
 
 # ensure CouchDB is locked down for replication-backend (admin-only _security, no JWT auth, no anonymous access)
 if ! "$scriptDir/create-couchdb.sh" "$path" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"}; then

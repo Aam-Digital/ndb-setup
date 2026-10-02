@@ -33,7 +33,7 @@ setEnv() {
   # escape sed special characters in value (\, &, |)
   local escaped
   escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
-  sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+  sed -i "s|^$key=.*|$key=$escaped|g" "$file" || return 1
   echo "  ~ updated $key in $(basename "$file")"
 }
 
@@ -41,7 +41,7 @@ setEnv() {
 _ensureTrailingNewline() {
   local file="$1"
   if [ -s "$file" ] && [ -n "$(tail -c 1 "$file")" ]; then
-    echo >> "$file"
+    echo >> "$file" || return 1
   fi
 }
 
@@ -53,11 +53,11 @@ upsertEnv() {
   local escaped
   escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
-    _ensureTrailingNewline "$file"
-    echo "$key=$value" >> "$file"
+    _ensureTrailingNewline "$file" || return 1
+    echo "$key=$value" >> "$file" || return 1
     echo "  + added $key to $(basename "$file")"
   else
-    sed -i "s|^$key=.*|$key=$escaped|g" "$file"
+    sed -i "s|^$key=.*|$key=$escaped|g" "$file" || return 1
     echo "  ~ updated $key in $(basename "$file")"
   fi
 }
@@ -68,8 +68,8 @@ ensureEnv() {
   local value="$2"
   local file="$3"
   if ! grep -q "^$key=" "$file" 2>/dev/null; then
-    _ensureTrailingNewline "$file"
-    echo "$key=$value" >> "$file"
+    _ensureTrailingNewline "$file" || return 1
+    echo "$key=$value" >> "$file" || return 1
     echo "  + added $key to $(basename "$file")"
   else
     echo "  = $key already exists in $(basename "$file"), skipping"
@@ -107,7 +107,7 @@ ensureRealValue() {
     if [ -n "$current" ]; then
       echo "  ! $key is a placeholder ('$current') in $(basename "$file") — replacing with '$value'"
     fi
-    upsertEnv "$key" "$value" "$file"
+    upsertEnv "$key" "$value" "$file" || return 1
   else
     echo "  = $key already set to '$current' in $(basename "$file"), keeping it"
   fi
@@ -118,7 +118,7 @@ removeEnv() {
   local key="$1"
   local file="$2"
   if grep -q "^$key=" "$file" 2>/dev/null; then
-    sed -i "/^$key=/d" "$file"
+    sed -i "/^$key=/d" "$file" || return 1
     echo "  - removed $key from $(basename "$file")"
   fi
 }

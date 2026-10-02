@@ -208,10 +208,10 @@ getKeycloakBackendClientSecret() {
 # Args: appEnvFile, serverUrl (e.g. https://keycloak.example.com), realm, clientSecret
 ensureBackendKeycloakAdminConfig() {
   local appEnvFile="$1" serverUrl="$2" realm="$3" clientSecret="$4"
-  ensureRealValue "KEYCLOAK_SERVERURL" "$serverUrl" "$appEnvFile"
-  upsertEnv "KEYCLOAK_REALM" "$realm" "$appEnvFile"
-  upsertEnv "KEYCLOAK_CLIENTID" "aam-backend" "$appEnvFile"
-  upsertEnv "KEYCLOAK_CLIENTSECRET" "$clientSecret" "$appEnvFile"
+  ensureRealValue "KEYCLOAK_SERVERURL" "$serverUrl" "$appEnvFile" || return 1
+  upsertEnv "KEYCLOAK_REALM" "$realm" "$appEnvFile" || return 1
+  upsertEnv "KEYCLOAK_CLIENTID" "aam-backend" "$appEnvFile" || return 1
+  upsertEnv "KEYCLOAK_CLIENTSECRET" "$clientSecret" "$appEnvFile" || return 1
 }
 
 # Assign AAM_BACKEND_REALM_MANAGEMENT_ROLES and the "roles" client scope (for role claims in the access token)

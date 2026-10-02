@@ -1,14 +1,22 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create the instance folder with its base configuration (.env, couchdb.ini, docker-compose.yml, ...) and
+apply a baseConfig (the assets and config overlay of baseConfigs/<baseConfig>, default "default").
+Does not touch Keycloak or start containers.
 
-# Create the instance directory and its base configuration (.env, couchdb.ini, docker-compose.yml, ...)
-# and apply the selected baseConfig overlay. Does NOT touch Keycloak or start any container.
-# Idempotent: existing files are never overwritten and generated secrets / versions are written only once,
-# so re-running never regenerates the CouchDB password or bumps versions of an existing instance.
-#
-# Usage:
-#   ./create-instance.sh <instance> [baseConfig] [--skip-restart]
-#
-# No secrets required. Reads DOMAIN / PREFIX from setup.env.
+Usage:
+  ./create-instance.sh [name] [baseConfig] [--skip-restart]
+
+Asks for name and baseConfig if they are not given. The name is lowercased; it has less than 24 characters
+(letters, digits and hyphens, not at the start or end) and is not in blacklist.txt.
+No secrets needed; reads DOMAIN and PREFIX from setup.env.
+
+Safe to re-run: existing files are never overwritten, and generated secrets and versions are written only
+once (the CouchDB password is never regenerated, versions are not bumped).
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup

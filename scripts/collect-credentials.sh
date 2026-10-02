@@ -1,15 +1,21 @@
 #!/bin/bash
-# Collect CouchDB admin credentials from all Aam Digital instance folders on this server.
-#
-# Usage: ./collect-credentials.sh [INSTANCES_DIR]
-#   INSTANCES_DIR defaults to /var/docker
-#
-# Output: credentials.json in the current working directory.
-#
-# Next step: copy the generated credentials.json into your local ndb-core checkout
-# and run the admin CLI from there:
-#   npm run cli -- migrate list
-#   npm run cli -- check
+usage() {
+  cat <<'EOF'
+Collect the CouchDB admin credentials of all Aam Digital instance folders on this server into
+credentials.json in the current directory. Self-contained: can be copied out and run on its own.
+
+Usage:
+  ./collect-credentials.sh [INSTANCES_DIR]    (default: /var/docker)
+
+Next step: copy credentials.json into your local ndb-core checkout and run the admin CLI from there:
+  npm run cli -- migrate list
+  npm run cli -- check
+EOF
+  exit "${1:-1}"
+}
+
+# self-contained (no lib/init.sh), so it handles --help itself
+case "${1:-}" in -h | --help) usage 0 ;; esac
 
 initial=$PWD
 

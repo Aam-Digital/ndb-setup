@@ -76,7 +76,7 @@ Check the documentation in the comments at the top of each file for usage instru
 the instance, set up Keycloak, set up CouchDB, create the initial user, …) can also be run on its own — by
 instance name or path — and, apart from the interactive orchestrator itself, without Bitwarden access.
 
-See **[scripts/README.md](./scripts/README.md)** for the architecture and how to run the scripts (by
+See **[scripts/README.md](./scripts/README.md)** for how to run the scripts (by
 name or path, for all instances, re-running as a repair). To change or add a script, see
 **[scripts/DEVELOPING.md](./scripts/DEVELOPING.md)**.
 

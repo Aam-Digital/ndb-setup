@@ -1,33 +1,29 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Configure CouchDB for an instance: write couchdb.ini, start the database, create the required databases and
+apply the _security for the instance's mode.
 
-# Configure CouchDB for an instance: write couchdb.ini (with or without the JWT signing key, depending on
-# mode - see below), start the database, create the required databases and apply the document-level
-# _security appropriate for the mode: "user_app" as database admin and member for a directly-exposed
-# database-only instance, or admin-only (resetting any previously-applied "user_app" grant) when
-# replication-backend fronts it.
-# Idempotent: couchdb.ini is regenerated from the template each run, database creation tolerates existing
-# databases, and _security is always (re)applied for the current mode, not just applied-once. Reads
-# everything it needs from the instance .env — no secrets.
-#
-# Safe to run on a live instance, so it also works as a repair/migration: an already-running CouchDB is
-# reused (not removed) and only restarted if couchdb.ini actually changed.
-#
-# Usage:
-#   ./create-couchdb.sh <instance> [--with-permissions] [--skip-restart]
-#
-# <instance>           an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
-#                      instance directory (e.g. "." when run from inside it, or /any/path/to/instance)
-# --with-permissions   the replication-backend enforces access, so CouchDB stays internal: _security is
-#                      reset to admin-only, anonymous requests are rejected (except /_up, for the
-#                      healthcheck; 401s carry a Basic-auth challenge so browsers prompt for credentials
-#                      and Fauxton at /db/couchdb/_utils/ stays usable) and couchdb-with-permissions.ini omits the JWT signing key - CouchDB's own
-#                      JWT auth is dead config once nothing talks to it directly. Without the flag, the mode
-#                      is detected from COMPOSE_PROFILES in the instance .env (the flag is needed while
-#                      setting up an instance whose profile is not switched yet). Database-only mode
-#                      (CouchDB exposed directly) applies the "user_app" _security and the JWT signing key.
-#
-# To repair all instances with replication-backend:
-#   ./for-each-instance.sh --only replication-backend ./create-couchdb.sh
+Usage:
+  ./create-couchdb.sh <instance> [--with-permissions] [--skip-restart]
+
+  --with-permissions  replication-backend enforces access, so CouchDB stays internal: _security is admin-only,
+                      anonymous requests are rejected (except /_up; browsers get a Basic-auth prompt, so
+                      Fauxton at /db/couchdb/_utils/ stays usable) and couchdb.ini has no JWT signing key.
+                      Without the flag, the mode is detected from COMPOSE_PROFILES in the instance .env (the
+                      flag is only needed while setting up an instance whose profile is not switched yet).
+                      In database-only mode (CouchDB exposed directly) "user_app" gets access and JWT auth
+                      is configured.
+
+Reads everything it needs from the instance .env, no secrets.
+
+Safe to re-run on a live instance, and doubles as the repair of CouchDB's security config: a running CouchDB
+is reused (restarted only if couchdb.ini changed), and the config and _security are re-applied for the
+current mode. For all instances with replication-backend:
+  ./for-each-instance.sh --only replication-backend ./create-couchdb.sh
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup

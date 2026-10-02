@@ -1,27 +1,33 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create (or reuse) the Keycloak realm and the "app" client of an instance, and write the realm's signing key
+into the instance .env (for the JWT auth of CouchDB / replication-backend).
 
-# Create (or reuse) the Keycloak realm and the "app" client for an instance, and persist the
-# realm's signing key into the instance .env for CouchDB / replication-backend JWT auth.
-# (The app container generates its own keycloak.json at start from KEYCLOAK_URL/KEYCLOAK_REALM -
-# see docker-compose.yml - so this script no longer needs to download and write that file itself.)
-# Idempotent: an existing realm or client is reused; the key values are written when missing or changed.
-#
-# Re-running it on an existing instance repairs its realm to what the realm template sets up:
-#   - the realm-management roles of the "account_manager" realm role (view-realm, manage-users,
-#     manage-realm), needed by the app's "Roles & Permissions" admin UI - users need to log out and back in
-#   - the admin-only `exact_username` User Profile attribute, which realms upgraded in place to Keycloak 26
-#     lose (see keycloak/README.md)
-# For all instances: ./for-each-instance.sh ./create-keycloak-realm.sh
-#
-# Usage:
-#   ./create-keycloak-realm.sh <instance> [locale] [baseConfig] [--skip-restart]
-#
-# <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the instance
-#             directory (e.g. "." when run from inside it). The realm name is read from the .env INSTANCE_NAME.
-# [locale]    default language, only used (and asked for) when the realm is created
-#
-# Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD; SMTP_SERVER, SMTP_PASSWORD (only to create the realm)
+Usage:
+  ./create-keycloak-realm.sh <instance> [locale] [baseConfig] [--skip-restart]
+
+  locale      default language of the realm; only used (and asked for) when the realm is created
+  baseConfig  use baseConfigs/<baseConfig>/realm_config.json instead of the default realm template, if it
+              exists; only used when the realm is created
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD; SMTP_SERVER, SMTP_PASSWORD (only to create the realm)
+
+Re-running it on an existing instance reuses the realm and repairs what older realm templates lack:
+  - the realm-management roles of the "account_manager" role (view-realm, manage-users, manage-realm), needed
+    by the app's "Roles & Permissions" admin UI (users have to log out and back in)
+  - the admin-only "exact_username" User Profile attribute, which realms upgraded in place to Keycloak 26
+    lose (see keycloak/README.md)
+It refuses to create a new realm for an instance that was already set up, or to repoint an instance that uses
+another Keycloak. For all instances:
+  ./for-each-instance.sh ./create-keycloak-realm.sh
+EOF
+  exit "${1:-1}"
+}
+
+# The app container generates its own keycloak.json at start from KEYCLOAK_URL / KEYCLOAK_REALM (see
+# docker-compose.yml), so this script doesn't write that file.
 
 ##############################
 # setup

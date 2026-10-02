@@ -18,6 +18,10 @@ Follow [scripts/DEVELOPING.md](scripts/DEVELOPING.md) when changing or adding sc
 
 - Don't add `migrate-*.sh` scripts: make the setup script that owns that part repair existing instances
   when re-run.
+- Every script starts with a `usage()` function (right after the shebang) that prints its help: what it does,
+  arguments, config, re-run behaviour and the `for-each-instance.sh` rollout command. `--help` prints it
+  (handled by `lib/init.sh`). This is the script's only user documentation: don't duplicate it in a header
+  comment or in `scripts/README.md`; developer-only notes go in comments below it.
 - Config and secrets: never call the `bws` (Bitwarden Secrets Manager) CLI directly. Scripts source
   `scripts/lib/init.sh` (which loads `lib/common.sh` and `lib/secrets.sh`) and resolve values with
   `requireConfig KEY` / `getConfig KEY`. These take the value from `setup.env` / the environment first and

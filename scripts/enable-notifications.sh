@@ -1,13 +1,25 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Enable push notifications of an instance (aam-backend-service with Firebase), including email notifications
+(enable-email-notifications.sh). Requires the backend (enable-backend.sh).
 
-# This script will enable the notification feature for an customer instance.
+Usage:
+  ./enable-notifications.sh <instance> [credential-base64] [--skip-restart]
 
-# how to use
-# ./enable-notifications.sh <instance> [--skip-restart]
-# example: ./enable-notifications.sh qm
-#
-# Attention: on macos, see setEnv function and enable the macos line instead the linux line
-#
+  credential-base64  the backend's Firebase service-account credential, instead of FIREBASE_CREDENTIAL_BASE64
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set), the same for every instance:
+  FIREBASE_CONFIG_JSON        the frontend Firebase web config, a JSON object (single-quoted in setup.env).
+                              Written to the instance's assets/firebase-config.json and volume-mounted into
+                              the app, as the published ndb-core image doesn't contain it.
+  FIREBASE_CREDENTIAL_BASE64  the backend's service-account credential (base64), used to send the pushes
+
+Re-running it on an instance with notifications already enabled only applies the frontend web config (and
+its volume mount) and the permission-check credentials.
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup
@@ -15,13 +27,6 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
-# FIREBASE_CONFIG_JSON / FIREBASE_CREDENTIAL_BASE64 are resolved via getConfig/requireConfig
-# (setup.env/environment, falling back to Bitwarden Secrets Manager - see lib/secrets.sh). They hold
-# the shared Firebase project's credentials (the same ones are used for every instance):
-#   - the frontend web config (firebase-config.json) the browser uses to register for push notifications.
-#     The published ndb-core image does not contain it (the file is gitignored there), so it is written to
-#     the instance's assets/ folder and volume-mounted into the app container.
-#   - the backend service-account credential (base64) the aam-backend-service uses to send pushes
 # --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
 source "$scriptDir/lib/skip-restart.sh"
 

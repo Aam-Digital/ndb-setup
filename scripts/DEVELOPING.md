@@ -40,14 +40,26 @@ full examples):
 
 ```bash
 #!/bin/bash
-# What the script sets up, in a few lines. This header is the only documentation of its arguments.
-# Re-running it on an existing instance: what it repairs. For all instances:
-#   ./for-each-instance.sh [--only ...] ./enable-foo.sh
-#
-# Usage:
-#   ./enable-foo.sh <instance> [--skip-restart]
+usage() {
+  cat <<'EOF'
+What the script sets up, in a few lines.
 
-# setup.env, lib/common.sh, lib/secrets.sh, and $scriptDir / $ndbSetupDir / $baseDirectory
+Usage:
+  ./enable-foo.sh <instance> [--skip-restart]
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  FOO_API_TOKEN
+
+Re-running it on an existing instance: what it repairs. For all instances:
+  ./for-each-instance.sh [--only ...] ./enable-foo.sh
+EOF
+  exit "${1:-1}"
+}
+
+# Notes only developers need (why something is done this way) go in comments here or next to the code.
+
+# handles --help (calls usage 0), then: setup.env, lib/common.sh, lib/secrets.sh, and
+# $scriptDir / $ndbSetupDir / $baseDirectory
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"                # other lib files only if you need them
 
@@ -68,10 +80,21 @@ fi
 
 Conventions behind it:
 
+- **`usage()` is the documentation.** It comes first, right after the shebang, so it reads like a header
+  comment, and `--help` prints it. It is the only place that documents the arguments, config and re-run
+  behaviour, for the operator: don't repeat that in comments. Quote the heredoc (`<<'EOF'`) and write the
+  script name literally: the help runs before `lib/init.sh`, so `$baseDirectory` etc. are not set yet, and
+  backticks would run as commands. `lib/init.sh` handles `-h` / `--help` in any position (before
+  `--`) and before it loads `setup.env`, so the help works without one. Call `usage` (exit 1) on invalid
+  arguments. Exceptions: `for-each-instance.sh` parses `--help` itself (`ownHelpFlag=true`), as arguments
+  after its command belong to the command; `collect-credentials.sh` / `install-dependencies.sh` don't use
+  `lib/` and check `$1` themselves.
 - **Relocatable.** Build paths from `$ndbSetupDir` / `$baseDirectory` (set by `lib/init.sh` from the script's
   location), never hard-code `/var/docker` or the checkout's folder name.
 - **One instance per run.** The instance is the first positional argument, so `for-each-instance.sh` can
-  pass it in front of the other arguments. Don't write your own loop over instances.
+  pass it in front of the other arguments. Don't write your own loop over instances. (Exceptions:
+  `list-instances.sh` builds one combined table with `forEachInstance`, and `collect-credentials.sh` keeps its
+  own loop because it is meant to be copied out and run without the rest of the checkout.)
 - **Config and secrets** come from `requireConfig` / `getConfig` ([`lib/secrets.sh`](lib/secrets.sh)), never
   from `bws` directly. They read `setup.env` / the environment first and only fall back to Bitwarden when
   `BWS_ACCESS_TOKEN` is set, so scripts also run on servers without it. A new Bitwarden-backed key goes into
@@ -134,7 +157,7 @@ Say instances need a new setting, a new Keycloak role or a corrected value. Inst
    writeFooConfig "$appEnv" "$token"
    ```
 
-5. **Document the rollout** in the script header and in the PR: which `for-each-instance.sh` command, which
+5. **Document the rollout** in the script's `usage()` and in the PR: which `for-each-instance.sh` command, which
    instances it affects, what gets restarted.
 6. **Roll out** on staging first: run the command for all instances, then run it **again**. The second run
    must report "Nothing to do" everywhere; if it doesn't, the check and the write don't agree.
@@ -190,7 +213,7 @@ from real problems found while turning migrations into repairs:
 
 | File | Provides |
 | --- | --- |
-| [`init.sh`](lib/init.sh) | sourced first by every script: sets `$scriptDir`, `$ndbSetupDir`, `$baseDirectory`, loads `setup.env`, `common.sh` and `secrets.sh` |
+| [`init.sh`](lib/init.sh) | sourced first by every script: handles `-h` / `--help` (calls the script's `usage 0`), sets `$scriptDir`, `$ndbSetupDir`, `$baseDirectory`, loads `setup.env`, `common.sh` and `secrets.sh` |
 | [`common.sh`](lib/common.sh) | see the `.env` helpers below; `generate_password`, `saveRollbackCopy` (rollback copies of files a script changes; see `prune-rollback-copies.sh`), instance resolution (`requireInstance`, `resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, `downloadBackendConfigTemplate`, docker-compose volume-mount helpers |
 | [`skip-restart.sh`](lib/skip-restart.sh) | sourced by every script after `init.sh`: the shared `--skip-restart` flag (`$skipRestart`, `skipRestartNote`) |
 | [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig`, and `_isBwsBackedKey` (which keys may come from Bitwarden) |
@@ -214,7 +237,8 @@ Use `ensureRealValue` for generated values such as passwords, so a re-run never 
 
 Nothing here has automated tests, so test by running the script:
 
-1. **Syntax:** `bash -n` on every changed file.
+1. **Syntax and help:** `bash -n` on every changed file; `./x.sh --help` prints the help, also without a
+   `setup.env`.
 2. **Stub run.** Copy the scripts to a temp folder next to fake instances, and put fake `docker` / `curl`
    commands first on the `PATH`. To stub a lib function (e.g. a Keycloak call), append a function with the
    same name to the *copied* lib file; the later definition wins. Run with `</dev/null` so an unexpected
@@ -246,7 +270,8 @@ Nothing here has automated tests, so test by running the script:
 - [ ] The re-run checks what's out of date, changes only that and says "Nothing to do" otherwise.
 - [ ] It fails with a non-zero exit code, before changing anything where possible.
 - [ ] It follows the rules for re-running on live instances above.
-- [ ] The script header documents the arguments, what a re-run repairs and the `for-each-instance.sh` command.
+- [ ] The script's `usage()` (`--help`) documents the arguments, what a re-run repairs and the
+      `for-each-instance.sh` command.
 - [ ] Tested: `bash -n`, a stub run covering the cases above, and staging with a second run.
 - [ ] The PR states the rollout command, which instances it affects and what gets restarted. Keep instance
       names and other production details out of it: this repository is public.

@@ -1,22 +1,25 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create the DNS CNAME record <name>.DNS_SERVER_DOMAIN -> DNS_SERVER_NAME.DNS_SERVER_DOMAIN (Hetzner DNS).
+An existing CNAME of that name is left untouched.
 
-# Create the DNS CNAME record for an instance (Hetzner DNS).
-# Idempotent: if a CNAME with the instance name already exists in the zone, it is left untouched.
-#
-# Usage:
-#   ./create-dns-record.sh <instance> [--skip-restart]
-#
-# Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   DNS_HETZNER_API_TOKEN   (BWS-backed) A Hetzner Cloud API token (console.hetzner.com ->
-#                           Security -> API Tokens) for whichever Project holds DNS_SERVER_DOMAIN's
-#                           zone — tokens are scoped to one Project, so the wrong one looks like "no
-#                           such zone", not "wrong token". Hetzner shut the old DNS Console
-#                           (dns.hetzner.com) and its API down in May 2026; a token created there
-#                           does not work here. There is no separate zone id to configure — the
-#                           zone is looked up by DNS_SERVER_DOMAIN's own name (see below), so it
-#                           doubles as the query and can't go stale the way a hardcoded id could.
-#   DNS_SERVER_NAME                                  (setup.env / environment)
-#   DNS_SERVER_DOMAIN                                (setup.env / environment, optional, defaults to aam-digital.net)
+Usage:
+  ./create-dns-record.sh <name> [--skip-restart]
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  DNS_HETZNER_API_TOKEN  Hetzner Cloud API token (console.hetzner.com -> Security -> API Tokens) of the
+                         Project that holds the DNS_SERVER_DOMAIN zone. Tokens are scoped to one Project, so
+                         a token of another one shows up as "no such zone". Tokens of the old DNS Console
+                         (dns.hetzner.com, shut down in May 2026) don't work.
+  DNS_SERVER_NAME        the server the record points to
+  DNS_SERVER_DOMAIN      the zone (optional, default aam-digital.net)
+EOF
+  exit "${1:-1}"
+}
+
+# There is no zone id to configure: the zone is looked up by DNS_SERVER_DOMAIN's name, so it can't go stale
+# the way a hardcoded id could.
 
 ##############################
 # setup

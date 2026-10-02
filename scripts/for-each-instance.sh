@@ -1,33 +1,33 @@
 #!/bin/bash
-# Run a command for every instance ($baseDirectory/$PREFIX* folders with a docker-compose.yml), each as its
-# own process, and list the instances it failed for. A failure does not stop the remaining instances.
-#
-# Usage:
-#   ./for-each-instance.sh [--only replication-backend|backend] [--] <command> [args...]
-#
-# How the command runs, always inside each instance's directory:
-#   a script path (contains "/"): gets the instance directory as its first argument, before [args...],
-#       which fits every script here that takes <instance> as its first argument
-#         ./for-each-instance.sh --only backend ./enable-backend.sh
-#         ./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0   # runs: update-version.sh <dir> ndb-core ...
-#   any other command: runs as given
-#         ./for-each-instance.sh docker compose pull
-#   one quoted string with spaces: runs with bash, so &&, | and variables work
-#         ./for-each-instance.sh "docker compose down && docker compose up -d"
-#         ./for-each-instance.sh 'grep ^APP_VERSION= .env'
-#
-# --only replication-backend   only instances whose COMPOSE_PROFILES deploys replication-backend
-# --only backend               only instances whose COMPOSE_PROFILES deploys aam-backend-service
-#
-# Can be run from any directory.
-
-source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
-
 usage() {
-  sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+Run a command for every instance ($PREFIX* folders with a docker-compose.yml next to ndb-setup), each in its
+own process inside the instance folder, and list the instances it failed for. A failure doesn't stop the
+remaining instances.
+
+Usage:
+  ./for-each-instance.sh [--only replication-backend|backend] [--] <command> [args...]
+
+  --only replication-backend  only instances whose COMPOSE_PROFILES deploys replication-backend
+  --only backend              only instances whose COMPOSE_PROFILES deploys aam-backend-service
+
+How the command runs:
+  a script path (contains "/"): gets the instance folder as its first argument, before [args...]
+      ./for-each-instance.sh --only backend ./enable-backend.sh
+      ./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0   # runs update-version.sh <dir> ndb-core ...
+  any other command: runs as given
+      ./for-each-instance.sh docker compose pull
+  one quoted string with spaces: runs with bash, so &&, | and variables work
+      ./for-each-instance.sh "docker compose down && docker compose up -d"
+      ./for-each-instance.sh 'grep ^APP_VERSION= .env'
+
+Options of for-each-instance.sh go before the command; put the command after "--" if it starts with "-".
+EOF
   exit "${1:-1}"
 }
 
+# Parse the own options (including -h / --help) before lib/init.sh, which must not take a --help after the
+# command: that belongs to the command.
 only=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -45,6 +45,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ "$#" -gt 0 ] || usage
+
+ownHelpFlag=true
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 if [ "$#" -eq 1 ] && [[ "$1" == *[[:space:]]* ]]; then
   mode=shell

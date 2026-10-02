@@ -1,12 +1,18 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Replace the assets/ folder of an instance with the one of a baseConfig (baseConfigs/<baseConfig>/assets) and
+volume-mount each asset into the app container. The previous folder is kept as "assets.rollback-<timestamp>"
+(its firebase-config.json is carried over).
 
-# Update the assets/ folder of an instance to the one of a baseConfig: replaces the instance's assets/
-# (the previous folder is kept as an "assets.rollback-<timestamp>" copy) and adjusts docker-compose.yml
-# to volume-mount each asset into the app container.
+Usage:
+  ./update-assets.sh <instance> [baseConfig] [y|true] [--skip-restart]
 
-# how to use
-# ./update-assets.sh <instance> <baseConfig> [y|true] [--skip-restart]
-# example: ./update-assets.sh my-system basic
+  baseConfig  asked for if not given
+  y | true    restart the instance afterwards (without it, nothing is restarted)
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup

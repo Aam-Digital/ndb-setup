@@ -1,15 +1,19 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Enable (or disable) Sentry error logging of an instance, by (re)writing its .env values.
 
-# Enable (or disable) Sentry error logging for an instance.
-# Idempotent: just (re)writes the relevant .env values.
-#
-# Usage:
-#   ./enable-sentry.sh <instance> [y|n] [--skip-restart]
-#     y (default) -> set the Sentry DSNs and enable logging for app + replication-backend
-#     n           -> disable backend Sentry logging (SENTRY_LOGGING_ENABLED=false)
-#
-# Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   SENTRY_DSN_APP, SENTRY_DSN_REPLICATION_BACKEND
+Usage:
+  ./enable-sentry.sh <instance> [y|n] [--skip-restart]
+
+  y  set the Sentry DSNs and enable logging of app and replication-backend (asked for if not given)
+  n  disable the backend Sentry logging (SENTRY_LOGGING_ENABLED=false)
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  SENTRY_DSN_APP, SENTRY_DSN_REPLICATION_BACKEND
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup

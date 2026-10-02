@@ -1,25 +1,23 @@
 #!/bin/bash
-# System backups: encrypted archives of the whole base directory (all instances, and this checkout) in
-# BACKUP_DIR, one per day ("YYYYMMDD.tar.gz.gpg"), encrypted with BACKUP_PASSPHRASE (both from setup.env).
-#
-# Usage:
-#   ./backup.sh [create] [--keep <n>]      create today's backup, keep the newest <n> (default 14); for cron
-#   ./backup.sh list                       list the available backups
-#   ./backup.sh restore [<date> [<instance>]]
-#       unpack the backup of <date> (YYYYMMDD) next to the instances, and if an instance is given (or chosen
-#       when asked), replace that instance's CouchDB data with the backed-up one and restart it. Only the
-#       CouchDB data is restored, not its .env or config. The replaced data is kept next to it.
-#
-# Can be run from any directory.
-
-source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
-
 usage() {
-  sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+System backups: encrypted archives of the whole base directory (all instances, and this checkout) in
+BACKUP_DIR, one per day ("YYYYMMDD.tar.gz.gpg"), encrypted with BACKUP_PASSPHRASE (both from setup.env).
+
+Usage:
+  ./backup.sh [create] [--keep <n>]      create today's backup, keep the newest <n> (default 14); for cron
+  ./backup.sh list                       list the available backups
+  ./backup.sh restore [<date> [<instance>]]
+      unpack the backup of <date> (YYYYMMDD) next to the instances, and if an instance is given (or chosen
+      when asked), replace that instance's CouchDB data with the backed-up one and restart it. Only the
+      CouchDB data is restored, not its .env or config. The replaced data is kept next to it.
+
+Doesn't accept --skip-restart: a restore has to stop and start the instance.
+EOF
   exit "${1:-1}"
 }
 
-case "${1:-}" in -h | --help) usage 0 ;; esac
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
 # backup.sh deliberately has no --skip-restart (lib/skip-restart.sh): restoring is a stop / replace the
 # data / start cycle, so skipping the restart would just leave the instance down. Reject the flag instead

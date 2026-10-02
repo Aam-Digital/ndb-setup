@@ -1,18 +1,22 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create the initial admin user of an instance: in Keycloak (with all realm roles, email 2FA and a verification
+email) and as a User document in CouchDB.
 
-# Create the initial admin user for an instance, in Keycloak (with all realm roles, email 2FA, and a
-# verification email) and as a User document in CouchDB.
-# Idempotent: an existing Keycloak user or CouchDB document is reused; the verification email is only
-# sent when the Keycloak user is newly created, so re-running never re-sends onboarding mail.
-#
-# Usage:
-#   ./create-initial-user.sh <instance> <email> <name> [--skip-restart]
-#
-# <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the instance
-#             directory (e.g. "." when run from inside it). The realm name is read from the .env INSTANCE_NAME.
-#
-# Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD
+Usage:
+  ./create-initial-user.sh <instance> [email] [name] [--skip-restart]
+
+Asks for email and name if they are not given.
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD
+
+Safe to re-run: an existing Keycloak user or CouchDB document is reused, and the verification email is only
+sent when the Keycloak user is created.
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup

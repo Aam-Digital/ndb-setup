@@ -1,35 +1,27 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Enable aam-backend-service for an instance: write its application.env, create the Keycloak clients it needs
+(including carbone-<instance> in the central aam-platform realm for the Carbone PDF render API) and start it.
 
-# This script will enable the backend for a customer instance.
-# For each instance, this script creates a dedicated Keycloak client in the central aam-platform realm
-# for Carbone PDF render API access (named carbone-{instance}).
-# Credentials are resolved via getConfig: from setup.env / the environment, falling back to the
-# Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set (so it can run without BWS access).
+Usage:
+  ./enable-backend.sh <instance> [--skip-restart]
 
-# how to use
-#
-# make sure to install the dependencies: ./install-dependencies.sh
-#
-# ./enable-backend.sh <instance> [--skip-restart]
-# example: ./enable-backend.sh qm
-#   <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
-#               instance directory (e.g. "." when run from inside it)
-#
-# Re-running it on an instance with the backend already enabled only repairs its config (Keycloak admin access,
-# replication-backend's permission-check client and CouchDB credentials, the Carbone render API - see
-# repairBackendConfig) and recreates the services whose config changed. For all instances with the backend:
-#   ./for-each-instance.sh --only backend ./enable-backend.sh
-#
-# Requires: CARBONE_HOST and KEYCLOAK_HOST set in setup.env (environment-specific):
-#   Environment  KEYCLOAK_HOST                  CARBONE_HOST
-#   -----------  -----------------------------  --------------------------------
-#   Staging      keycloak.aam-digital.net        pdf.dev-cluster.aam-digital.net
-#   Production   keycloak.aam-digital.com        pdf.aam-digital.app
-#
-# KEYCLOAK_HOST may also be fetched automatically via BWS_ACCESS_TOKEN instead of
-# setting it directly in setup.env (KEYCLOAK_USER/KEYCLOAK_PASSWORD are also needed then).
-# Requires: the aam-platform realm to already exist on the central Keycloak.
-#
+Requires replication-backend, the canonical docker-compose.yml (run update-compose.sh first) and the
+aam-platform realm on the central Keycloak.
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set; see setup.example.env):
+  CARBONE_HOST, KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD, SENTRY_AUTH_TOKEN, SENTRY_DSN_BACKEND
+
+Re-running it on an instance with the backend already enabled only repairs its config (Keycloak admin access,
+replication-backend's permission-check client and CouchDB credentials, the Carbone render API client) and
+recreates the services whose config changed. For all instances with the backend:
+  ./for-each-instance.sh --only backend ./enable-backend.sh
+EOF
+  exit "${1:-1}"
+}
+
+# The repair on a re-run is repairBackendConfig, built from the same functions as the first run.
 
 ##############################
 # setup

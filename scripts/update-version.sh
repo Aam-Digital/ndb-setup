@@ -1,15 +1,22 @@
 #!/bin/bash
-# Update the pinned image version for a service of an instance.
-#
-# Each instance pins its service versions in .env (APP_VERSION,
-# AAM_REPLICATION_BACKEND_VERSION, AAM_BACKEND_SERVICE_VERSION). This script
-# bumps that variable from old_version to new_version if the instance is
-# currently on old_version (otherwise it is skipped), then pulls and redeploys.
-# For all instances: ./for-each-instance.sh ./update-version.sh <service> <old> <new>
-# With --skip-restart only .env is updated; the instances pick the new version up
-# on their next 'docker compose pull && docker compose up -d'.
-#
-# Can be run from any directory.
+usage() {
+  cat <<'EOF'
+Update the pinned image version of a service of an instance (APP_VERSION, AAM_REPLICATION_BACKEND_VERSION or
+AAM_BACKEND_SERVICE_VERSION in .env) from old_version to new_version, then pull and redeploy. An instance that
+is not on old_version is skipped.
+
+Usage:
+  ./update-version.sh <instance> <service> <old_version> <new_version> [--skip-restart]
+
+  service         ndb-core | replication-backend | aam-services
+  --skip-restart  only update .env; the instance picks the version up on its next
+                  'docker compose pull && docker compose up -d'
+
+Example: ./update-version.sh acme ndb-core 3.5.0 3.6.0
+For all instances: ./for-each-instance.sh ./update-version.sh <service> <old_version> <new_version>
+EOF
+  exit "${1:-1}"
+}
 
 set -euo pipefail
 
@@ -17,22 +24,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 # --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
 source "$scriptDir/lib/skip-restart.sh"
 
-usage() {
-    echo "Usage: $0 <instance> <service> <old_version> <new_version> [--skip-restart]"
-    echo "  instance        instance name or directory (for all: ./for-each-instance.sh $0 <service> <old> <new>)"
-    echo "  service         ndb-core | replication-backend | aam-services"
-    echo "  old_version     only update the instance if it is currently on this version"
-    echo "  new_version     version to set"
-    echo "  --skip-restart  only update .env, do not pull or redeploy"
-    echo
-    echo "Example: $0 acme ndb-core 3.5.0 3.6.0"
-    exit "${1:-1}"
-}
-
 positional=()
 for arg in "$@"; do
     case "$arg" in
-        -h|--help)  usage 0 ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)  positional+=("$arg") ;;
     esac

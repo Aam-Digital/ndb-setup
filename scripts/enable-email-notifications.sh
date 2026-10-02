@@ -1,12 +1,24 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Enable email notifications of an instance (aam-backend-service: SMTP config and the Keycloak access to look
+up recipients). Requires the notification feature (enable-notifications.sh, which also runs this script).
+
+Usage:
+  ./enable-email-notifications.sh <instance> [--skip-restart]
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  SMTP_SERVER, SMTP_PASSWORD (only if the instance has no SMTP config yet);
+  KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD (to give the backend's service account the "view-users"
+  role; without them it continues with a warning)
+
+Re-running it keeps existing SMTP settings and only repairs what's missing or outdated (the "view-users"
+role, a placeholder Keycloak client ID, legacy sender settings).
+EOF
+  exit "${1:-1}"
+}
+
 set -euo pipefail
-
-# This script will enable email notifications for a customer instance.
-# It requires the notification feature to already be enabled (run enable-notifications.sh first).
-
-# how to use
-# ./enable-email-notifications.sh <instance> [--skip-restart]
-# example: ./enable-email-notifications.sh qm
 
 ##############################
 # setup

@@ -1,16 +1,20 @@
 #!/bin/bash
-# Delete the rollback copies scripts leave behind in an instance: the "<file>.rollback-<timestamp>" copies
-# saveRollbackCopy (scripts/lib/common.sh) makes before changing .env, docker-compose.yml, application.env,
-# ..., the "assets.rollback-<timestamp>" folders update-assets.sh makes, and the older names of both
-# (".bak-<timestamp>", ".bak", "_backup", "-old"). Lists every match and asks for confirmation first.
-# (These are not backups: system backups are backup.sh's encrypted archives.)
-#
-# Usage:
-#   ./prune-rollback-copies.sh <instance> [--yes] [--skip-restart]
-#     --yes  delete without asking for confirmation
-# For all instances: ./for-each-instance.sh ./prune-rollback-copies.sh [--yes]
-#
-# Can be run from any directory.
+usage() {
+  cat <<'EOF'
+Delete the rollback copies scripts leave behind in an instance: the "<file>.rollback-<timestamp>" copies made
+before changing .env, docker-compose.yml, application.env, ..., the "assets.rollback-<timestamp>" folders of
+update-assets.sh, and the older names of both (".bak-<timestamp>", ".bak", "_backup", "-old"). Lists every
+match and asks for confirmation first. (These are not backups: system backups are backup.sh's archives.)
+
+Usage:
+  ./prune-rollback-copies.sh <instance> [--yes] [--skip-restart]
+
+  --yes  delete without asking for confirmation
+
+For all instances: ./for-each-instance.sh ./prune-rollback-copies.sh [--yes]
+EOF
+  exit "${1:-1}"
+}
 
 set -euo pipefail
 
@@ -22,15 +26,9 @@ source "$scriptDir/lib/skip-restart.sh"
 ASSUME_YES=0
 INSTANCE=""
 
-usage() {
-    sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-    exit "${1:-1}"
-}
-
 for arg in "$@"; do
     case "$arg" in
         --yes)     ASSUME_YES=1 ;;
-        -h|--help) usage 0 ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)  INSTANCE="$arg" ;;
     esac

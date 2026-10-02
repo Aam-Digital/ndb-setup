@@ -1,31 +1,34 @@
 #!/bin/bash
-# Update the docker-compose.yml of an instance to match the canonical
-# ndb-setup/docker-compose.yml. For all instances: ./for-each-instance.sh ./update-compose.sh
+usage() {
+  cat <<'EOF'
+Update the docker-compose.yml of an instance to the canonical ndb-setup/docker-compose.yml: show the diff, ask
+for confirmation, save a rollback copy, copy the new file and redeploy ('docker compose pull' and 'up -d').
+
+Usage:
+  ./update-compose.sh <instance> [--yes] [--skip-restart]
+
+  --yes           don't ask for confirmation (an unchanged instance is still skipped)
+  --skip-restart  only update docker-compose.yml, don't pull or redeploy
+
+The instance's asset volume mounts (assets/, e.g. firebase-config.json) are kept. It also fills in .env
+values the new file relies on (DB_ENTRYPOINT_URL with replication-backend, API_BACKEND_URL with the backend),
+so /db and /api keep going through those services.
+
+For all instances: ./for-each-instance.sh ./update-compose.sh [--yes]
+EOF
+  exit "${1:-1}"
+}
+
+# Instances get a *copy* of docker-compose.yml at setup time, so changes to the canonical file don't propagate
+# by themselves. The target file is the canonical one plus a mount for every asset in the instance's assets/
+# folder (the same logic update-assets.sh uses); the up-to-date check, the preview diff and the copy all use
+# that target, so asset mounts are neither dropped nor reported as a change on every run.
 #
-# Instances get a *copy* of docker-compose.yml at setup time, so structural
-# changes to the canonical file (new service, changed volume, etc.) do not
-# propagate automatically. This script previews the diff for the instance,
-# asks for confirmation, saves a rollback copy of the old file, copies the new one and
-# redeploys the instance ('docker compose pull' + 'docker compose up -d').
+# Instances from before the Firebase web config moved to assets/ still mount ./firebase-config.json from the
+# instance root; a valid (non-empty) one is carried over to assets/ so push notifications keep working.
 #
-# The wholesale copy would drop any instance-local asset volume mounts, so the target
-# file is the canonical one plus a mount for every asset present in the instance's
-# assets/ folder (the same logic update-assets.sh uses). The up-to-date check,
-# the preview diff and the copy all use that target, so asset mounts (e.g. the
-# assets/firebase-config.json written by enable-notifications.sh) are neither
-# dropped nor reported as a change on every run.
-#
-# Instances from before the Firebase web config moved to assets/ still mount
-# ./firebase-config.json from the instance root; a valid (non-empty) one is carried
-# over to assets/ so push notifications keep working after the update.
-#
-# It also backfills DB_ENTRYPOINT_URL into any instance's .env whose COMPOSE_PROFILES
-# already requires replication-backend (i.e. not "database-only") but predates that
-# variable - otherwise the new docker-compose.yml would route /db straight to CouchDB
-# on redeploy, silently bypassing replication-backend's permission checks. Same idea for
-# API_BACKEND_URL on any full-stack instance, so /api keeps reaching aam-backend-service.
-#
-# Can be run from any directory.
+# Without the backfilled DB_ENTRYPOINT_URL, the new docker-compose.yml would route /db straight to CouchDB on
+# redeploy, silently bypassing replication-backend's permission checks. Same for API_BACKEND_URL and /api.
 
 set -euo pipefail
 
@@ -38,18 +41,9 @@ CANONICAL="$ndbSetupDir/docker-compose.yml"
 ASSUME_YES=0
 INSTANCE=""
 
-usage() {
-    echo "Usage: $0 <instance> [--yes] [--skip-restart]"
-    echo "  instance        instance name or directory (for all: ./for-each-instance.sh $0 [--yes])"
-    echo "  --yes           skip the confirmation (still skips unchanged)"
-    echo "  --skip-restart  only update docker-compose.yml, do not pull or redeploy"
-    exit "${1:-1}"
-}
-
 for arg in "$@"; do
     case "$arg" in
         --yes)      ASSUME_YES=1 ;;
-        -h|--help)  usage 0 ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)
             if [ -n "$INSTANCE" ]; then

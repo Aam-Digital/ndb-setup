@@ -1,23 +1,27 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create a new instance end to end, running the individual scripts: create-dns-record.sh, create-instance.sh,
+create-keycloak-realm.sh, create-couchdb.sh, create-initial-user.sh, enable-backend.sh (optional) and
+enable-sentry.sh. The instance is restarted once at the end.
 
-# Interactive orchestrator that creates an aam-digital instance end to end.
-# It gathers the answers and then delegates each step to a standalone script (create-dns-record.sh,
-# create-instance.sh, create-keycloak-realm.sh, create-couchdb.sh, create-initial-user.sh, enable-backend.sh,
-# enable-sentry.sh). Each of those can also be run on its own — see the header of each file. Only this
-# interactive entry point requires Bitwarden (BWS_ACCESS_TOKEN); the individual scripts resolve their
-# config from setup.env / the environment and fall back to BWS only when a token is present.
-#
-# how to use
-#
-# make sure to install the dependencies: ./install-dependencies.sh
-#
-# ./interactive-setup.sh <instance> <baseConfig> <locale> <userEmail> <userName> <withReplicationBackend> <withBackend> <unused> <enableSentry> [--skip-restart]
-# example: ./interactive-setup.sh qm codo de "mail@foo.bar" "Foo Bar" y y y y
-#
-# The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was
-# removed. The slot is kept rather than closed because the argument line is assembled by the external
-# deployer-backend service (see deployer/), whose code is not in this repo - so callers may still be
-# passing <enableSentry> in position 9.
+Usage:
+  ./interactive-setup.sh [name] [baseConfig] [locale] [userEmail] [userName] [withReplicationBackend]
+                         [withBackend] [unused] [enableSentry] [--skip-restart]
+
+Asks for every argument that is not given (y/n for the with*/enable* ones).
+Example: ./interactive-setup.sh acme basic de "admin@example.com" "Admin Name" y y y y
+
+Requires BWS_ACCESS_TOKEN (Bitwarden), unlike the individual scripts. Install the bws CLI with
+./install-dependencies.sh.
+EOF
+  exit "${1:-1}"
+}
+
+# The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was removed.
+# The slot is kept rather than closed because the argument line is assembled by the external deployer-backend
+# service (see deployer/), whose code is not in this repo - so callers may still be passing <enableSentry> in
+# position 9.
 
 ##############################
 # setup

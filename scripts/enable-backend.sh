@@ -5,7 +5,11 @@ Enable aam-backend-service for an instance: write its application.env, create th
 (including carbone-<instance> in the central aam-platform realm for the Carbone PDF render API) and start it.
 
 Usage:
-  ./enable-backend.sh <instance> [--skip-restart]
+  ./enable-backend.sh <instance> [--repair-only] [--skip-restart]
+
+  --repair-only   only repair an instance that already has the backend; skip (without failing) one that
+                  doesn't. Without it, an instance with replication-backend but no backend gets the
+                  backend newly enabled - a profile change, not a repair.
 
 Requires replication-backend, the canonical docker-compose.yml (run update-compose.sh first) and the
 aam-platform realm on the central Keycloak.
@@ -14,9 +18,13 @@ Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set; see 
   CARBONE_HOST, KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD, SENTRY_AUTH_TOKEN, SENTRY_DSN_BACKEND
 
 Re-running it on an instance with the backend already enabled only repairs its config (Keycloak admin access,
-replication-backend's permission-check client and CouchDB credentials, the Carbone render API client) and
-recreates the services whose config changed. For all instances with the backend:
+replication-backend's permission-check client and CouchDB credentials, the Carbone render API client, and
+dropping the dead PostgreSQL/RabbitMQ keys of backends that still had their own database) and recreates the
+services whose config changed. For all instances with the backend, either form - the first selects them by
+profile, the second lets every instance decide for itself, so a run that forgets the filter still repairs
+instead of enabling:
   ./for-each-instance.sh --only backend ./enable-backend.sh
+  ./for-each-instance.sh ./enable-backend.sh --repair-only
 EOF
   exit "${1:-1}"
 }
@@ -31,6 +39,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"
 # --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
 source "$scriptDir/lib/skip-restart.sh"
+
+# --repair-only, stripped from "$@" like --skip-restart so the positional args stay intact.
+# Without it this script *enables* the backend on an instance that has none, which for a
+# with-permissions instance is a silent profile change rather than a repair - so a fleet-wide
+# run either filters with `for-each-instance.sh --only backend` or passes this flag.
+repairOnly=false
+_enableBackendArgs=()
+for _enableBackendArg in "$@"; do
+  case "$_enableBackendArg" in
+    --repair-only) repairOnly=true ;;
+    *) _enableBackendArgs+=("$_enableBackendArg") ;;
+  esac
+done
+set -- "${_enableBackendArgs[@]+"${_enableBackendArgs[@]}"}"
+unset _enableBackendArg _enableBackendArgs
 
 ##############################
 # backend config (shared by enabling and repairing)
@@ -126,6 +149,42 @@ couchdbClientCredentialsUpToDate() {
   done
 }
 
+# Config of the PostgreSQL database and RabbitMQ broker the backend used before it moved its state into
+# CouchDB (aam-services #211 and #221). The current backend has no binding for these keys at all, so they
+# are inert rather than harmful - but they describe containers the canonical docker-compose.yml no longer
+# deploys, so leaving them in place makes the config read as if it still had a database of its own.
+LEGACY_STORAGE_KEYS=(
+  SPRING_DATASOURCE_URL
+  SPRING_DATASOURCE_USERNAME
+  SPRING_DATASOURCE_PASSWORD
+  SPRING_RABBITMQ_HOST
+  SPRING_RABBITMQ_VIRTUALHOST
+  SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_ENABLED
+  SPRING_RABBITMQ_LISTENER_DIRECT_RETRY_MAXATTEMPTS
+)
+
+# Drop the dead PostgreSQL/RabbitMQ config. Args: application.env
+removeLegacyStorageConfig() {
+  local appEnv="$1" key
+  for key in "${LEGACY_STORAGE_KEYS[@]}"; do
+    removeEnv "$key" "$appEnv" || return 1
+  done
+}
+
+# Whether removeLegacyStorageConfig would change nothing - including on an instance still pinned to a
+# backend that reads these keys, where removing them would be the breaking change rather than the fix:
+# before $COMPOSE_REQUIRES_BACKEND_MAJOR the datasource URL has no default outside the
+# local-development profile, so without it the backend fails to start the next time it is recreated.
+# Args: application.env, instance .env
+legacyStorageConfigRemoved() {
+  local appEnv="$1" envFile="$2" key major
+  major=$(versionMajor "$(getVar "$envFile" AAM_BACKEND_SERVICE_VERSION)") \
+    && [ "$major" -lt "$COMPOSE_REQUIRES_BACKEND_MAJOR" ] && return 0
+  for key in "${LEGACY_STORAGE_KEYS[@]}"; do
+    ! grep -q "^$key=" "$appEnv" 2>/dev/null || return 1
+  done
+}
+
 # Point replication-backend's permission checks at the aam-backend client (an existing placeholder like
 # NOT_USED as client id is corrected). Args: instance .env, aam-backend client secret
 writeReplicationBackendKeycloakClient() {
@@ -154,8 +213,10 @@ repairBackendConfig() {
 
   # what is out of date
   local fixKeycloakAdmin=false fixReplicationClient=false fixCouchdbCredentials=false fixRenderApi=false
+  local fixLegacyStorage=false
   couchdbClientCredentialsUpToDate "$appEnv" "$envFile" "$path" || fixCouchdbCredentials=true
   renderApiConfigUpToDate "$appEnv" || fixRenderApi=true
+  legacyStorageConfigRemoved "$appEnv" "$envFile" || fixLegacyStorage=true
   # the aam-backend client lives in the instance's realm, which must be on the central Keycloak
   if ! requireCentralKeycloak "$envFile"; then
     failed=true
@@ -185,6 +246,7 @@ repairBackendConfig() {
   $fixReplicationClient && repairs+=(replication-backend-client)
   $fixCouchdbCredentials && repairs+=(couchdb-credentials)
   $fixRenderApi && repairs+=(render-api)
+  $fixLegacyStorage && repairs+=(legacy-storage-config)
   if [ "${#repairs[@]}" -eq 0 ]; then
     if $failed; then
       return 1
@@ -210,8 +272,13 @@ repairBackendConfig() {
   fi
 
   local servicesToRecreate=() writeFailed=false
-  if $fixKeycloakAdmin || $fixCouchdbCredentials || $fixRenderApi; then
+  if $fixKeycloakAdmin || $fixCouchdbCredentials || $fixRenderApi || $fixLegacyStorage; then
     saveRollbackCopy "$appEnv"
+  fi
+  # Only the repairs that change config the running backend actually reads recreate it. Dropping the
+  # legacy PostgreSQL/RabbitMQ keys doesn't: the current backend has no binding for them, so on its own
+  # that repair would restart every backend instance for a value nothing reads.
+  if $fixKeycloakAdmin || $fixCouchdbCredentials || $fixRenderApi; then
     servicesToRecreate+=("aam-backend-service")
   fi
   if $fixKeycloakAdmin; then
@@ -222,6 +289,9 @@ repairBackendConfig() {
   fi
   if $fixRenderApi; then
     writeRenderApiConfig "$appEnv" "carbone-${org}" "$carboneSecret" || writeFailed=true
+  fi
+  if $fixLegacyStorage; then
+    removeLegacyStorageConfig "$appEnv" || writeFailed=true
   fi
   if $fixReplicationClient; then
     saveRollbackCopy "$envFile"
@@ -257,6 +327,14 @@ repairBackendConfig() {
 requireInstance "${1:-}"
 appEnv="$path/config/aam-backend-service/application.env"
 envFile="$path/.env"
+
+# Checked before any config is required, so a fleet-wide --repair-only run doesn't need Keycloak
+# credentials for the instances it skips. A half-enabled backend (only one of the two true) is not
+# skipped: it needs the manual look the checks further down ask for.
+if [ "$repairOnly" = true ] && ! backendEnabledCheck && ! isBackendConfigCreated; then
+  echo "Backend not enabled for '$org', skipping (--repair-only)."
+  exit 0
+fi
 
 requireConfig KEYCLOAK_HOST
 requireConfig KEYCLOAK_PASSWORD
@@ -310,6 +388,14 @@ checkCarbonePrerequisites || exit 1
 # aam-services repository), and the Keycloak clients (both idempotent, so a re-run after a failure is fine).
 backendVersion=$(getLatestBackendVersion)
 echo "Latest backendVersion available: $backendVersion"
+# A release older than the canonical docker-compose.yml supports cannot be enabled with it: it would start
+# without containers it still expects. Checked before anything is written, so the instance is left as it was.
+if ! backendMajor=$(versionMajor "$backendVersion") \
+  || [ "$backendMajor" -lt "$COMPOSE_REQUIRES_BACKEND_MAJOR" ]; then
+  echo "ERROR: the latest aam-backend-service release ('$backendVersion') is not a"
+  echo "  ${COMPOSE_REQUIRES_BACKEND_MAJOR}.x release, which this docker-compose.yml needs. Abort."
+  exit 1
+fi
 template=$(downloadBackendConfigTemplate "$backendVersion") || exit 1
 
 carboneClientId="carbone-${org}"
@@ -346,9 +432,8 @@ setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile" || abortConfigWr
 mkdir -p "$(dirname "$appEnv")" && printf '%s\n' "$template" > "$appEnv" || abortConfigWrite
 setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv" || abortConfigWrite
 setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$org" "$appEnv" || abortConfigWrite
-setEnv SPRING_DATASOURCE_USERNAME "$(getVar "$envFile" COUCHDB_USER)" "$appEnv" || abortConfigWrite
-setEnv SPRING_DATASOURCE_PASSWORD "$(getVar "$envFile" COUCHDB_PASSWORD)" "$appEnv" || abortConfigWrite
 writeCouchdbClientCredentials "$appEnv" "$envFile" "$path" || abortConfigWrite
+removeLegacyStorageConfig "$appEnv" || abortConfigWrite
 writeRenderApiConfig "$appEnv" "$carboneClientId" "$carboneSecret" || abortConfigWrite
 setEnv SENTRY_AUTH_TOKEN "$SENTRY_AUTH_TOKEN" "$appEnv" || abortConfigWrite
 setEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$appEnv" || abortConfigWrite

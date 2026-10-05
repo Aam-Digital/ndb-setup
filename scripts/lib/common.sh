@@ -394,6 +394,51 @@ getLatestBackendVersion() {
   curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
 }
 
+# The lowest aam-backend-service major the canonical docker-compose.yml can run. 2.x moved the
+# backend's state into CouchDB (aam-services #211 and #221), so the compose file no longer deploys
+# the PostgreSQL and RabbitMQ containers every 1.x release needed.
+#
+# A compose file and a backend version are coupled whenever a release drops infrastructure, and that
+# has to be written down somewhere; a major number is the smallest honest form of it. Raise this only
+# when a future major takes more containers away.
+COMPOSE_REQUIRES_BACKEND_MAJOR=2
+
+# Normalise a version as it comes out of a .env: getVar keeps the quotes and the trailing CR a file may
+# carry, and several components tag releases with a leading `v`. Args: version
+_normalizeVersion() {
+  local version="$1"
+  version="${version//[$'\r'\"\']/}"
+  printf '%s' "${version#v}"
+}
+
+# Print the major of a version, e.g. `2` for 2.0.0. Fails (printing nothing) for a version that has
+# none: unset, or a floating tag like `latest`, which says nothing about what it resolves to.
+# Callers decide what that means for them. Args: version
+versionMajor() {
+  local version
+  version=$(_normalizeVersion "$1")
+  [[ "$version" =~ ^([0-9]+)\. ]] || return 1
+  printf '%s' "${BASH_REMATCH[1]}"
+}
+
+# Print the highest released version of a major for a component, e.g. `1.24.8` for major 1 of
+# aam-backend-service. Read from the release tags rather than a GitHub API: `git ls-remote` is not rate
+# limited (the API allows 60 unauthenticated calls an hour, which a fleet-wide for-each-instance.sh run
+# would exhaust) and not paginated (where an older major eventually falls off the first page).
+# Fails if the lookup finds nothing, so a caller can tell "not the latest" from "could not tell".
+# Args: repository URL, tag prefix (empty unless the repo tags several components), major
+getLatestVersionOfMajor() {
+  local repo="$1" prefix="$2" major="$3" latest
+  # Only plain X.Y.Z, which drops both the pre-release tags some components publish (ndb-core's
+  # `3.93.1-master.2`, which `sort -V` would order *after* 3.93.1) and legacy two-part ones (`v2.5`).
+  # Both `v`-prefixed and plain tags exist for some releases, hence -u.
+  latest=$(git ls-remote --tags --refs "$repo" "${prefix}*" 2>/dev/null \
+           | sed "s|.*refs/tags/${prefix}||; s|^v||" \
+           | grep -E "^$major\.[0-9]+\.[0-9]+$" | sort -uV | tail -1)
+  [ -n "$latest" ] || return 1
+  printf '%s' "$latest"
+}
+
 # Print the application.env template of an aam-backend-service release (from the aam-services repository).
 # Fails if the download fails or returns no config. Args: version
 downloadBackendConfigTemplate() {

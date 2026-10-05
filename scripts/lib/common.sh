@@ -425,18 +425,56 @@ versionMajor() {
 # aam-backend-service. Read from the release tags rather than a GitHub API: `git ls-remote` is not rate
 # limited (the API allows 60 unauthenticated calls an hour, which a fleet-wide for-each-instance.sh run
 # would exhaust) and not paginated (where an older major eventually falls off the first page).
-# Fails if the lookup finds nothing, so a caller can tell "not the latest" from "could not tell".
 # Args: repository URL, tag prefix (empty unless the repo tags several components), major
+# Returns: 0 and the version; 1 if that major has no release (a definite answer, so a caller can treat
+# "no next major" as safe); 2 if the lookup itself failed, which answers nothing.
 getLatestVersionOfMajor() {
-  local repo="$1" prefix="$2" major="$3" latest
+  local repo="$1" prefix="$2" major="$3" tags latest
+  tags=$(git ls-remote --tags --refs "$repo" "${prefix}*" 2>/dev/null) || return 2
+  [ -n "$tags" ] || return 2
   # Only plain X.Y.Z, which drops both the pre-release tags some components publish (ndb-core's
   # `3.93.1-master.2`, which `sort -V` would order *after* 3.93.1) and legacy two-part ones (`v2.5`).
   # Both `v`-prefixed and plain tags exist for some releases, hence -u.
-  latest=$(git ls-remote --tags --refs "$repo" "${prefix}*" 2>/dev/null \
+  latest=$(printf '%s\n' "$tags" \
            | sed "s|.*refs/tags/${prefix}||; s|^v||" \
            | grep -E "^$major\.[0-9]+\.[0-9]+$" | sort -uV | tail -1)
   [ -n "$latest" ] || return 1
   printf '%s' "$latest"
+}
+
+# Print the version a running container is on, normalised. Both the OCI image label and the image tag
+# are asked, in that order: the label is baked in at build time and is the only one that answers for a
+# floating tag like `latest`, while the tag covers images published without labels. Fails if neither
+# gives a version (no such container, no label and a tag like `latest`, or docker unavailable).
+# Args: container name
+runningContainerVersion() {
+  local container="$1" value
+  # Separate reads: one template covering both would fail as a whole on an image without the label,
+  # losing the tag fallback.
+  value=$(docker inspect --type container \
+            -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$container" 2>/dev/null)
+  if versionMajor "$value" >/dev/null 2>&1; then
+    _normalizeVersion "$value"
+    return 0
+  fi
+  value=$(docker inspect --type container -f '{{.Config.Image}}' "$container" 2>/dev/null) || return 1
+  value="${value##*:}"   # the tag; a digest-pinned image leaves a hex string, which fails below
+  versionMajor "$value" >/dev/null 2>&1 || return 1
+  _normalizeVersion "$value"
+}
+
+# Print "<repository URL>|<tag prefix>|<container_name suffix>" for a component, so the scripts that
+# look up its releases or inspect its container agree on all three. Args: ndb-core | replication-backend
+# | aam-services
+# Read it with `IFS='|' read -r`: a tab separator would collapse the empty tag prefix (tab is IFS
+# whitespace), and the trailing newline keeps `read` from failing at end of input under `set -e`.
+componentReleaseSource() {
+  case "$1" in
+    ndb-core)            printf '%s|%s|%s\n' "https://github.com/Aam-Digital/ndb-core.git" "" "-app" ;;
+    replication-backend) printf '%s|%s|%s\n' "https://github.com/Aam-Digital/replication-backend.git" "" "-replication-backend" ;;
+    aam-services)        printf '%s|%s|%s\n' "https://github.com/Aam-Digital/aam-services.git" "aam-backend-service/" "-aam-backend-service" ;;
+    *) return 1 ;;
+  esac
 }
 
 # Print the application.env template of an aam-backend-service release (from the aam-services repository).

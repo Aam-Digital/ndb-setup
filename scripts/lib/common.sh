@@ -394,6 +394,17 @@ getLatestBackendVersion() {
   curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
 }
 
+# The aam-services version an instance runs, as pinned in its .env. Prints "latest" when it is not pinned,
+# which is what docker-compose.yml falls back to. Args: the instance's .env
+getInstanceBackendVersion() {
+  local version
+  version=$(getVar "$1" AAM_BACKEND_SERVICE_VERSION)
+  if isPlaceholderValue "$version"; then
+    version="latest"
+  fi
+  printf '%s\n' "$version"
+}
+
 # Print the application.env template of an aam-backend-service release (from the aam-services repository).
 # Fails if the download fails or returns no config. Args: version
 downloadBackendConfigTemplate() {

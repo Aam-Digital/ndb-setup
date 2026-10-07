@@ -7,9 +7,10 @@ apply the _security for the instance's mode.
 Usage:
   ./create-couchdb.sh <instance> [--with-permissions] [--skip-restart]
 
-  --with-permissions  replication-backend enforces access, so CouchDB stays internal: _security is admin-only,
-                      anonymous requests are rejected (except /_up; browsers get a Basic-auth prompt, so
-                      Fauxton at /db/couchdb/_utils/ stays usable) and couchdb.ini has no JWT signing key.
+  --with-permissions  replication-backend enforces access, so CouchDB stays internal: _security is admin-only
+                      and couchdb.ini has no JWT signing key. CouchDB itself still accepts anonymous requests
+                      (no server-wide login requirement), so Fauxton at /db/couchdb/_utils/ works via its own
+                      login, same as database-only mode.
                       Without the flag, the mode is detected from COMPOSE_PROFILES in the instance .env (the
                       flag is only needed while setting up an instance whose profile is not switched yet).
                       In database-only mode (CouchDB exposed directly) "user_app" gets access and JWT auth
@@ -108,7 +109,7 @@ if ! cmp -s "$newIni" "$path/couchdb.ini"; then
   cat "$newIni" > "$path/couchdb.ini"
   iniChanged=true
   if [ "$withPermissions" = true ]; then
-    echo "  ~ wrote couchdb.ini (with-permissions: no JWT signing key, anonymous requests rejected)"
+    echo "  ~ wrote couchdb.ini (with-permissions: no JWT signing key)"
   else
     echo "  ~ wrote couchdb.ini (with JWT signing key)"
   fi
@@ -175,10 +176,6 @@ else
     echo "  ~ removing runtime-configured jwt_keys/$key"
     couchdbCurl -X DELETE "$DB_LOCAL_URL/_node/_local/_config/jwt_keys/$(jq -rn --arg k "$key" '$k|@uri')" >/dev/null
   done
-
-  if [ "$(couchdbCurl "$DB_LOCAL_URL/_node/_local/_config/chttpd/require_valid_user_except_for_up")" != '"true"' ]; then
-    echo "WARNING: [chttpd] require_valid_user_except_for_up is not active - CouchDB still accepts anonymous requests."
-  fi
 fi
 
 # Remove the temporary init container so the instance starts from a clean, healthchecked state.

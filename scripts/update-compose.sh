@@ -1,55 +1,49 @@
 #!/bin/bash
-# Update the docker-compose.yml of every instance to match the canonical
-# ndb-setup/docker-compose.yml.
+usage() {
+  cat <<'EOF'
+Update the docker-compose.yml of an instance to the canonical ndb-setup/docker-compose.yml: show the diff, ask
+for confirmation, save a rollback copy, copy the new file and redeploy ('docker compose pull' and 'up -d').
+
+Usage:
+  ./update-compose.sh <instance> [--yes] [--skip-restart]
+
+  --yes           don't ask for confirmation (an unchanged instance is still skipped)
+  --skip-restart  only update docker-compose.yml, don't pull or redeploy
+
+The instance's asset volume mounts (assets/, e.g. firebase-config.json) are kept. It also fills in .env
+values the new file relies on (DB_ENTRYPOINT_URL with replication-backend, API_BACKEND_URL with the backend),
+so /db and /api keep going through those services.
+
+For all instances: ./for-each-instance.sh ./update-compose.sh [--yes]
+EOF
+  exit "${1:-1}"
+}
+
+# Instances get a *copy* of docker-compose.yml at setup time, so changes to the canonical file don't propagate
+# by themselves. The target file is the canonical one plus a mount for every asset in the instance's assets/
+# folder (the same logic update-assets.sh uses); the up-to-date check, the preview diff and the copy all use
+# that target, so asset mounts are neither dropped nor reported as a change on every run.
 #
-# Instances get a *copy* of docker-compose.yml at setup time, so structural
-# changes to the canonical file (new service, changed volume, etc.) do not
-# propagate automatically. This script previews the diff for each instance,
-# asks for confirmation, backs up the old file, copies the new one and
-# redeploys the instance ('docker compose pull' + 'docker compose up -d').
+# Instances from before the Firebase web config moved to assets/ still mount ./firebase-config.json from the
+# instance root; a valid (non-empty) one is carried over to assets/ so push notifications keep working.
 #
-# The wholesale copy would drop any instance-local asset volume mounts, so the target
-# file is the canonical one plus a mount for every asset present in the instance's
-# assets/ folder (the same logic enable-assets-overwrites.sh uses). The up-to-date check,
-# the preview diff and the copy all use that target, so asset mounts (e.g. the
-# assets/firebase-config.json written by enable-feature-notification.sh) are neither
-# dropped nor reported as a change on every run.
-#
-# Instances from before the Firebase web config moved to assets/ still mount
-# ./firebase-config.json from the instance root; a valid (non-empty) one is carried
-# over to assets/ so push notifications keep working after the update.
-#
-# It also backfills DB_ENTRYPOINT_URL into any instance's .env whose COMPOSE_PROFILES
-# already requires replication-backend (i.e. not "database-only") but predates that
-# variable - otherwise the new docker-compose.yml would route /db straight to CouchDB
-# on redeploy, silently bypassing replication-backend's permission checks. Same idea for
-# API_BACKEND_URL on any full-stack instance, so /api keeps reaching aam-backend-service.
-#
-# Can be run from any directory.
+# Without the backfilled DB_ENTRYPOINT_URL, the new docker-compose.yml would route /db straight to CouchDB on
+# redeploy, silently bypassing replication-backend's permission checks. Same for API_BACKEND_URL and /api.
 
 set -euo pipefail
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
-source "$baseDirectory/ndb-setup/scripts/lib/couchdb.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+source "$scriptDir/lib/couchdb.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
-CANONICAL="$baseDirectory/ndb-setup/docker-compose.yml"
+CANONICAL="$ndbSetupDir/docker-compose.yml"
 ASSUME_YES=0
 INSTANCE=""
-
-usage() {
-    echo "Usage: $0 [--yes] [instance]"
-    echo "  instance  update only this instance (default: all ${PREFIX}* instances)"
-    echo "  --yes     skip per-instance confirmation (still skips unchanged)"
-    exit 1
-}
 
 for arg in "$@"; do
     case "$arg" in
         --yes)      ASSUME_YES=1 ;;
-        -h|--help)  usage ;;
         -*) echo "Unknown option: $arg"; usage ;;
         *)
             if [ -n "$INSTANCE" ]; then
@@ -65,9 +59,6 @@ if [ ! -f "$CANONICAL" ]; then
     echo "Canonical compose file not found: $CANONICAL"
     exit 1
 fi
-
-updated=0
-skipped=0
 
 # Print the resolved compose config of instance dir $1 (empty if it does not resolve).
 resolvedComposeConfig() {
@@ -120,8 +111,7 @@ update_instance() {
 
     if [ ! -f "$target" ]; then
         echo "[$instance] no docker-compose.yml, skipping"
-        skipped=$((skipped + 1))
-        return
+        return 0
     fi
 
     # Carry over a legacy root-level Firebase web config (see header) - only a valid one, as
@@ -134,8 +124,7 @@ update_instance() {
         # Without jq every config would look invalid and its mount be dropped silently.
         if ! command -v jq >/dev/null 2>&1; then
             echo "[$instance] ERROR: jq is required to check ./firebase-config.json before its mount is dropped, skipping"
-            skipped=$((skipped + 1))
-            return
+            return 0
         fi
         if isValidFirebaseWebConfig "$(cat "$legacyFirebase")"; then
             migrateFirebase=1
@@ -145,7 +134,7 @@ update_instance() {
         fi
     elif [ -d "$assetsFirebase" ]; then
         echo "[$instance] WARNING: assets/firebase-config.json is a directory (Docker creates one when a mounted file is"
-        echo "[$instance]          missing), so push notifications cannot register. Re-run enable-feature-notification.sh."
+        echo "[$instance]          missing), so push notifications cannot register. Re-run enable-notifications.sh."
     fi
 
     # The target file: canonical + this instance's asset mounts.
@@ -163,8 +152,7 @@ update_instance() {
         if [ "$migrateFirebase" -eq 0 ]; then
             rm -f "$expected"
             echo "[$instance] already up to date"
-            skipped=$((skipped + 1))
-            return
+            return 0
         fi
         # docker-compose.yml may already mount assets/firebase-config.json (e.g. an earlier run was
         # interrupted before the copy) while the file itself is still missing - complete that copy.
@@ -197,16 +185,15 @@ update_instance() {
         read -r -p "Apply this change to [$instance]? [y/N] " reply < /dev/tty
         case "$reply" in
             [yY]|[yY][eE][sS]) ;;
-            *) echo "[$instance] skipped"; rm -f "$expected"; skipped=$((skipped + 1)); return ;;
+            *) echo "[$instance] skipped"; rm -f "$expected"; return 0 ;;
         esac
     fi
 
     if [ "$migrateFirebase" -eq 1 ]; then
         if ! writeFirebaseWebConfig "$assetsFirebase" "$(cat "$legacyFirebase")"; then
-            echo "[$instance] skipped (could not copy firebase-config.json to assets/)"
+            echo "[$instance] ERROR: could not copy firebase-config.json to assets/, nothing changed"
             rm -f "$expected"
-            skipped=$((skipped + 1))
-            return
+            return 1
         fi
         echo "[$instance] copied firebase-config.json to assets/"
     fi
@@ -214,13 +201,12 @@ update_instance() {
     if [ "$composeChanged" -eq 0 ]; then
         rm -f "$expected"
         echo "[$instance] run 'docker compose up -d' in $D if the app container predates the mount"
-        updated=$((updated + 1))
-        return
+        return 0
     fi
 
-    backupFile "$target"
-    # Remember the backup just made so a failed redeploy can roll back config + runtime.
-    local previous="$BACKUP_FILE"
+    saveRollbackCopy "$target"
+    # Remember the rollback copy just made so a failed redeploy can roll back config + runtime.
+    local previous="$ROLLBACK_COPY"
 
     cp "$expected" "$target"
     rm -f "$expected"
@@ -235,9 +221,9 @@ update_instance() {
     org=$(getVar "$envFile" INSTANCE_NAME)
     composeProfiles=$(getVar "$envFile" COMPOSE_PROFILES)
 
-    backupFile "$envFile"
-    # Remember the .env backup (if any) so a failed redeploy can roll it back alongside docker-compose.yml.
-    local previousEnv="$BACKUP_FILE"
+    saveRollbackCopy "$envFile"
+    # Remember the .env rollback copy (if any) so a failed redeploy can roll it back alongside docker-compose.yml.
+    local previousEnv="$ROLLBACK_COPY"
 
     if profileDeploysReplicationBackend "$composeProfiles" \
         && [ -z "$(getVar "$envFile" DB_ENTRYPOINT_URL)" ]; then
@@ -256,6 +242,11 @@ update_instance() {
     fi
 
     echo "[$instance] updated"
+
+    if skipRestartNote "docker compose pull && docker compose up -d --remove-orphans" "$D"; then
+        echo "[$instance] docker-compose.yml updated (not redeployed)"
+        return 0
+    fi
 
     echo "[$instance] redeploying..."
     # The merged "couchdb" service inherits container_name "${INSTANCE_NAME}-database" from the
@@ -307,10 +298,8 @@ update_instance() {
         return 1
     fi
     echo "[$instance] redeployed"
-    updated=$((updated + 1))
 }
 
-forEachInstance update_instance "$INSTANCE"
-
-echo
-echo "Done. $updated updated, $skipped skipped."
+[ -n "$INSTANCE" ] || usage
+requireInstance "$INSTANCE"
+update_instance "$path"

@@ -1,26 +1,31 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create the instance folder with its base configuration (.env, couchdb.ini, docker-compose.yml, ...) and
+apply a baseConfig (the assets and config overlay of baseConfigs/<baseConfig>, default "default").
+Does not touch Keycloak or start containers.
 
-# Create the instance directory and its base configuration (.env, couchdb.ini, docker-compose.yml, ...)
-# and apply the selected baseConfig overlay. Does NOT touch Keycloak or start any container.
-# Idempotent: existing files are never overwritten and generated secrets / versions are written only once,
-# so re-running never regenerates the CouchDB password or bumps versions of an existing instance.
-#
-# Usage:
-#   ./create-instance.sh <instance> [baseConfig]
-#
-# No secrets required. Reads DOMAIN / PREFIX from setup.env.
+Usage:
+  ./create-instance.sh [name] [baseConfig] [--skip-restart]
+
+Asks for name and baseConfig if they are not given. The name is lowercased; it has less than 24 characters
+(letters, digits and hyphens, not at the start or end) and is not in blacklist.txt.
+No secrets needed; reads DOMAIN and PREFIX from setup.env.
+
+Safe to re-run: existing files are never overwritten, and generated secrets and versions are written only
+once (the CouchDB password is never regenerated, versions are not bumped).
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # input
@@ -145,7 +150,7 @@ ensureRealValue AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$path/.env"
 # and use an `available-configs.json` entry to make it selectable in the app
 # see https://github.com/Aam-Digital/ndb-core/blob/master/src/assets/base-configs/available-configs.json
 if [ -d "$ndbSetupDir/baseConfigs/$baseConfig/assets" ]; then
-  "$scriptDir/enable-assets-overwrites.sh" "$org" "$baseConfig"
+  "$scriptDir/update-assets.sh" "$org" "$baseConfig"
 fi
 
 # Apply a config overlay shipped by the baseConfig. The baseConfig's `config/` folder mirrors the

@@ -1,67 +1,40 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Enable push notifications of an instance (aam-backend-service with Firebase), including email notifications
+(enable-email-notifications.sh). Requires the backend (enable-backend.sh).
 
-# This script will enable the notification feature for an customer instance.
+Usage:
+  ./enable-notifications.sh <instance> [credential-base64] [--skip-restart]
 
-# how to use
-# ./enable-feature-notification.sh <instance>
-# example: ./enable-feature-notification.sh qm
-#
-# Attention: on macos, see setEnv function and enable the macos line instead the linux line
-#
+  credential-base64  the backend's Firebase service-account credential, instead of FIREBASE_CREDENTIAL_BASE64
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set), the same for every instance:
+  FIREBASE_CONFIG_JSON        the frontend Firebase web config, a JSON object (single-quoted in setup.env).
+                              Written to the instance's assets/firebase-config.json and volume-mounted into
+                              the app, as the published ndb-core image doesn't contain it.
+  FIREBASE_CREDENTIAL_BASE64  the backend's service-account credential (base64), used to send the pushes
+
+Re-running it on an instance with notifications already enabled only applies the frontend web config (and
+its volume mount) and the permission-check credentials.
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
-
-# FIREBASE_CONFIG_JSON / FIREBASE_CREDENTIAL_BASE64 are resolved via getConfig/requireConfig
-# (setup.env/environment, falling back to Bitwarden Secrets Manager - see lib/secrets.sh). They hold
-# the shared Firebase project's credentials (the same ones are used for every instance):
-#   - the frontend web config (firebase-config.json) the browser uses to register for push notifications.
-#     The published ndb-core image does not contain it (the file is gitignored there), so it is written to
-#     the instance's assets/ folder and volume-mounted into the app container.
-#   - the backend service-account credential (base64) the aam-backend-service uses to send pushes
-
-##############################
-# parse flags
-##############################
-
-# --skip-restart: do not restart docker at the end; the caller (e.g. interactive-setup.sh) restarts the stack
-# once after all enable-* scripts have written their config. Run standalone the script restarts itself.
-# Flags are stripped here so positional args stay intact.
-skipRestart=false
-positionalArgs=()
-for arg in "$@"; do
-  case "$arg" in
-    --skip-restart) skipRestart=true ;;
-    *) positionalArgs+=("$arg") ;;
-  esac
-done
-set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # ask for input data
 ##############################
 
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-instance=$(getVar "$path/.env" INSTANCE_NAME)
-if [ -z "$instance" ]; then
-  instance="$(basename "$path")"
-  instance="${instance#"$PREFIX"}"
-fi
+requireInstance "${1:-}"
 
 ##############################
 # variables
@@ -96,12 +69,12 @@ syncPermissionCheckAuth() {
 
 # check if backend is already enabled for this instance
 if ! backendEnabledCheck; then
-  echo "No backend found for instance '$instance'. Please run './enable-backend.sh' first."
+  echo "No backend found for instance '$org'. Please run './enable-backend.sh' first."
   exit 1
 fi
 
 if ! isBackendConfigCreated; then
-  echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
+  echo "No backend configuration found for instance '$org'. Please run './enable-backend.sh' first."
   exit 1
 fi
 
@@ -134,7 +107,7 @@ fi
 # interactive-setup.
 if [ "$isFeatureAlreadyEnabled" != "true" ]; then
   [ -n "$2" ] && FIREBASE_CREDENTIAL_BASE64="$2"
-  requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./enable-feature-notification.sh <instance> <credential-base64>"
+  requireConfig FIREBASE_CREDENTIAL_BASE64 "Or pass it as the second argument: ./enable-notifications.sh <instance> <credential-base64>"
   configCredentialBase64="$FIREBASE_CREDENTIAL_BASE64"
 fi
 
@@ -143,7 +116,7 @@ fi
 frontendConfigChanged=false
 newFirebaseWebConfig=$(printf '%s' "$firebaseWebConfigJson" | jq .)
 if [ ! -f "$firebaseWebConfigFile" ] || [ "$(cat "$firebaseWebConfigFile")" != "$newFirebaseWebConfig" ]; then
-  # No backupFile here: a backup inside assets/ would get volume-mounted (and served) as well, and the config
+  # No saveRollbackCopy here: a copy inside assets/ would get volume-mounted (and served) as well, and the config
   # is the shared, non-secret Firebase web config that can always be re-created from FIREBASE_CONFIG_JSON.
   writeFirebaseWebConfig "$firebaseWebConfigFile" "$newFirebaseWebConfig" || exit 1
   echo "  ~ wrote assets/$(basename "$firebaseWebConfigFile") (frontend web push config)"
@@ -154,12 +127,12 @@ fi
 # mount point.
 legacyFirebaseMount='^[[:space:]]*- \./firebase-config\.json:/usr/share/nginx/html/assets/firebase-config\.json([[:space:]]|$)'
 if grep -Eq "$legacyFirebaseMount" "$composeFile"; then
-  backupFile "$composeFile"
+  saveRollbackCopy "$composeFile"
   sed -i -E "\\#$legacyFirebaseMount#d" "$composeFile" || exit 1
   echo "  - removed legacy ./firebase-config.json volume mount"
   frontendConfigChanged=true
 elif ! grep -Eq "^[[:space:]]*- \./assets/firebase-config\.json:" "$composeFile"; then
-  backupFile "$composeFile"
+  saveRollbackCopy "$composeFile"
   frontendConfigChanged=true
 fi
 ensureAssetVolumeMount "$composeFile" "firebase-config.json"
@@ -170,12 +143,12 @@ ensureAssetVolumeMount "$composeFile" "firebase-config.json"
 if [ "$isFeatureAlreadyEnabled" == "true" ]; then
   backendConfigChanged=false
   if permissionCheckAuthOutdated; then
-    backupFile "$appEnv"
+    saveRollbackCopy "$appEnv"
     syncPermissionCheckAuth || exit 1
     backendConfigChanged=true
   fi
   if [ "$frontendConfigChanged" == "true" ] || [ "$backendConfigChanged" == "true" ]; then
-    if [ "$skipRestart" != "true" ]; then
+    if ! skipRestartNote "docker compose up -d" "$path"; then
       (cd "$path" && docker compose up -d)
     fi
     echo "Feature was already enabled; added the missing config."
@@ -185,9 +158,9 @@ if [ "$isFeatureAlreadyEnabled" == "true" ]; then
   exit 0
 fi
 
-backupFile "$appEnv"
-# Private pre-write copy to roll back to if the email step fails (below). Not $BACKUP_FILE: the email script
-# backs up application.env as well, and within the same second its backup would overwrite ours.
+saveRollbackCopy "$appEnv"
+# Private pre-write copy to roll back to if the email step fails (below). Not $ROLLBACK_COPY: the email script
+# saves a rollback copy of application.env as well, and within the same second its copy would overwrite ours.
 appEnvBeforeWrite=$(mktemp)
 trap 'rm -f "$appEnvBeforeWrite"' EXIT   # holds the backend secrets: remove it on every exit path
 cp "$appEnv" "$appEnvBeforeWrite"
@@ -195,28 +168,28 @@ cp "$appEnv" "$appEnvBeforeWrite"
 # upsertEnv (not setEnv): application.env files created from older aam-backend-service templates may lack
 # some of these keys (LINKBASEURL is not in the template at all), so they have to be added if missing.
 upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_CREDENTIALFILEBASE64" "$configCredentialBase64" "$appEnv" || exit 1
-upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$instance.$DOMAIN" "$appEnv" || exit 1
+upsertEnv "NOTIFICATIONFIREBASECONFIGURATION_LINKBASEURL" "https://$org.$DOMAIN" "$appEnv" || exit 1
 upsertEnv "FEATURES_NOTIFICATIONAPI_MODE" "firebase" "$appEnv" || exit 1
 upsertEnv "FEATURES_NOTIFICATIONAPI_ENABLED" "true" "$appEnv" || exit 1
 syncPermissionCheckAuth || exit 1
 
 # Enable email notifications by default. Always pass --skip-restart: the email step writes its config but does
 # not restart, so the single restart below applies both the notification and email config in one cycle.
-# Pass $path (not $instance) so a custom instance location (outside the standard layout) is preserved.
+# Pass $path (not $org) so a custom instance location (outside the standard layout) is preserved.
 # Abort (without restarting) if the email step fails, instead of reporting success with a half-applied config.
 # Roll application.env back as well: otherwise FEATURES_NOTIFICATIONAPI_ENABLED=true would make a re-run take
 # the "already enabled" shortcut above and never retry the email step or apply the pending config.
-if ! "$scriptDir/enable-feature-notification-email.sh" "$path" --skip-restart; then
+if ! "$scriptDir/enable-email-notifications.sh" "$path" --skip-restart; then
   cp "$appEnvBeforeWrite" "$appEnv"
   echo "ERROR: Enabling email notifications failed (see above). $(basename "$appEnv") was restored to its"
   echo "       previous state and the instance was NOT restarted. Fix the issue and re-run"
-  echo "       './enable-feature-notification.sh $instance'."
+  echo "       './enable-notifications.sh $org'."
   exit 1
 fi
 
 # Restart once, here, after both this script and the email step have written their config — unless the caller
 # asked to skip it (interactive-setup restarts the stack itself after all enable-* scripts have run).
-if [ "$skipRestart" != "true" ]; then
+if ! skipRestartNote "docker compose down && docker compose up -d" "$path"; then
   (cd "$path" && docker compose down && docker compose up -d)
 fi
 

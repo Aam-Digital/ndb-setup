@@ -1,8 +1,17 @@
 #!/bin/sh
+usage() {
+  cat <<'EOF'
+Install the Bitwarden Secrets Manager CLI (bws), which interactive-setup.sh needs, with Rust and Cargo
+(apt build-essential, rustup).
 
-# dependencies:
-# - Rust and Cargo
-# - Bitwarden Secrets Manager CLI
+Usage:
+  ./install-dependencies.sh
+EOF
+  exit "${1:-1}"
+}
+
+# self-contained (no lib/init.sh), so it handles --help itself
+case "${1:-}" in -h | --help) usage 0 ;; esac
 
 sudo apt install -y build-essential
 

@@ -1,44 +1,34 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Enable (or disable) Sentry error logging of an instance, by (re)writing its .env values.
 
-# Enable (or disable) Sentry error logging for an instance.
-# Idempotent: just (re)writes the relevant .env values.
-#
-# Usage:
-#   ./enable-sentry.sh <instance> [y|n]
-#     y (default) -> set the Sentry DSNs and enable logging for app + replication-backend
-#     n           -> disable backend Sentry logging (SENTRY_LOGGING_ENABLED=false)
-#
-# Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   SENTRY_DSN_APP, SENTRY_DSN_REPLICATION_BACKEND
+Usage:
+  ./enable-sentry.sh <instance> [y|n] [--skip-restart]
+
+  y  set the Sentry DSNs and enable logging of app and replication-backend (asked for if not given)
+  n  disable the backend Sentry logging (SENTRY_LOGGING_ENABLED=false)
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  SENTRY_DSN_APP, SENTRY_DSN_REPLICATION_BACKEND
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # input
 ##############################
 
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-if [ ! -d "$path" ]; then
-  echo "ERROR: instance directory not found: $path (run create-instance.sh first). Abort."
-  exit 1
-fi
-org=$(getVar "$path/.env" INSTANCE_NAME)
+requireInstance "${1:-}"
 
 if [ -n "$2" ]; then
   enableSentry="$2"

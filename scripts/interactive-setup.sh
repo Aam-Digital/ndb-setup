@@ -1,35 +1,35 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create a new instance end to end, running the individual scripts: create-dns-record.sh, create-instance.sh,
+create-keycloak-realm.sh, create-couchdb.sh, create-initial-user.sh, enable-backend.sh (optional) and
+enable-sentry.sh. The instance is restarted once at the end.
 
-# Interactive orchestrator that creates an aam-digital instance end to end.
-# It gathers the answers and then delegates each step to a standalone script (create-dns-record.sh,
-# create-instance.sh, create-keycloak-realm.sh, create-couchdb.sh, create-initial-user.sh, enable-backend.sh,
-# enable-sentry.sh). Each of those can also be run on its own — see the header of each file. Only this
-# interactive entry point requires Bitwarden (BWS_ACCESS_TOKEN); the individual scripts resolve their
-# config from setup.env / the environment and fall back to BWS only when a token is present.
-#
-# how to use
-#
-# make sure to install the dependencies: ./install-dependencies.sh
-#
-# ./interactive-setup.sh <instance> <baseConfig> <locale> <userEmail> <userName> <withReplicationBackend> <withBackend> <unused> <enableSentry>
-# example: ./interactive-setup.sh qm codo de "mail@foo.bar" "Foo Bar" y y y y
-#
-# The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was
-# removed. The slot is kept rather than closed because the argument line is assembled by the external
-# deployer-backend service (see deployer/), whose code is not in this repo - so callers may still be
-# passing <enableSentry> in position 9.
+Usage:
+  ./interactive-setup.sh [name] [baseConfig] [locale] [userEmail] [userName] [withReplicationBackend]
+                         [withBackend] [unused] [enableSentry] [--skip-restart]
+
+Asks for every argument that is not given (y/n for the with*/enable* ones).
+Example: ./interactive-setup.sh acme basic de "admin@example.com" "Admin Name" y y y y
+
+Requires BWS_ACCESS_TOKEN (Bitwarden), unlike the individual scripts. Install the bws CLI with
+./install-dependencies.sh.
+EOF
+  exit "${1:-1}"
+}
+
+# The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was removed.
+# The slot is kept rather than closed because the argument line is assembled by the external deployer-backend
+# service (see deployer/), whose code is not in this repo - so callers may still be passing <enableSentry> in
+# position 9.
 
 ##############################
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 # the interactive setup relies on Bitwarden for all credentials
 if [[ -z "${BWS_ACCESS_TOKEN}" ]]; then
@@ -156,9 +156,9 @@ if [ "$app" == 0 ]; then
   "$scriptDir/create-keycloak-realm.sh" "$org" "$locale" "$baseConfig" || exit 1
 
   if [ "$withPermissions" = true ]; then
-    "$scriptDir/create-couchdb.sh" "$org" --with-permissions || exit 1
+    "$scriptDir/create-couchdb.sh" "$org" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   else
-    "$scriptDir/create-couchdb.sh" "$org" || exit 1
+    "$scriptDir/create-couchdb.sh" "$org" ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   fi
 
   "$scriptDir/create-initial-user.sh" "$org" "$userEmail" "$userName" || exit 1
@@ -171,7 +171,7 @@ if [ "$withPermissions" = true ]; then
   upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$path/.env"
   # an existing database-only instance still has the permissive "user_app" _security and CouchDB's JWT auth
   if [ "$app" != 0 ]; then
-    "$scriptDir/create-couchdb.sh" "$org" --with-permissions || exit 1
+    "$scriptDir/create-couchdb.sh" "$org" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   fi
   echo "replication-backend added"
 fi
@@ -200,7 +200,7 @@ if [ "$aamBackendService" == 0 ]; then
       # Enabling the backend also enables (push + email) notifications by default. The enable script loads the
       # Firebase credentials from BWS, so this runs non-interactively. --skip-restart is passed because this
       # script restarts the stack once at the very end, after all enable-* scripts have written their config.
-      "$scriptDir/enable-feature-notification.sh" "$org" --skip-restart
+      "$scriptDir/enable-notifications.sh" "$org" --skip-restart
     fi
   fi
 fi
@@ -225,6 +225,12 @@ fi
 
 # Single restart for the whole instance, after every enable-* script (run with --skip-restart) has written
 # its config. `down && up -d` (not just `up -d`) forces recreation so changed env_file/config is picked up.
-(cd "$path" && docker compose down && docker compose up -d)
+if ! skipRestartNote "docker compose down && docker compose up -d" "$path"; then
+  (cd "$path" && docker compose down && docker compose up -d)
+fi
 
-echo "DONE app is now available under https://$url"
+if [ "$skipRestart" = true ]; then
+  echo "DONE setting up '$org' - it is available under https://$url once you have restarted it."
+else
+  echo "DONE app is now available under https://$url"
+fi

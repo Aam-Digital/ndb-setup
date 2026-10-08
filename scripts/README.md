@@ -1,183 +1,68 @@
 # ndb-setup scripts
 
-Shell scripts that provision and maintain Aam Digital instances on a server. This document explains how
-they fit together so both **developers** (extending them) and **admins** (running them) can work with
-confidence.
+Shell scripts that provision and maintain Aam Digital instances on a server.
+For the deployment walkthrough, see the [repository README](../README.md); for changing or adding scripts,
+see [DEVELOPING.md](DEVELOPING.md).
 
-For the higher-level deployment walkthrough, see the [repository README](../README.md); this file focuses
-on the scripts' architecture and shared conventions.
+**Run any script with `--help`** for its arguments, required config and what a re-run does. This page only
+covers what applies to all of them. Scripts can be run from any directory.
 
-## Directory layout & assumptions
+## Directory layout
 
-Every script assumes this on-disk layout, where the `ndb-setup` checkout sits next to the instance folders:
+The scripts expect the `ndb-setup` checkout next to the instance folders:
 
 ```
 <baseDirectory>/
-├── ndb-setup/                 # this repository (the checkout)
-│   ├── setup.env              # server/environment config (sourced by every script)
-│   ├── docker-compose.yml     # template copied into each instance
-│   ├── .env.template          # template copied into each instance
-│   └── scripts/
-│       ├── lib/               # shared helpers (sourced, never run directly)
-│       └── *.sh
-├── c-acme/                    # an instance  ($PREFIX + name)
-│   ├── .env                   # per-instance config — the source of truth for that instance
-│   ├── couchdb.ini
-│   └── ...
-└── c-beta/                    # another instance
+├── ndb-setup/        # this repository, with setup.env (server config, read by every script)
+├── c-acme/           # an instance ($PREFIX + name); its .env is the source of truth for that instance
+└── c-beta/
 ```
 
-`baseDirectory` is the parent of the checkout, `PREFIX` (from `setup.env`, e.g. `c-`) namespaces the
-instance folders, and each instance's `.env` (`INSTANCE_NAME`, `COUCHDB_*`, `COMPOSE_PROFILES`, …) is the
-authoritative record for that instance.
+## Which script to run
 
-## Architecture
+- **New instance:** `interactive-setup.sh` asks for everything and runs the individual steps
+  (`create-*.sh`, `enable-*.sh`). It is the only script that requires Bitwarden (`BWS_ACCESS_TOKEN`).
+- **Single steps, features and maintenance on an existing instance:** run the step script on its own,
+  e.g. `create-keycloak-realm.sh`, `enable-backend.sh`, `update-version.sh`, `backup.sh`.
 
-### 1. Orchestrator — `interactive-setup.sh`
+Setup scripts are safe to re-run: they keep existing files and generated secrets, skip what already exists
+and repair what is out of date. Re-running the script that owns a part is also how a change of the setup is
+rolled out to existing instances (there are no migration scripts).
 
-The entry point for creating a new instance end to end. It gathers answers (interactively or from
-positional args), then **delegates each step to a standalone script**. It is the only script that
-*requires* Bitwarden (`BWS_ACCESS_TOKEN`); it owns the prompts and the single final restart.
+## Selecting the instance
 
-```
-interactive-setup.sh
-  ├─ create-dns-record.sh
-  ├─ create-instance.sh
-  ├─ create-keycloak-realm.sh
-  ├─ create-couchdb.sh
-  ├─ create-initial-user.sh
-  ├─ enable-backend.sh        (optional)
-  └─ enable-sentry.sh
-```
-
-### 2. Standalone step & feature scripts
-
-Each step above is a self-contained script that can also be run on its own — e.g. to re-configure
-Keycloak or recreate the databases for an existing instance. Feature toggles (`enable-backend.sh`,
-`enable-feature-notification.sh`, `enable-feature-notification-email.sh`, `enable-assets-overwrites.sh`)
-and maintenance/migration scripts follow the same conventions.
-
-### 3. Shared library — `lib/`
-
-Sourced by scripts, never executed directly. See [lib reference](#lib-reference) below.
-
-## Shared conventions
-
-Every non-trivial script follows these. When you write a new one, follow them too.
-
-### Standard header (relocatable — no hard-coded paths)
-
-`baseDirectory` is **derived from the script's own location**, never hard-coded, so the checkout can live
-anywhere:
+Scripts that work on an existing instance take it as their first argument, either as a **name**
+(`$baseDirectory/$PREFIX<name>`) or as a **path** to the instance folder (`.` from inside it):
 
 ```bash
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout
-source "$baseDirectory/ndb-setup/setup.env"
-source "$baseDirectory/ndb-setup/scripts/lib/common.sh"
-source "$baseDirectory/ndb-setup/scripts/lib/secrets.sh"   # if it needs secrets
+./create-couchdb.sh acme
+./create-couchdb.sh /srv/instances/c-acme
 ```
 
-Root-level scripts (one directory up, in the checkout root) use `baseDirectory="$(cd "$scriptDir/.." && pwd)"`.
+## All instances: `for-each-instance.sh`
 
-### Config & secrets — `getConfig` / `requireConfig`
-
-Scripts never call `bws` directly. They resolve values through [`lib/secrets.sh`](lib/secrets.sh), which
-**hides where a value comes from**:
-
-1. an already-set environment variable / `setup.env` value, else
-2. the Bitwarden Secrets Manager — **only** when `BWS_ACCESS_TOKEN` is set and the key has a known UUID.
+Runs a command once per instance, inside the instance's folder, continues on failures and lists the failed
+instances at the end. A script gets the instance as its first argument; any other command runs as given:
 
 ```bash
-requireConfig KEYCLOAK_HOST      # aborts with a clear message if unresolved; exports $KEYCLOAK_HOST
-value=$(getConfig SMTP_SERVER)   # returns non-zero if unresolved (caller decides)
+./for-each-instance.sh ./update-version.sh ndb-core 3.5.0 3.6.0
+./for-each-instance.sh --only backend ./enable-backend.sh    # only instances with aam-backend-service
+./for-each-instance.sh "docker compose down && docker compose up -d"
 ```
 
-**Consequence:** the standalone scripts run **without BWS** — just put the needed values in `setup.env`
-or the environment. Only `interactive-setup.sh` (and the not-yet-converted one-off migrations) require a
-token. To add a new BWS-backed value, add its `NAME → UUID` mapping to `_bwsSecretId` in `lib/secrets.sh`.
+## `--skip-restart`
 
-### Instance targeting — name **or** path
-
-Scripts that operate on an existing instance accept their `<instance>` argument as either an instance
-**name** (resolved to `$baseDirectory/$PREFIX<name>`) or a **path** to the instance directory, including
-`.` when run from inside the folder. This is handled by `resolveInstancePath` (sets the global `path`);
-the org/realm name is then read from that directory's `.env` (`INSTANCE_NAME`).
-
-```bash
-./create-couchdb.sh acme                 # by name (standard layout)
-./create-couchdb.sh /srv/instances/c-acme  # by explicit path
-cd /srv/instances/c-acme && …/create-couchdb.sh .   # "." from inside the folder
-```
-
-`forEachInstance <callback> [instance]` iterates every instance, or a single one (name or path) when the
-argument is given.
-
-### Idempotency
-
-Scripts are safe to re-run. They preserve existing files and generated secrets (never regenerate a
-CouchDB password or bump a pinned version on re-run — see `ensureRealValue`), skip already-created
-Keycloak realms/clients/users and CouchDB databases, and only send onboarding email on first creation.
-
-### `--skip-restart`
-
-Feature scripts that write config accept `--skip-restart` so an orchestrator can write all config first
-and restart the stack **once** at the end. Run standalone (without the flag) they restart themselves.
-
-## lib reference
-
-| File | Provides |
-| --- | --- |
-| [`common.sh`](lib/common.sh) | `.env` helpers (`getVar`, `setEnv`, `upsertEnv`, `ensureEnv`, `ensureRealValue`, `removeEnv`), `generate_password`, `backupFile`, instance resolution (`resolveInstancePath`, `forEachInstance`), state checks (`backendEnabledCheck`, `replicationBackendEnabledCheck`, and `profileDeploysBackend` / `profileDeploysReplicationBackend` for a given `COMPOSE_PROFILES` value), `getLatestBackendVersion`, docker-compose volume-mount helpers |
-| [`secrets.sh`](lib/secrets.sh) | `getConfig` / `requireConfig` and the `NAME → BWS UUID` map (`_bwsSecretId`) |
-| [`couchdb.sh`](lib/couchdb.sh) | `couchdbInitStart` / `couchdbCurl` / `couchdbInitStop` / `couchdbRestart` — bring up the CouchDB init container (or reuse an already-running one), run authenticated requests, tear it down (leaving a reused one running) |
-| [`keycloak.sh`](lib/keycloak.sh) | `getKeycloakToken`, `getKeycloakRealmKey`, `createKeycloakBackendClient`, `serviceAccountHasRealmManagementRole`, `getKeycloakBackendClientSecret`, `ensureBackendKeycloakAdminConfig`, `accountManagerHasRealmManagementRoles`, `ensureAccountManagerRealmManagementRoles` |
-
-Each script documents its own arguments and purpose in a header comment — run `head -n 20 <script>.sh` or
-open the file. Rather than duplicate that here, note only the deviations from the conventions above:
-
-- **One-off migrations** (`migrate-*.sh`) have their `baseDirectory` derived but still load secrets
-  directly from BWS; they are kept as historical one-offs, not converted to `getConfig`.
-- **`backup.sh` / `backup-restore.sh`** still target `/var/docker` for the actual backup data path (the
-  tar and restore paths are coupled), so they are not relocatable for the backup operation itself.
-- **`collect-credentials.sh`** is intentionally self-contained (meant to be copied out; takes an
-  `INSTANCES_DIR` arg, default `/var/docker`) and does not source `lib/`.
-- **`enable-backend.sh`** re-run on an instance with the backend already enabled does not abort but only
-  repairs the backend's Keycloak admin access (realm-management roles incl. `manage-clients`, `KEYCLOAK_*` in
-  `application.env`), recreating the backend if something changed. `--repair-all` does this for every instance
-  with the backend enabled.
-- **`create-couchdb.sh`** is safe to re-run on a live instance and doubles as the repair for CouchDB's
-  security config: it detects the mode from `COMPOSE_PROFILES`, reuses a running CouchDB (restarting it only
-  if `couchdb.ini` changed) and re-applies `_security`, the JWT config and — with replication-backend —
-  rejecting anonymous requests. `--repair-all` does this for every instance with replication-backend.
-- **`migrate-account-manager-manage-realm.sh`** adds the realm-management roles the `account_manager`
-  realm role needs (incl. `manage-realm`) so its members can manage roles in the app's admin UI. Unlike the
-  other Keycloak repairs this runs on *every* instance, since that UI calls Keycloak from the frontend and
-  does not involve the backend.
-- **`enable-feature-notification.sh`** writes the frontend Firebase web config to the instance's
-  `assets/firebase-config.json` and volume-mounts it (the published ndb-core image does not contain it).
-  Without BWS, provide `FIREBASE_CONFIG_JSON` as a single-quoted JSON object in `setup.env`. Re-running
-  the script on an instance with notifications already enabled only adds a missing web config/mount.
+Scripts restart the services whose config they changed. With `--skip-restart` they don't, and print the
+command to run instead. Every script accepts it (`backup.sh` excepted), so it can be passed to a whole
+`for-each-instance.sh` run; put it after the script:
+`./for-each-instance.sh ./update-compose.sh --skip-restart`.
 
 ## Running without Bitwarden
 
-Provide the values the script needs in `setup.env` or the environment (see
-[`setup.example.env`](../setup.example.env)); then any converted script runs without a token:
+Provide the values a script needs in `setup.env` or the environment (see
+[`setup.example.env`](../setup.example.env)). If one is missing, the script says which one and how to set it:
 
 ```bash
 KEYCLOAK_HOST=keycloak.example.com KEYCLOAK_USER=admin KEYCLOAK_PASSWORD=… \
-  ./create-keycloak-realm.sh /srv/instances/c-acme en
+  ./create-keycloak-realm.sh acme en
 ```
-
-If a required value is missing, `requireConfig` prints exactly which one and how to supply it.
-
-## Adding a new script
-
-1. Start from the [standard header](#standard-header-relocatable--no-hard-coded-paths); source only the
-   lib files you use.
-2. Take the instance as `$1`; resolve it with `resolveInstancePath` and read the org from
-   `getVar "$path/.env" INSTANCE_NAME` (or accept a name for creation-time scripts).
-3. Resolve any secret with `requireConfig NAME` (add its UUID to `lib/secrets.sh` if BWS-backed).
-4. Make every effect idempotent (guard creates, use `ensureRealValue` for generated values).
-5. If it writes config for a running stack, support `--skip-restart`.
-6. Document its arguments and purpose in a header comment (the single source of truth for per-script docs).

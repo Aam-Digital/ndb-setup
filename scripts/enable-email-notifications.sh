@@ -1,58 +1,38 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Enable email notifications of an instance (aam-backend-service: SMTP config and the Keycloak access to look
+up recipients). Requires the notification feature (enable-notifications.sh, which also runs this script).
+
+Usage:
+  ./enable-email-notifications.sh <instance> [--skip-restart]
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  SMTP_SERVER, SMTP_PASSWORD (only if the instance has no SMTP config yet);
+  KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD (to give the backend's service account the "view-users"
+  role; without them it continues with a warning)
+
+Re-running it keeps existing SMTP settings and only repairs what's missing or outdated (the "view-users"
+role, a placeholder Keycloak client ID, legacy sender settings).
+EOF
+  exit "${1:-1}"
+}
+
 set -euo pipefail
-
-# This script will enable email notifications for a customer instance.
-# It requires the notification feature to already be enabled (run enable-feature-notification.sh first).
-
-# how to use
-# ./enable-feature-notification-email.sh <instance>
-# example: ./enable-feature-notification-email.sh qm
 
 ##############################
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
-
-##############################
-# parse flags
-##############################
-
-# --skip-restart: do not restart docker at the end; the caller is responsible for bringing the stack up once
-# after all config is written (e.g. enable-feature-notification.sh, which restarts once for both steps, or
-# interactive-setup.sh). Run standalone the script restarts itself. Flags are stripped so positional args stay intact.
-skipRestart=false
-positionalArgs=()
-for arg in "$@"; do
-  case "$arg" in
-    --skip-restart) skipRestart=true ;;
-    *) positionalArgs+=("$arg") ;;
-  esac
-done
-set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # ask for input data
 ##############################
 
-if [ -n "${1:-}" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-instance=$(getVar "$path/.env" INSTANCE_NAME)
-if [ -z "$instance" ]; then
-  instance="$(basename "$path")"
-  instance="${instance#"$PREFIX"}"
-fi
+requireInstance "${1:-}"
 
 ##############################
 # variables
@@ -65,18 +45,18 @@ appEnv="$path/config/aam-backend-service/application.env"
 ##############################
 
 if ! backendEnabledCheck; then
-  echo "No backend found for instance '$instance'. Please run './enable-backend.sh' first."
+  echo "No backend found for instance '$org'. Please run './enable-backend.sh' first."
   exit 1
 fi
 
 if ! isBackendConfigCreated; then
-  echo "No backend configuration found for instance '$instance'. Please run './enable-backend.sh' first."
+  echo "No backend configuration found for instance '$org'. Please run './enable-backend.sh' first."
   exit 1
 fi
 
 isNotificationEnabled=$(getVar "$appEnv" FEATURES_NOTIFICATIONAPI_ENABLED)
 if [ "$isNotificationEnabled" != "true" ]; then
-  echo "Notification feature is not enabled for instance '$instance'. Please run './enable-feature-notification.sh' first."
+  echo "Notification feature is not enabled for instance '$org'. Please run './enable-notifications.sh' first."
   exit 1
 fi
 
@@ -128,11 +108,11 @@ else
   if [ -z "$issuerUri" ] || [ "$keycloakServerUrl" == "$issuerUri" ]; then
     echo "ERROR: Could not determine the Keycloak server URL (KEYCLOAK_URL missing in $path/.env and"
     echo "       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI not parseable in the backend config)."
-    echo "       Run './enable-backend.sh $instance' first."
+    echo "       Run './enable-backend.sh $org' first."
     exit 1
   fi
 fi
-keycloakRealm="$instance"
+keycloakRealm="$org"
 # Normalize the replication-backend client ID in .env: older/hand-edited instances may still have it as a
 # placeholder (e.g. NOT_USED), which must not be propagated into application.env's KEYCLOAK_CLIENTID below.
 ensureRealValue "REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID" "aam-backend" "$path/.env"
@@ -153,7 +133,7 @@ roleAlreadyPresent=false
 if [[ -n "${KEYCLOAK_HOST:-}" && -n "${KEYCLOAK_USER:-}" && -n "${KEYCLOAK_PASSWORD:-}" ]]; then
   adminCredsAvailable=true
   source "$scriptDir/lib/keycloak.sh"
-  if serviceAccountHasRealmManagementRole "$instance" "view-users"; then
+  if serviceAccountHasRealmManagementRole "$org" "view-users"; then
     roleAlreadyPresent=true
   fi
 fi
@@ -162,14 +142,14 @@ fi
 # something to repair — a missing 'view-users' role we CAN fix, or a placeholder client ID to normalize.
 if [ "$isEmailAlreadyEnabled" == "true" ] && [ -n "$existingKeycloakServerUrl" ]; then
   if [ "$roleAlreadyPresent" == "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ] && [ "$emailBrandingNeedsMigration" != "true" ]; then
-    echo "Email notifications already fully configured for instance '$instance' (incl. view-users role). Nothing to do."
+    echo "Email notifications already fully configured for instance '$org' (incl. view-users role). Nothing to do."
     exit 0
   fi
   # A placeholder client ID, a stale BASEPATH or legacy email branding vars are plain env edits that need no
   # Keycloak admin access — fall through to fix them even when admin creds are unavailable. Only exit here when
   # the sole outstanding issue is the unverifiable role.
   if [ "$adminCredsAvailable" != "true" ] && [ "$clientIdNeedsRepair" != "true" ] && [ "$basePathNeedsCleanup" != "true" ] && [ "$emailBrandingNeedsMigration" != "true" ]; then
-    echo "Email is configured for instance '$instance', but Keycloak admin credentials are unavailable, so the"
+    echo "Email is configured for instance '$org', but Keycloak admin credentials are unavailable, so the"
     echo "'view-users' role on the aam-backend service account could not be verified or repaired."
     echo "If recipient lookups fail with 'HTTP 403 Forbidden', re-run with KEYCLOAK_HOST/USER/PASSWORD in setup.env"
     echo "(or a BWS_ACCESS_TOKEN that can read the Keycloak secrets)."
@@ -180,9 +160,9 @@ fi
 
 echo ""
 if [ "$isEmailAlreadyEnabled" == "true" ]; then
-  echo "Email is enabled but needs repair (placeholder Keycloak client ID, stale BASEPATH, missing admin config and/or 'view-users' role) — repairing '$instance'..."
+  echo "Email is enabled but needs repair (placeholder Keycloak client ID, stale BASEPATH, missing admin config and/or 'view-users' role) — repairing '$org'..."
 else
-  echo "Configuring email notifications for '$instance'..."
+  echo "Configuring email notifications for '$org'..."
 fi
 
 # Best-effort: (re)assign the realm-management roles on the aam-backend service account (idempotent —
@@ -191,17 +171,16 @@ fi
 # loudly, because a lingering 403 is otherwise silent.
 keycloakRolesEnsured=false
 if [ "$adminCredsAvailable" == "true" ]; then
-  if createKeycloakBackendClient "$instance" && [ -n "$clientSecret" ]; then
-    keycloakClientSecret="$clientSecret"
+  if secret=$(ensureKeycloakBackendClient "$org" "$(getInstanceBackendVersion "$path/.env")"); then
+    keycloakClientSecret="$secret"
     # keep .env in sync — the replication-backend uses the same client
     if grep -q '^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=' "$path/.env"; then
-      setEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$clientSecret" "$path/.env"
+      setEnv "REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET" "$secret" "$path/.env"
     fi
   else
-    echo "  WARNING: Could not create/fetch the aam-backend Keycloak client; using the secret from .env."
+    echo "  WARNING: Could not set up the aam-backend Keycloak client; using the secret from .env."
   fi
-  # Verify the role actually stuck — createKeycloakBackendClient returns 0 even if assignment only warned.
-  if serviceAccountHasRealmManagementRole "$instance" "view-users"; then
+  if serviceAccountHasRealmManagementRole "$org" "view-users"; then
     keycloakRolesEnsured=true
     echo "  Verified: aam-backend service account has the realm-management 'view-users' role."
   else
@@ -214,11 +193,11 @@ fi
 
 if [ -z "$keycloakClientSecret" ]; then
   echo "ERROR: No aam-backend Keycloak client secret available (REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET missing"
-  echo "       in $path/.env and not retrievable from Keycloak). Run './enable-backend.sh $instance' first."
+  echo "       in $path/.env and not retrievable from Keycloak). Run './enable-backend.sh $org' first."
   exit 1
 fi
 
-backupFile "$appEnv"
+saveRollbackCopy "$appEnv"
 
 # Configure SMTP only when not already set, so re-runs/repairs keep existing (possibly customized) mail settings.
 if [ -z "$existingMailHost" ]; then
@@ -282,7 +261,7 @@ upsertEnv "KEYCLOAK_CLIENTSECRET" "$keycloakClientSecret" "$appEnv"
 # a failure during the file I/O above aborts before this line, so the instance is never taken down with
 # a partially written application.env — it keeps running on its previous, working config.
 # Skipped with --skip-restart when a caller restarts the stack itself after this step.
-if [ "$skipRestart" != "true" ]; then
+if ! skipRestartNote "docker compose down && docker compose up -d" "$path"; then
   (cd "$path" && docker compose down && docker compose up -d)
 fi
 

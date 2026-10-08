@@ -1,109 +1,60 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Configure CouchDB for an instance: write couchdb.ini, start the database, create the required databases and
+apply the _security for the instance's mode.
 
-# Configure CouchDB for an instance: write couchdb.ini (with or without the JWT signing key, depending on
-# mode - see below), start the database, create the required databases and apply the document-level
-# _security appropriate for the mode: "user_app" as database admin and member for a directly-exposed
-# database-only instance, or admin-only (resetting any previously-applied "user_app" grant) when
-# replication-backend fronts it.
-# Idempotent: couchdb.ini is regenerated from the template each run, database creation tolerates existing
-# databases, and _security is always (re)applied for the current mode, not just applied-once. Reads
-# everything it needs from the instance .env — no secrets.
-#
-# Safe to run on a live instance, so it also works as a repair/migration: an already-running CouchDB is
-# reused (not removed) and only restarted if couchdb.ini actually changed.
-#
-# Usage:
-#   ./create-couchdb.sh <instance> [--with-permissions]
-#   ./create-couchdb.sh --repair-all
-#
-# <instance>           an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the
-#                      instance directory (e.g. "." when run from inside it, or /any/path/to/instance)
-# --with-permissions   the replication-backend enforces access, so CouchDB stays internal: _security is
-#                      reset to admin-only, anonymous requests are rejected (except /_up, for the
-#                      healthcheck) and couchdb-with-permissions.ini omits the JWT signing key - CouchDB's own
-#                      JWT auth is dead config once nothing talks to it directly. Without the flag, the mode
-#                      is detected from COMPOSE_PROFILES in the instance .env (the flag is needed while
-#                      setting up an instance whose profile is not switched yet). Database-only mode
-#                      (CouchDB exposed directly) applies the "user_app" _security and the JWT signing key.
-# --repair-all         run this for every instance with replication-backend (database-only instances are
-#                      skipped); takes no other arguments
+Usage:
+  ./create-couchdb.sh <instance> [--with-permissions] [--skip-restart]
+
+  --with-permissions  replication-backend enforces access, so CouchDB stays internal: _security is admin-only
+                      and couchdb.ini has no JWT signing key. CouchDB itself still accepts anonymous requests
+                      (no server-wide login requirement), so Fauxton at /db/couchdb/_utils/ works via its own
+                      login, same as database-only mode.
+                      Without the flag, the mode is detected from COMPOSE_PROFILES in the instance .env (the
+                      flag is only needed while setting up an instance whose profile is not switched yet).
+                      In database-only mode (CouchDB exposed directly) "user_app" gets access and JWT auth
+                      is configured.
+
+Reads everything it needs from the instance .env, no secrets.
+
+Safe to re-run on a live instance, and doubles as the repair of CouchDB's security config: a running CouchDB
+is reused (restarted only if couchdb.ini changed), and the config and _security are re-applied for the
+current mode. For all instances with replication-backend:
+  ./for-each-instance.sh --only replication-backend ./create-couchdb.sh
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/couchdb.sh"
 
 ##############################
 # parse flags
 ##############################
 
+# --skip-restart (and $skipRestart), stripped from "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
+
 withPermissions=false
-repairAll=false
 positionalArgs=()
 for arg in "$@"; do
   case "$arg" in
     --with-permissions) withPermissions=true ;;
-    --repair-all) repairAll=true ;;
     *) positionalArgs+=("$arg") ;;
   esac
 done
 set -- "${positionalArgs[@]+"${positionalArgs[@]}"}"
 
 ##############################
-# --repair-all
-##############################
-
-# Each instance runs in its own subprocess: the per-instance path exits on errors and sets globals, which
-# must neither abort the loop nor leak into the next instance.
-if [ "$repairAll" = true ]; then
-  if [ "$#" -gt 0 ] || [ "$withPermissions" = true ]; then
-    echo "ERROR: --repair-all repairs all instances with replication-backend and takes no other arguments (got: $*)."
-    echo "  To repair a single instance, run: $0 <instance>"
-    exit 1
-  fi
-  failedInstances=()
-  repairInstance() {
-    local dir="$1"
-    if ! profileDeploysReplicationBackend "$(getVar "$dir/.env" COMPOSE_PROFILES)"; then
-      echo "[$(basename "$dir")] database-only, skipping"
-      return 0
-    fi
-    echo "[$(basename "$dir")]"
-    "$0" "$dir" || failedInstances+=("$(basename "$dir")")
-    echo ""
-  }
-  forEachInstance repairInstance || exit 1
-  if [ "${#failedInstances[@]}" -gt 0 ]; then
-    echo "Repair failed for: ${failedInstances[*]}"
-    exit 1
-  fi
-  exit 0
-fi
-
-##############################
 # input
 ##############################
 
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-if [ ! -d "$path" ]; then
-  echo "ERROR: instance directory not found: $path (run create-instance.sh first). Abort."
-  exit 1
-fi
-org=$(getVar "$path/.env" INSTANCE_NAME)
+requireInstance "${1:-}"
 
 replicationBackendEnabledCheck && withPermissions=true
 if [ "$withPermissions" = true ]; then
@@ -158,7 +109,7 @@ if ! cmp -s "$newIni" "$path/couchdb.ini"; then
   cat "$newIni" > "$path/couchdb.ini"
   iniChanged=true
   if [ "$withPermissions" = true ]; then
-    echo "  ~ wrote couchdb.ini (with-permissions: no JWT signing key, anonymous requests rejected)"
+    echo "  ~ wrote couchdb.ini (with-permissions: no JWT signing key)"
   else
     echo "  ~ wrote couchdb.ini (with JWT signing key)"
   fi
@@ -175,8 +126,10 @@ couchdbInitStart || exit 1
 
 # A reused, already-running CouchDB only reads couchdb.ini on startup.
 if [ "$DB_REUSED_RUNNING" = true ] && [ "$iniChanged" = true ]; then
-  echo "  ~ restarting the running CouchDB to apply couchdb.ini"
-  couchdbRestart || exit 1
+  if ! skipRestartNote "docker compose restart couchdb" "$path"; then
+    echo "  ~ restarting the running CouchDB to apply couchdb.ini"
+    couchdbRestart || exit 1
+  fi
 fi
 
 # create the required databases (201 = created, 412 = already exists; anything else is a real failure)
@@ -223,10 +176,6 @@ else
     echo "  ~ removing runtime-configured jwt_keys/$key"
     couchdbCurl -X DELETE "$DB_LOCAL_URL/_node/_local/_config/jwt_keys/$(jq -rn --arg k "$key" '$k|@uri')" >/dev/null
   done
-
-  if [ "$(couchdbCurl "$DB_LOCAL_URL/_node/_local/_config/chttpd/require_valid_user_except_for_up")" != '"true"' ]; then
-    echo "WARNING: [chttpd] require_valid_user_except_for_up is not active - CouchDB still accepts anonymous requests."
-  fi
 fi
 
 # Remove the temporary init container so the instance starts from a clean, healthchecked state.

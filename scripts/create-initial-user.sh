@@ -1,49 +1,40 @@
 #!/bin/bash
+usage() {
+  cat <<'EOF'
+Create the initial admin user of an instance in Keycloak (with all realm roles, email 2FA and a verification
+email). The app creates and links the user's User entity itself on first startup.
 
-# Create the initial admin user for an instance in Keycloak (with all realm roles, email 2FA, and a
-# verification email). The app creates and links the user's User entity itself on first startup.
-# Idempotent: an existing Keycloak user is reused; the verification email is only sent when the
-# Keycloak user is newly created, so re-running never re-sends onboarding mail.
-#
-# Usage:
-#   ./create-initial-user.sh <instance> <email> <name>
-#
-# <instance>  an instance name (standard $baseDirectory/$PREFIX<name> layout) OR a path to the instance
-#             directory (e.g. "." when run from inside it). The realm name is read from the .env INSTANCE_NAME.
-#
-# Config (via setup.env / environment, or Bitwarden Secrets Manager when BWS_ACCESS_TOKEN is set):
-#   KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD
+Usage:
+  ./create-initial-user.sh <instance> [email] [name] [--skip-restart]
+
+Asks for email and name if they are not given.
+
+Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
+  KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD
+
+Safe to re-run: an existing Keycloak user is reused, and the verification email is only sent when the
+Keycloak user is created.
+EOF
+  exit "${1:-1}"
+}
 
 ##############################
 # setup
 ##############################
 
-scriptDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-baseDirectory="$(cd "$scriptDir/../.." && pwd)"   # parent of the ndb-setup checkout (instances live here)
-ndbSetupDir="$(cd "$scriptDir/.." && pwd)"        # the ndb-setup checkout
-
-source "$ndbSetupDir/setup.env"
-source "$scriptDir/lib/common.sh"
-source "$scriptDir/lib/secrets.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"
+# --skip-restart is accepted (and ignored: this script changes no running service), stripped from
+# "$@" so the positional args stay intact
+source "$scriptDir/lib/skip-restart.sh"
 
 ##############################
 # input
 ##############################
 
-if [ -n "$1" ]; then
-  instanceArg="$1"
-else
-  echo "Which instance? (name, or path to the instance directory, e.g. '.')"
-  read -r instanceArg
-fi
-resolveInstancePath "$instanceArg" || exit 1
-if [ ! -d "$path" ]; then
-  echo "ERROR: instance directory not found: $path (run create-instance.sh first). Abort."
-  exit 1
-fi
-org=$(getVar "$path/.env" INSTANCE_NAME)
-if [ -z "$org" ]; then
+requireInstance "${1:-}"
+# the realm is named after INSTANCE_NAME, don't guess it from the folder name
+if [ -z "$(getVar "$path/.env" INSTANCE_NAME)" ]; then
   echo "ERROR: INSTANCE_NAME not set in $path/.env. Abort."
   exit 1
 fi
@@ -78,10 +69,7 @@ if ! getKeycloakToken; then
   exit 1
 fi
 
-userId=$(curl -s -G -H "Authorization: Bearer $token" \
-  --data-urlencode "username=$userName" --data-urlencode "exact=true" \
-  "https://$KEYCLOAK_HOST/admin/realms/$org/users" | jq -r '.[0].id // empty')
-
+userId=$(kcApi GET "$org/users?exact=true&username=$(jq -rn --arg v "$userName" '$v|@uri')" | jq -r '.[0].id // empty')
 userCreated=false
 if [ -n "$userId" ]; then
   echo "Keycloak user '$userName' already exists ($userId), reusing."
@@ -89,12 +77,7 @@ else
   echo "Creating Keycloak user '$userName'..."
   newUserPayload=$(jq -n --arg username "$userName" --arg email "$userEmail" \
     '{username: $username, enabled: true, email: $email, emailVerified: false, credentials: [], requiredActions: ["UPDATE_PASSWORD", "VERIFY_EMAIL"]}')
-  curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-    -d "$newUserPayload" \
-    "https://$KEYCLOAK_HOST/admin/realms/$org/users"
-  userId=$(curl -s -G -H "Authorization: Bearer $token" \
-    --data-urlencode "username=$userName" --data-urlencode "exact=true" \
-    "https://$KEYCLOAK_HOST/admin/realms/$org/users" | jq -r '.[0].id // empty')
+  userId=$(kcCreate "$org/users" "$newUserPayload")
   userCreated=true
 fi
 
@@ -105,29 +88,26 @@ fi
 echo "User id $userId"
 
 # assign all realm roles (idempotent — Keycloak ignores already-assigned roles)
-roles=$(curl -s -H "Authorization: Bearer $token" "https://$KEYCLOAK_HOST/admin/realms/$org/roles")
 echo "assign realm roles..."
-curl -s -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d "$roles" \
-  "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm" >/dev/null
+roles=$(kcApi GET "$org/roles")
+kcApi POST "$org/users/$userId/role-mappings/realm" "$roles" >/dev/null || echo "  WARNING: assigning the realm roles failed."
 
 # enable email 2FA by removing the "no-email-2fa" role (idempotent — removing an absent mapping is harmless)
 echo "enable 2fa for user..."
-roleId=$(curl -s -X GET "https://$KEYCLOAK_HOST/admin/realms/$org/roles" -H "Authorization: Bearer $token" \
-  | jq -r '.[] | select(.name=="no-email-2fa") | .id')
+roleId=$(echo "$roles" | jq -r '.[] | select(.name=="no-email-2fa") | .id')
 if [ -z "$roleId" ]; then
   echo "  WARNING: no 'no-email-2fa' role found."
 else
-  curl -s -X DELETE "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/role-mappings/realm" \
-    -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
-    -d "[{\"id\": \"$roleId\"}]" >/dev/null
+  kcApi DELETE "$org/users/$userId/role-mappings/realm" "[{\"id\": \"$roleId\"}]" >/dev/null \
+    || echo "  WARNING: removing the 'no-email-2fa' role failed."
 fi
 
 # send the verification email only for a freshly-created user, so re-runs do not re-send onboarding mail
 if [ "$userCreated" = true ]; then
   echo "send verification email..."
   # no redirect_uri: Keycloak falls back to the "app" client's baseUrl for the "back to application" link
-  curl -s -X PUT -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '["VERIFY_EMAIL"]' \
-    "https://$KEYCLOAK_HOST/admin/realms/$org/users/$userId/execute-actions-email?client_id=app" >/dev/null
+  kcApi PUT "$org/users/$userId/execute-actions-email?client_id=app" '["VERIFY_EMAIL"]' >/dev/null \
+    || echo "  WARNING: sending the verification email failed."
 fi
 
 echo "Initial user '$userName' is set up for '$org'."

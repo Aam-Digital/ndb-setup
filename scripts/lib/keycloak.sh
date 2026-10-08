@@ -121,63 +121,206 @@ getKeycloakClientSecret() {
   [ -n "$secret" ] && echo "$secret"
 }
 
-# A confidential client with a service account and no interactive login flows. Args: clientId
-_serviceAccountClientJson() {
-  jq -n --arg id "$1" '{
-    clientId: $id,
-    enabled: true,
-    clientAuthenticatorType: "client-secret",
-    serviceAccountsEnabled: true,
-    publicClient: false,
-    standardFlowEnabled: false,
-    directAccessGrantsEnabled: false,
-    protocol: "openid-connect"
-  }'
-}
+##############################
+# Keycloak client definitions shipped by aam-services
+##############################
 
-# Print the uuid of a service-account client, creating the client if it does not exist yet.
-# Args: realm, clientId
-_ensureServiceAccountClient() {
-  local realm="$1" clientId="$2" uuid
-  if uuid=$(getKeycloakClientUuid "$realm" "$clientId"); then
-    echo "  $clientId client already exists in realm '$realm': $uuid" >&2
-  elif uuid=$(kcCreate "$realm/clients" "$(_serviceAccountClientJson "$clientId")"); then
-    echo "  Created $clientId client in realm '$realm': $uuid" >&2
+# aam-services ships the definitions of the Keycloak clients it depends on in its Docker image. The path, the
+# file names and the names of the variables they substitute are a public contract of the image (see its
+# keycloak/README.md), so a release carries the permissions that exactly that version needs.
+AAM_SERVICES_KEYCLOAK_DIR="/opt/app/keycloak"
+AAM_BACKEND_CLIENT_DEFINITION="aam-backend-client.json"
+CARBONE_CLIENT_DEFINITION="carbone-render-client.json"
+
+# keycloak-config-cli 6.5.1, the version aam-services verified the definitions with. The second half of the
+# tag is the Keycloak it is built against: the one the central Keycloak runs, as for the realm configuration
+# jobs of aam-cloud-infrastructure, which import into the same Keycloak. Unlike Keycloak's partial import, it
+# also brings an existing client up to date.
+KEYCLOAK_CONFIG_CLI_IMAGE="adorsys/keycloak-config-cli:6.5.1-26.5.5"
+
+# Print a client definition out of the aam-services image of a version. Fails when the image does not carry
+# it, which is the case for every release older than the one that added them.
+# Args: aam-services version, definition file name
+getKeycloakClientDefinition() {
+  # NB: a later assignment in the same `local` must not reference an earlier one - it would expand to the
+  # enclosing scope's value (or empty), not the one being set here.
+  local version="$1" file="$2" definition="" image dir container status=0
+  image="ghcr.io/aam-digital/aam-services:$version"
+  dir=$(mktemp -d) || return 1
+  # Copied out of a container that is created but never started, so nothing from the image runs and this does
+  # not depend on the tools the image contains. `docker create` pulls an image that is not there (progress on
+  # stderr). No `docker pull` here - it would move a floating tag like "latest" away from the image the
+  # instance actually runs.
+  if container=$(docker create "$image" 2>"$dir/errors"); then
+    docker cp "$container:$AAM_SERVICES_KEYCLOAK_DIR/$file" "$dir/definition.json" 2>>"$dir/errors" || status=$?
+    docker rm "$container" >/dev/null 2>&1
+    [ "$status" -ne 0 ] || definition=$(cat "$dir/definition.json")
   else
-    echo "  ERROR: Failed to create the $clientId client in realm '$realm'." >&2
+    status=1
+  fi
+  if [ "$status" -ne 0 ] || ! jq -e 'has("clients") and has("users")' <<<"$definition" >/dev/null 2>&1; then
+    echo "  ERROR: could not read $AAM_SERVICES_KEYCLOAK_DIR/$file from $image:" >&2
+    sed 's/^/    /' "$dir/errors" >&2
+    echo "  aam-services releases before the Keycloak client definitions were added do not ship it, but" >&2
+    echo "  check the message above - a registry, network or tag problem looks the same from here." >&2
+    rm -rf "$dir"
     return 1
   fi
-  echo "$uuid"
+  rm -rf "$dir"
+  printf '%s\n' "$definition"
+}
+
+# Import a client definition into an EXISTING realm with keycloak-config-cli, which makes the client match
+# the file (also removing what older setup scripts granted it). The definition's variables and the admin
+# credentials reach the container through the environment of `docker run` (`-e NAME` without a value), never
+# on a command line or in a file, so no secret shows up in `ps` or is left behind by an interrupted run.
+# Args: realm, definition JSON, NAME=VALUE of a variable the definition substitutes...
+importKeycloakClientDefinition() {
+  local realm="$1" definition="$2"
+  shift 2
+
+  # keycloak-config-cli creates a realm that is not there. An instance whose realm is missing (a typo in
+  # INSTANCE_NAME, a realm deleted by accident) must never silently get a new, empty one instead.
+  local realmStatus
+  realmStatus=$(getKeycloakRealmStatus "$realm")
+  if [ "$realmStatus" != "200" ]; then
+    echo "  ERROR: realm '$realm' not found on $KEYCLOAK_HOST (HTTP $realmStatus), not importing into it." >&2
+    return 1
+  fi
+
+  # the definition itself holds no secret, only $(env:NAME) placeholders
+  local dir
+  dir=$(mktemp -d) || return 1
+  printf '%s\n' "$definition" >"$dir/definition.json" || { rm -rf "$dir"; return 1; }
+
+  local passed=() var
+  for var in "$@"; do
+    passed+=(-e "${var%%=*}")
+  done
+  local output status=0
+  # exported in this subshell only
+  output=$(
+    export KEYCLOAK_URL="https://$KEYCLOAK_HOST" KEYCLOAK_USER KEYCLOAK_PASSWORD
+    for var in "$@"; do
+      export "${var?}"
+    done
+    # IMPORT_VARSUBSTITUTION_ENABLED: the definitions use $(env:NAME) placeholders; an unset one fails the
+    #   import rather than importing "".
+    # IMPORT_MANAGED_CLIENT=no-delete: clients are the only resource type the definitions declare, so they are
+    #   the only one managed. Without no-delete, an import removes the clients earlier imports of the same realm
+    #   created: in the shared platform realm every instance's import would delete the render clients of all
+    #   the others.
+    # IMPORT_CACHE_ENABLED=false: the cache skips a file whose checksum is unchanged, so a client changed by
+    #   hand would never be repaired - and the checksum lives on the realm, which instances share for the
+    #   render clients.
+    # IMPORT_REMOTE_STATE_ENABLED=false: with remote state, keycloak-config-cli records "the clients I created"
+    #   on the realm, and the next import in default managed mode deletes those it does not declare itself -
+    #   such as the jobs of aam-cloud-infrastructure that keep the realms' shared configuration up to date in
+    #   the same Keycloak, which would delete aam-backend.
+    docker run --rm \
+      -v "$dir/definition.json:/definitions/definition.json:ro" \
+      -e KEYCLOAK_URL -e KEYCLOAK_USER -e KEYCLOAK_PASSWORD \
+      -e IMPORT_FILES_LOCATIONS=/definitions/definition.json \
+      -e IMPORT_VARSUBSTITUTION_ENABLED=true \
+      -e IMPORT_MANAGED_CLIENT=no-delete \
+      -e IMPORT_CACHE_ENABLED=false \
+      -e IMPORT_REMOTE_STATE_ENABLED=false \
+      "${passed[@]}" \
+      "$KEYCLOAK_CONFIG_CLI_IMAGE" 2>&1
+  ) || status=$?
+  rm -rf "$dir"
+  if [ "$status" -ne 0 ]; then
+    echo "  ERROR: keycloak-config-cli failed to import into realm '$realm':" >&2
+    printf '%s\n' "$output" | sed 's/^/    /' >&2
+    return 1
+  fi
+}
+
+# Print the client secret of an existing client, or a freshly generated one if the client does not exist.
+# The import sets the secret to whatever it is given, so an existing one has to be kept: rotating it would
+# break the services that already hold it (aam-backend-service, replication-backend).
+# Args: realm, clientId
+_keycloakClientSecretOrNew() {
+  local realm="$1" clientId="$2" clients uuid secret
+  # Only a lookup that succeeded and found nothing means the client is new. A failed one (Keycloak or its
+  # proxy briefly down, a refused token, a reply that is not the client list) must not: a new secret imported
+  # over the live client would lock out the services that hold the current one.
+  if ! clients=$(kcApi GET "$realm/clients?clientId=$clientId") \
+    || ! uuid=$(jq -er 'if type == "array" then .[0].id // "" else error end' <<<"$clients" 2>/dev/null); then
+    echo "  ERROR: failed to look up the $clientId client in realm '$realm'." >&2
+    return 1
+  fi
+  if [ -z "$uuid" ]; then
+    echo "  $clientId does not exist in realm '$realm' yet, creating it with a new secret." >&2
+    # 256 bits from the kernel's CSPRNG, as hex: it goes into the JSON of the definition unescaped.
+    # (Not generate_password, whose $RANDOM is not a cryptographic generator.)
+    secret=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+    if [ "${#secret}" -ne 64 ]; then
+      echo "  ERROR: could not generate a secret for the $clientId client." >&2
+      return 1
+    fi
+    printf '%s\n' "$secret"
+    return 0
+  fi
+  if ! secret=$(getKeycloakClientSecret "$realm" "$uuid"); then
+    echo "  ERROR: failed to read the secret of the $clientId client in realm '$realm'." >&2
+    return 1
+  fi
+  echo "  $clientId client already exists in realm '$realm' ($uuid), keeping its secret." >&2
+  printf '%s\n' "$secret"
 }
 
 ##############################
 # aam-backend client (the backend's and replication-backend's Keycloak admin access)
 ##############################
 
-# realm-management roles the aam-backend service account needs
-# (manage-clients: aam-backend-service creates and assigns the client scopes its API endpoints check)
-AAM_BACKEND_REALM_MANAGEMENT_ROLES=("manage-realm" "manage-clients" "query-users" "view-users" "manage-users")
-
-# Ensure the realm's aam-backend client exists and its service account holds
-# AAM_BACKEND_REALM_MANAGEMENT_ROLES (checked afterwards), plus the "roles" client scope. Idempotent.
-# Prints the client secret. Fails if the client, its secret or the roles could not be set up.
-# Args: realm
+# Ensure the realm's aam-backend client matches the definition the given aam-services release ships: the
+# client itself, its secret, and the realm-management roles of its service account (verified afterwards).
+# Idempotent, and it keeps the secret of an existing client.
+# Prints the client secret. Args: realm, aam-services version
 ensureKeycloakBackendClient() {
-  local realm="$1" uuid secret
-  uuid=$(_ensureServiceAccountClient "$realm" aam-backend) || return 1
-  if ! secret=$(getKeycloakClientSecret "$realm" "$uuid"); then
-    echo "  ERROR: Failed to get the secret of the aam-backend client in realm '$realm'." >&2
+  local realm="$1" version="$2" definition secret
+  definition=$(getKeycloakClientDefinition "$version" "$AAM_BACKEND_CLIENT_DEFINITION") || return 1
+  secret=$(_keycloakClientSecretOrNew "$realm" aam-backend) || return 1
+
+  importKeycloakClientDefinition "$realm" "$definition" \
+    "AAM_BACKEND_REALM=$realm" "AAM_BACKEND_CLIENT_SECRET=$secret" || return 1
+  if ! backendServiceAccountRolesMatch "$realm" "$definition"; then
+    echo "  ERROR: the realm-management roles of the aam-backend service account in realm '$realm' do not" >&2
+    echo "  match the definition of aam-services $version after the import." >&2
     return 1
   fi
-  _assignBackendRealmManagementRoles "$realm" "$uuid" >&2 || return 1
-  if ! serviceAccountHasRealmManagementRole "$realm" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; then
-    echo "  ERROR: Could not confirm the realm-management roles (${AAM_BACKEND_REALM_MANAGEMENT_ROLES[*]}) on the aam-backend service account in realm '$realm'." >&2
-    return 1
-  fi
-  echo "$secret"
+  echo "  aam-backend client in realm '$realm' matches the definition of aam-services $version." >&2
+  printf '%s\n' "$secret"
+}
+
+# Print the realm-management roles a definition gives the aam-backend service account, one per line, sorted.
+# Args: definition JSON
+_definitionBackendRoles() {
+  jq -r '.users[] | select(.serviceAccountClientId == "aam-backend")
+         | .clientRoles["realm-management"][]' <<<"$1" 2>/dev/null | sort
+}
+
+# Returns 0 if the aam-backend service account holds exactly the realm-management roles of the definition.
+# Checked on the direct role mappings, not the composites: the point of the import is also that roles older
+# setup scripts granted (manage-realm, query-users) are gone, and a composite check would never see that.
+# Args: realm, definition JSON
+backendServiceAccountRolesMatch() {
+  local realm="$1" definition="$2" clientUuid userId mgmtUuid mappings actual expected
+  expected=$(_definitionBackendRoles "$definition")
+  [ -n "$expected" ] || return 1
+  clientUuid=$(getKeycloakClientUuid "$realm" aam-backend) || return 1
+  userId=$(kcApi GET "$realm/clients/$clientUuid/service-account-user" | jq -r '.id // empty' 2>/dev/null)
+  [ -n "$userId" ] || return 1
+  mgmtUuid=$(getKeycloakClientUuid "$realm" realm-management) || return 1
+  mappings=$(kcApi GET "$realm/users/$userId/role-mappings/clients/$mgmtUuid") || return 1
+  actual=$(jq -r '.[].name' <<<"$mappings" 2>/dev/null | sort)
+  [ "$actual" = "$expected" ]
 }
 
 # Returns 0 if the aam-backend service account has all the given (effective) realm-management roles, else 1.
+# "Has at least", for callers that only depend on a single role; the full set is checked against the
+# definition by backendServiceAccountRolesMatch.
 # Args: realm, roleName...
 serviceAccountHasRealmManagementRole() {
   local realm="$1"
@@ -214,44 +357,6 @@ ensureBackendKeycloakAdminConfig() {
   upsertEnv "KEYCLOAK_CLIENTSECRET" "$clientSecret" "$appEnvFile" || return 1
 }
 
-# Assign AAM_BACKEND_REALM_MANAGEMENT_ROLES and the "roles" client scope (for role claims in the access token)
-# to a client's service account. Args: realm, client uuid
-_assignBackendRealmManagementRoles() {
-  local realm="$1" clientUuid="$2" userId mgmtUuid
-  userId=$(kcApi GET "$realm/clients/$clientUuid/service-account-user" | jq -r '.id // empty' 2>/dev/null)
-  if [ -z "$userId" ]; then
-    echo "  ERROR: Could not get the service account user of the aam-backend client in realm '$realm'."
-    return 1
-  fi
-  if ! mgmtUuid=$(getKeycloakClientUuid "$realm" realm-management); then
-    echo "  ERROR: Could not find the realm-management client in realm '$realm'."
-    return 1
-  fi
-
-  local rolePayload="[]" roleName roleJson
-  for roleName in "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; do
-    if roleJson=$(kcApi GET "$realm/clients/$mgmtUuid/roles/$roleName"); then
-      rolePayload=$(echo "$rolePayload" | jq --argjson role "$roleJson" '. + [$role]')
-    else
-      echo "  WARNING: Could not resolve realm-management role '$roleName' in realm '$realm'."
-    fi
-  done
-  if ! kcApi POST "$realm/users/$userId/role-mappings/clients/$mgmtUuid" "$rolePayload" >/dev/null; then
-    echo "  ERROR: Failed to assign realm-management roles to the aam-backend service account in realm '$realm'."
-    return 1
-  fi
-  echo "  Ensured realm-management roles on the aam-backend service account: ${AAM_BACKEND_REALM_MANAGEMENT_ROLES[*]}."
-
-  local rolesScopeUuid
-  rolesScopeUuid=$(kcApi GET "$realm/client-scopes" | jq -r '.[] | select(.name == "roles") | .id // empty' 2>/dev/null)
-  if [ -n "$rolesScopeUuid" ] \
-    && kcApi PUT "$realm/clients/$clientUuid/default-client-scopes/$rolesScopeUuid" >/dev/null; then
-    echo "  Ensured 'roles' client scope on the aam-backend client."
-  else
-    echo "  WARNING: Could not assign the 'roles' client scope in realm '$realm'."
-  fi
-}
-
 ##############################
 # Carbone render client helpers
 ##############################
@@ -262,51 +367,38 @@ CARBONE_REALM="aam-platform"
 # oauth2-proxy client ID — render clients must include this in their token audience.
 OAUTH2_PROXY_CLIENT_ID="carbone-oauth2-proxy"
 
-# Ensure a render client in the central aam-platform realm, with an audience mapper that puts
-# OAUTH2_PROXY_CLIENT_ID in its access tokens (oauth2-proxy rejects tokens without it). Idempotent.
-# Prints the client secret. Args: realm, clientId
+# Ensure an instance's render client in the shared platform realm matches the definition the given
+# aam-services release ships, including the audience mapper that the oauth2-proxy in front of Carbone needs
+# (it rejects a token without OAUTH2_PROXY_CLIENT_ID in its audience). Idempotent, and it keeps the secret of
+# an existing client. The definition builds the client id as "carbone-<instance>".
+# Prints the client secret. Args: realm, instance name, aam-services version
 ensureCarboneRenderClient() {
-  local realm="$1" clientId="$2" uuid secret
-  uuid=$(_ensureServiceAccountClient "$realm" "$clientId") || return 1
-  if ! secret=$(getKeycloakClientSecret "$realm" "$uuid"); then
-    echo "  ERROR: Failed to get the secret of the $clientId client in realm '$realm'." >&2
+  local realm="$1" instance="$2" version="$3" clientId="carbone-$2" definition secret
+  definition=$(getKeycloakClientDefinition "$version" "$CARBONE_CLIENT_DEFINITION") || return 1
+  secret=$(_keycloakClientSecretOrNew "$realm" "$clientId") || return 1
+
+  importKeycloakClientDefinition "$realm" "$definition" \
+    "CARBONE_REALM=$realm" "INSTANCE_NAME=$instance" "CARBONE_CLIENT_SECRET=$secret" \
+    "OAUTH2_PROXY_CLIENT_ID=$OAUTH2_PROXY_CLIENT_ID" || return 1
+  if ! carboneClientHasAudienceMapper "$realm" "$clientId"; then
+    echo "  ERROR: the $clientId client in realm '$realm' has no audience mapper for" >&2
+    echo "  $OAUTH2_PROXY_CLIENT_ID after the import; Carbone would reject its tokens." >&2
     return 1
   fi
-  _ensureAudienceMapper "$realm" "$uuid" >&2 || return 1
-  echo "$secret"
+  echo "  $clientId client in realm '$realm' matches the definition of aam-services $version." >&2
+  printf '%s\n' "$secret"
 }
 
-# Ensure the audience mapper for OAUTH2_PROXY_CLIENT_ID on a client (checked by mapper name).
-# Args: realm, client uuid
-_ensureAudienceMapper() {
-  local realm="$1" clientUuid="$2" mapperName="audience-${OAUTH2_PROXY_CLIENT_ID}" mappers
-  if ! mappers=$(kcApi GET "$realm/clients/$clientUuid/protocol-mappers/models"); then
-    echo "  ERROR: could not read the protocol mappers of the client."
-    return 1
-  fi
-  if echo "$mappers" | jq -e --arg n "$mapperName" 'any(.[]; .name == $n)' >/dev/null 2>&1; then
-    echo "  audience mapper already present on client."
-    return 0
-  fi
-
-  local mapper
-  mapper=$(jq -n --arg name "$mapperName" --arg audience "$OAUTH2_PROXY_CLIENT_ID" '{
-    name: $name,
-    protocol: "openid-connect",
-    protocolMapper: "oidc-audience-mapper",
-    config: {
-      "included.client.audience": $audience,
-      "id.token.claim": "false",
-      "access.token.claim": "true",
-      "introspection.token.claim": "true",
-      "userinfo.token.claim": "false"
-    }
-  }')
-  if ! kcApi POST "$realm/clients/$clientUuid/protocol-mappers/models" "$mapper" >/dev/null; then
-    echo "  ERROR: failed to add the audience mapper."
-    return 1
-  fi
-  echo "  Added audience mapper for $OAUTH2_PROXY_CLIENT_ID."
+# Returns 0 if the client has a mapper putting OAUTH2_PROXY_CLIENT_ID into the token audience (checked by
+# what the mapper does, not by its name). Args: realm, clientId
+carboneClientHasAudienceMapper() {
+  local realm="$1" uuid mappers
+  uuid=$(getKeycloakClientUuid "$realm" "$2") || return 1
+  mappers=$(kcApi GET "$realm/clients/$uuid/protocol-mappers/models") || return 1
+  jq -e --arg a "$OAUTH2_PROXY_CLIENT_ID" 'any(.[];
+      .protocolMapper == "oidc-audience-mapper"
+      and .config["included.client.audience"] == $a
+      and .config["access.token.claim"] == "true")' <<<"$mappers" >/dev/null 2>&1
 }
 
 ##############################

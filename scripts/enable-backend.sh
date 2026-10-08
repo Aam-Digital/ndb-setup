@@ -4,6 +4,10 @@ usage() {
 Enable aam-backend-service for an instance: write its application.env, create the Keycloak clients it needs
 (including carbone-<instance> in the central aam-platform realm for the Carbone PDF render API) and start it.
 
+The Keycloak clients are imported from the definitions the instance's own aam-services release ships in its
+image (/opt/app/keycloak/), with keycloak-config-cli, so the permissions of the aam-backend client are the
+ones the version it runs needs. This needs docker and an aam-services release that carries them.
+
 Usage:
   ./enable-backend.sh <instance> [--repair-only] [--skip-restart]
 
@@ -11,8 +15,8 @@ Usage:
                   doesn't. Without it, an instance with replication-backend but no backend gets the
                   backend newly enabled - a profile change, not a repair.
 
-Requires replication-backend, the canonical docker-compose.yml (run update-compose.sh first) and the
-aam-platform realm on the central Keycloak.
+Requires replication-backend, the canonical docker-compose.yml (run update-compose.sh first), the
+aam-platform realm on the central Keycloak, and the instance's own realm (it is never created here).
 
 Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set; see setup.example.env):
   CARBONE_HOST, KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD, SENTRY_AUTH_TOKEN, SENTRY_DSN_BACKEND
@@ -20,7 +24,11 @@ Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set; see 
 Re-running it on an instance with the backend already enabled only repairs its config (Keycloak admin access,
 replication-backend's permission-check client and CouchDB credentials, the Carbone render API client, and
 dropping the dead PostgreSQL/RabbitMQ keys of backends that still had their own database) and recreates the
-services whose config changed. For all instances with the backend, either form - the first selects them by
+services whose config changed. Client secrets are never rotated. Run it again after raising
+AAM_BACKEND_SERVICE_VERSION, so the aam-backend client picks up the permissions the new release needs. A
+re-run imports the definitions only when something above is out of date, e.g. the service account's
+realm-management roles differ from the definition; other changes to a definition reach existing clients only
+with such an import. For all instances with the backend, either form - the first selects them by
 profile, the second lets every instance decide for itself, so a run that forgets the filter still repairs
 instead of enabling:
   ./for-each-instance.sh --only backend ./enable-backend.sh
@@ -217,6 +225,12 @@ repairBackendConfig() {
   couchdbClientCredentialsUpToDate "$appEnv" "$envFile" "$path" || fixCouchdbCredentials=true
   renderApiConfigUpToDate "$appEnv" || fixRenderApi=true
   legacyStorageConfigRemoved "$appEnv" "$envFile" || fixLegacyStorage=true
+
+  # The Keycloak clients come from the definitions the instance's own aam-services release ships, so the
+  # roles the aam-backend service account must hold follow the version it runs. Only those roles are compared
+  # with the definition; the rest of the clients' settings are imported along whenever a repair imports.
+  local backendVersion definition=""
+  backendVersion=$(getInstanceBackendVersion "$envFile")
   # the aam-backend client lives in the instance's realm, which must be on the central Keycloak
   if ! requireCentralKeycloak "$envFile"; then
     failed=true
@@ -226,17 +240,20 @@ repairBackendConfig() {
   else
     local keycloakSecret
     keycloakSecret=$(getKeycloakBackendClientSecret "$org")
-    if [ -z "$keycloakSecret" ] \
+    if ! definition=$(getKeycloakClientDefinition "$backendVersion" "$AAM_BACKEND_CLIENT_DEFINITION"); then
+      echo "ERROR: cannot check the Keycloak clients of '$org' against aam-services $backendVersion."
+      failed=true
+    elif [ -z "$keycloakSecret" ] \
       || isPlaceholderValue "$(getVar "$appEnv" KEYCLOAK_SERVERURL)" \
       || [ "$(getVar "$appEnv" KEYCLOAK_REALM)" != "$org" ] \
       || [ "$(getVar "$appEnv" KEYCLOAK_CLIENTID)" != "aam-backend" ] \
       || [ "$(getVar "$appEnv" KEYCLOAK_CLIENTSECRET)" != "$keycloakSecret" ] \
-      || ! serviceAccountHasRealmManagementRole "$org" "${AAM_BACKEND_REALM_MANAGEMENT_ROLES[@]}"; then
+      || ! backendServiceAccountRolesMatch "$org" "$definition"; then
       fixKeycloakAdmin=true
     fi
-    if [ -z "$keycloakSecret" ] \
+    if [ -n "$definition" ] && { [ -z "$keycloakSecret" ] \
       || isPlaceholderValue "$(getVar "$envFile" REPLICATION_BACKEND_KEYCLOAK_CLIENT_ID)" \
-      || [ "$(getVar "$envFile" REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET)" != "$keycloakSecret" ]; then
+      || [ "$(getVar "$envFile" REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET)" != "$keycloakSecret" ]; }; then
       fixReplicationClient=true
     fi
   fi
@@ -259,13 +276,13 @@ repairBackendConfig() {
   # Keycloak first, so a failure does not leave a config pointing at a client without the needed access.
   local backendSecret="" carboneSecret=""
   if $fixKeycloakAdmin || $fixReplicationClient; then
-    if ! backendSecret=$(ensureKeycloakBackendClient "$org"); then
+    if ! backendSecret=$(ensureKeycloakBackendClient "$org" "$backendVersion"); then
       echo "ERROR: Could not set up the aam-backend Keycloak client for '$org'."
       fixKeycloakAdmin=false fixReplicationClient=false failed=true
     fi
   fi
   if $fixRenderApi; then
-    if ! checkCarbonePrerequisites || ! carboneSecret=$(ensureCarboneRenderClient "$CARBONE_REALM" "carbone-${org}"); then
+    if ! checkCarbonePrerequisites || ! carboneSecret=$(ensureCarboneRenderClient "$CARBONE_REALM" "$org" "$backendVersion"); then
       echo "ERROR: Could not set up the Carbone render client for '$org'."
       fixRenderApi=false failed=true
     fi
@@ -399,13 +416,13 @@ fi
 template=$(downloadBackendConfigTemplate "$backendVersion") || exit 1
 
 carboneClientId="carbone-${org}"
-if ! carboneSecret=$(ensureCarboneRenderClient "$CARBONE_REALM" "$carboneClientId"); then
+if ! carboneSecret=$(ensureCarboneRenderClient "$CARBONE_REALM" "$org" "$backendVersion"); then
   echo "ERROR: Could not set up the Carbone render client for '$org'. Abort."
   exit 1
 fi
 # the aam-backend client: replication-backend's permission checks and the backend's Keycloak admin access
 # (e.g. provisioning the client scopes of its API)
-if ! backendSecret=$(ensureKeycloakBackendClient "$org"); then
+if ! backendSecret=$(ensureKeycloakBackendClient "$org" "$backendVersion"); then
   echo "ERROR: Could not set up the aam-backend Keycloak client for '$org'. Abort."
   exit 1
 fi

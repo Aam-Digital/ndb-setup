@@ -1,19 +1,20 @@
 #!/bin/bash
 usage() {
   cat <<'EOF'
-Create the initial admin user of an instance: in Keycloak (with all realm roles, email 2FA and a verification
-email) and as a User document in CouchDB.
+Create the initial admin user of an instance in Keycloak (with all realm roles, email 2FA and a verification
+email). The app creates and links the user's User entity itself on first startup.
 
 Usage:
-  ./create-initial-user.sh <instance> [email] [name] [--skip-restart]
+  ./create-initial-user.sh <instance> [email] [--skip-restart]
 
-Asks for email and name if they are not given.
+Asks for the email if it is not given. The email is also used as the Keycloak username. A third argument (the
+former user name) is still accepted and ignored.
 
 Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set):
   KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD
 
-Safe to re-run: an existing Keycloak user or CouchDB document is reused, and the verification email is only
-sent when the Keycloak user is created.
+Safe to re-run: an existing Keycloak user with that email is reused, and the verification email is only sent
+when the Keycloak user is created.
 EOF
   exit "${1:-1}"
 }
@@ -24,7 +25,6 @@ EOF
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
 source "$scriptDir/lib/keycloak.sh"
-source "$scriptDir/lib/couchdb.sh"
 # --skip-restart is accepted (and ignored: this script changes no running service), stripped from
 # "$@" so the positional args stay intact
 source "$scriptDir/lib/skip-restart.sh"
@@ -46,16 +46,12 @@ else
   echo "Email address of initial user"
   read -r userEmail
 fi
-if [ -n "$3" ]; then
-  userName="$3"
-else
-  echo "Name of initial user"
-  read -r userName
-fi
-if [ -z "$userEmail" ] || [ -z "$userName" ]; then
-  echo "ERROR: both email and name are required. Abort."
+if [ -z "$userEmail" ]; then
+  echo "ERROR: an email address is required. Abort."
   exit 1
 fi
+# Keycloak stores usernames lowercased
+userName=$(echo "$userEmail" | tr '[:upper:]' '[:lower:]')
 
 requireConfig KEYCLOAK_HOST
 requireConfig KEYCLOAK_USER
@@ -70,14 +66,15 @@ if ! getKeycloakToken; then
   exit 1
 fi
 
-userId=$(kcApi GET "$org/users?exact=true&username=$(jq -rn --arg v "$userName" '$v|@uri')" | jq -r '.[0].id // empty')
+# look up by email, so a user created earlier with a different username is reused as well
+userId=$(kcApi GET "$org/users?exact=true&email=$(jq -rn --arg v "$userEmail" '$v|@uri')" | jq -r '.[0].id // empty')
 userCreated=false
 if [ -n "$userId" ]; then
-  echo "Keycloak user '$userName' already exists ($userId), reusing."
+  echo "Keycloak user with email '$userEmail' already exists ($userId), reusing."
 else
   echo "Creating Keycloak user '$userName'..."
-  newUserPayload=$(jq -n --arg username "$userName" --arg email "$userEmail" --arg exactUsername "User:$userName" \
-    '{username: $username, enabled: true, email: $email, attributes: {exact_username: [$exactUsername]}, emailVerified: false, credentials: [], requiredActions: ["UPDATE_PASSWORD", "VERIFY_EMAIL"]}')
+  newUserPayload=$(jq -n --arg username "$userName" --arg email "$userEmail" \
+    '{username: $username, enabled: true, email: $email, emailVerified: false, credentials: [], requiredActions: ["UPDATE_PASSWORD", "VERIFY_EMAIL"]}')
   userId=$(kcCreate "$org/users" "$newUserPayload")
   userCreated=true
 fi
@@ -110,24 +107,5 @@ if [ "$userCreated" = true ]; then
   kcApi PUT "$org/users/$userId/execute-actions-email?client_id=app" '["VERIFY_EMAIL"]' >/dev/null \
     || echo "  WARNING: sending the verification email failed."
 fi
-
-##############################
-# CouchDB user document
-##############################
-
-userDocId="User:$userName"
-encodedUserDocId=$(jq -rn --arg v "$userDocId" '$v|@uri')
-
-echo "ensure user document in CouchDB..."
-couchdbInitStart || exit 1
-if [ "$(couchdbCurl -o /dev/null -w '%{http_code}' "$DB_LOCAL_URL/app/$encodedUserDocId")" = "200" ]; then
-  echo "  = $userDocId document already exists, keeping it"
-else
-  userDocPayload=$(jq -n --arg name "$userName" '{name: $name}')
-  couchdbCurl -X PUT -H 'Content-Type: application/json' -d "$userDocPayload" \
-    "$DB_LOCAL_URL/app/$encodedUserDocId" >/dev/null
-  echo "  + created $userDocId document"
-fi
-couchdbInitStop
 
 echo "Initial user '$userName' is set up for '$org'."

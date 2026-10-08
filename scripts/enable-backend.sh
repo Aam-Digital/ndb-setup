@@ -5,8 +5,8 @@ Enable aam-backend-service for an instance: write its application.env, create th
 (including carbone-<instance> in the central aam-platform realm for the Carbone PDF render API) and start it.
 
 The Keycloak clients are imported from the definitions the instance's own aam-services release ships in its
-image (/opt/app/keycloak/), with keycloak-config-cli, so each instance gets the client settings and
-permissions of exactly the version it runs. This needs docker and an aam-services release that carries them.
+image (/opt/app/keycloak/), with keycloak-config-cli, so the permissions of the aam-backend client are the
+ones the version it runs needs. This needs docker and an aam-services release that carries them.
 
 Usage:
   ./enable-backend.sh <instance> [--skip-restart]
@@ -20,8 +20,10 @@ Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set; see 
 Re-running it on an instance with the backend already enabled only repairs its config (Keycloak admin access,
 replication-backend's permission-check client and CouchDB credentials, the Carbone render API client) and
 recreates the services whose config changed. Client secrets are never rotated. Run it again after raising
-AAM_BACKEND_SERVICE_VERSION, so the clients pick up the permissions the new release needs. For all instances
-with the backend:
+AAM_BACKEND_SERVICE_VERSION, so the aam-backend client picks up the permissions the new release needs. A
+re-run imports the definitions only when something above is out of date, e.g. the service account's
+realm-management roles differ from the definition; other changes to a definition reach existing clients only
+with such an import. For all instances with the backend:
   ./for-each-instance.sh --only backend ./enable-backend.sh
 EOF
   exit "${1:-1}"
@@ -163,8 +165,9 @@ repairBackendConfig() {
   couchdbClientCredentialsUpToDate "$appEnv" "$envFile" "$path" || fixCouchdbCredentials=true
   renderApiConfigUpToDate "$appEnv" || fixRenderApi=true
 
-  # The Keycloak clients come from the definitions the instance's own aam-services release ships, so what
-  # "correct" means follows the version it runs.
+  # The Keycloak clients come from the definitions the instance's own aam-services release ships, so the
+  # roles the aam-backend service account must hold follow the version it runs. Only those roles are compared
+  # with the definition; the rest of the clients' settings are imported along whenever a repair imports.
   local backendVersion definition=""
   backendVersion=$(getInstanceBackendVersion "$envFile")
   # the aam-backend client lives in the instance's realm, which must be on the central Keycloak

@@ -132,9 +132,11 @@ AAM_SERVICES_KEYCLOAK_DIR="/opt/app/keycloak"
 AAM_BACKEND_CLIENT_DEFINITION="aam-backend-client.json"
 CARBONE_CLIENT_DEFINITION="carbone-render-client.json"
 
-# keycloak-config-cli, pinned to the combination aam-services verified the definitions with (6.5.1 against
-# the Keycloak 26 line). Unlike Keycloak's partial import, it also brings an existing client up to date.
-KEYCLOAK_CONFIG_CLI_IMAGE="adorsys/keycloak-config-cli:6.5.1-26"
+# keycloak-config-cli 6.5.1, the version aam-services verified the definitions with. The second half of the
+# tag is the Keycloak it is built against: the one the central Keycloak runs, as for the realm configuration
+# jobs of aam-cloud-infrastructure, which import into the same Keycloak. Unlike Keycloak's partial import, it
+# also brings an existing client up to date.
+KEYCLOAK_CONFIG_CLI_IMAGE="adorsys/keycloak-config-cli:6.5.1-26.5.5"
 
 # Print a client definition out of the aam-services image of a version. Fails when the image does not carry
 # it, which is the case for every release older than the one that added them.
@@ -142,28 +144,36 @@ KEYCLOAK_CONFIG_CLI_IMAGE="adorsys/keycloak-config-cli:6.5.1-26"
 getKeycloakClientDefinition() {
   # NB: a later assignment in the same `local` must not reference an earlier one - it would expand to the
   # enclosing scope's value (or empty), not the one being set here.
-  local version="$1" file="$2" definition image errors status=0
+  local version="$1" file="$2" definition="" image dir container status=0
   image="ghcr.io/aam-digital/aam-services:$version"
-  errors=$(mktemp) || return 1
-  # stdout only: docker writes "Unable to find image ... locally" and the pull progress to stderr, which
-  # would end up in front of the JSON. No `docker pull` here - it would move a floating tag like "latest"
-  # away from the image the instance actually runs.
-  definition=$(docker run --rm --entrypoint cat "$image" "$AAM_SERVICES_KEYCLOAK_DIR/$file" 2>"$errors") || status=$?
+  dir=$(mktemp -d) || return 1
+  # Copied out of a container that is created but never started, so nothing from the image runs and this does
+  # not depend on the tools the image contains. `docker create` pulls an image that is not there (progress on
+  # stderr). No `docker pull` here - it would move a floating tag like "latest" away from the image the
+  # instance actually runs.
+  if container=$(docker create "$image" 2>"$dir/errors"); then
+    docker cp "$container:$AAM_SERVICES_KEYCLOAK_DIR/$file" "$dir/definition.json" 2>>"$dir/errors" || status=$?
+    docker rm "$container" >/dev/null 2>&1
+    [ "$status" -ne 0 ] || definition=$(cat "$dir/definition.json")
+  else
+    status=1
+  fi
   if [ "$status" -ne 0 ] || ! jq -e 'has("clients") and has("users")' <<<"$definition" >/dev/null 2>&1; then
     echo "  ERROR: could not read $AAM_SERVICES_KEYCLOAK_DIR/$file from $image:" >&2
-    sed 's/^/    /' "$errors" >&2
+    sed 's/^/    /' "$dir/errors" >&2
     echo "  aam-services releases before the Keycloak client definitions were added do not ship it, but" >&2
     echo "  check the message above - a registry, network or tag problem looks the same from here." >&2
-    rm -f "$errors"
+    rm -rf "$dir"
     return 1
   fi
-  rm -f "$errors"
+  rm -rf "$dir"
   printf '%s\n' "$definition"
 }
 
 # Import a client definition into an EXISTING realm with keycloak-config-cli, which makes the client match
 # the file (also removing what older setup scripts granted it). The definition's variables and the admin
-# credentials are passed in a file, never on the command line, so no secret shows up in `ps`.
+# credentials reach the container through the environment of `docker run` (`-e NAME` without a value), never
+# on a command line or in a file, so no secret shows up in `ps` or is left behind by an interrupted run.
 # Args: realm, definition JSON, NAME=VALUE of a variable the definition substitutes...
 importKeycloakClientDefinition() {
   local realm="$1" definition="$2"
@@ -178,35 +188,46 @@ importKeycloakClientDefinition() {
     return 1
   fi
 
+  # the definition itself holds no secret, only $(env:NAME) placeholders
   local dir
   dir=$(mktemp -d) || return 1
   printf '%s\n' "$definition" >"$dir/definition.json" || { rm -rf "$dir"; return 1; }
-  {
-    printf 'KEYCLOAK_URL=https://%s\n' "$KEYCLOAK_HOST"
-    printf 'KEYCLOAK_USER=%s\n' "$KEYCLOAK_USER"
-    printf 'KEYCLOAK_PASSWORD=%s\n' "$KEYCLOAK_PASSWORD"
-    printf 'IMPORT_FILES_LOCATIONS=/definitions/definition.json\n'
-    # the definitions use $(env:NAME) placeholders; an unset one fails the import rather than importing ""
-    printf 'IMPORT_VARSUBSTITUTION_ENABLED=true\n'
-    # Clients are the only resource type the definitions declare, so they are the only one managed. Without
-    # no-delete, an import removes the clients earlier imports of the same realm created: in the shared
-    # platform realm every instance's import would delete the render clients of all the others.
-    printf 'IMPORT_MANAGED_CLIENT=no-delete\n'
-    # The cache skips a file whose checksum is unchanged, so a client changed by hand would never be
-    # repaired - and the checksum lives on the realm, which instances share for the render clients.
-    printf 'IMPORT_CACHE_ENABLED=false\n'
-    # Without remote state, keycloak-config-cli records no list of "the clients I created" on the realm.
-    # Nothing is deleted anyway (clients are the only managed type here, and they are no-delete), and the
-    # shared platform realm does not end up with a state entry that another tool's import could act on.
-    printf 'IMPORT_REMOTE_STATE_ENABLED=false\n'
-    printf '%s\n' "$@"
-  } >"$dir/vars.env" || { rm -rf "$dir"; return 1; }
 
+  local passed=() var
+  for var in "$@"; do
+    passed+=(-e "${var%%=*}")
+  done
   local output status=0
-  output=$(docker run --rm \
-    -v "$dir/definition.json:/definitions/definition.json:ro" \
-    --env-file "$dir/vars.env" \
-    "$KEYCLOAK_CONFIG_CLI_IMAGE" 2>&1) || status=$?
+  # exported in this subshell only
+  output=$(
+    export KEYCLOAK_URL="https://$KEYCLOAK_HOST" KEYCLOAK_USER KEYCLOAK_PASSWORD
+    for var in "$@"; do
+      export "${var?}"
+    done
+    # IMPORT_VARSUBSTITUTION_ENABLED: the definitions use $(env:NAME) placeholders; an unset one fails the
+    #   import rather than importing "".
+    # IMPORT_MANAGED_CLIENT=no-delete: clients are the only resource type the definitions declare, so they are
+    #   the only one managed. Without no-delete, an import removes the clients earlier imports of the same realm
+    #   created: in the shared platform realm every instance's import would delete the render clients of all
+    #   the others.
+    # IMPORT_CACHE_ENABLED=false: the cache skips a file whose checksum is unchanged, so a client changed by
+    #   hand would never be repaired - and the checksum lives on the realm, which instances share for the
+    #   render clients.
+    # IMPORT_REMOTE_STATE_ENABLED=false: with remote state, keycloak-config-cli records "the clients I created"
+    #   on the realm, and the next import in default managed mode deletes those it does not declare itself -
+    #   such as the jobs of aam-cloud-infrastructure that keep the realms' shared configuration up to date in
+    #   the same Keycloak, which would delete aam-backend.
+    docker run --rm \
+      -v "$dir/definition.json:/definitions/definition.json:ro" \
+      -e KEYCLOAK_URL -e KEYCLOAK_USER -e KEYCLOAK_PASSWORD \
+      -e IMPORT_FILES_LOCATIONS=/definitions/definition.json \
+      -e IMPORT_VARSUBSTITUTION_ENABLED=true \
+      -e IMPORT_MANAGED_CLIENT=no-delete \
+      -e IMPORT_CACHE_ENABLED=false \
+      -e IMPORT_REMOTE_STATE_ENABLED=false \
+      "${passed[@]}" \
+      "$KEYCLOAK_CONFIG_CLI_IMAGE" 2>&1
+  ) || status=$?
   rm -rf "$dir"
   if [ "$status" -ne 0 ]; then
     echo "  ERROR: keycloak-config-cli failed to import into realm '$realm':" >&2
@@ -220,10 +241,25 @@ importKeycloakClientDefinition() {
 # break the services that already hold it (aam-backend-service, replication-backend).
 # Args: realm, clientId
 _keycloakClientSecretOrNew() {
-  local realm="$1" clientId="$2" uuid secret
-  if ! uuid=$(getKeycloakClientUuid "$realm" "$clientId"); then
+  local realm="$1" clientId="$2" clients uuid secret
+  # Only a lookup that succeeded and found nothing means the client is new. A failed one (Keycloak or its
+  # proxy briefly down, a refused token, a reply that is not the client list) must not: a new secret imported
+  # over the live client would lock out the services that hold the current one.
+  if ! clients=$(kcApi GET "$realm/clients?clientId=$clientId") \
+    || ! uuid=$(jq -er 'if type == "array" then .[0].id // "" else error end' <<<"$clients" 2>/dev/null); then
+    echo "  ERROR: failed to look up the $clientId client in realm '$realm'." >&2
+    return 1
+  fi
+  if [ -z "$uuid" ]; then
     echo "  $clientId does not exist in realm '$realm' yet, creating it with a new secret." >&2
-    generate_password
+    # 256 bits from the kernel's CSPRNG, as hex: it goes into the JSON of the definition unescaped.
+    # (Not generate_password, whose $RANDOM is not a cryptographic generator.)
+    secret=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+    if [ "${#secret}" -ne 64 ]; then
+      echo "  ERROR: could not generate a secret for the $clientId client." >&2
+      return 1
+    fi
+    printf '%s\n' "$secret"
     return 0
   fi
   if ! secret=$(getKeycloakClientSecret "$realm" "$uuid"); then

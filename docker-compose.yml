@@ -108,17 +108,14 @@ services:
       # to this over internal_aam.
       - internal_aam
     depends_on:
-      # wait until CouchDB and RabbitMQ actually accept connections, not just that the containers started -
-      # otherwise the listener containers race broker readiness on boot and flood Sentry with
-      # "Failed to check/redeclare auto-delete queue(s)." errors
+      # wait until CouchDB actually accepts connections, not just that the container started -
+      # the backend keeps all its state there (change-detection cursors, push device
+      # registrations, auth sessions) and polls the change feed on a schedule, so a race with
+      # CouchDB readiness on boot shows up as failing jobs rather than a clean retry.
       couchdb:
         condition: service_healthy
       replication-backend:
         condition: service_started
-      aam-backend-service-db:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
     volumes:
       - ./storage/aam-backend-service/data:/aam-backend-service/bin/data
       - ./config/aam-backend-service/templates:/opt/app/templates:ro
@@ -135,42 +132,6 @@ services:
       - full-stack
       - full-stack-without-sqs
 
-  aam-backend-service-db:
-    image: postgres:16.5-bookworm
-    container_name: ${INSTANCE_NAME}-aam-backend-service-db
-    networks:
-      - internal_aam
-    volumes:
-      - ./storage/aam-backend-service/postgresql-data:/var/lib/postgresql/data
-    environment:
-      POSTGRES_DB: aam-backend-service
-      POSTGRES_USER:  ${COUCHDB_USER}
-      POSTGRES_PASSWORD: ${COUCHDB_PASSWORD}
-    restart: unless-stopped
-    profiles:
-      - full-stack
-      - full-stack-without-sqs
-
-  # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" or "full-stack-without-sqs" is set in the `.env` file
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: ${INSTANCE_NAME}-rabbitmq
-    networks:
-      - internal_aam
-    healthcheck:
-      # verifies the AMQP listener is actually accepting connections, not just that the process started
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
-      interval: 10s
-      timeout: 10s
-      retries: 12
-      start_period: 30s
-    restart: unless-stopped
-    volumes:
-      - ./storage/rabbitmq/data:/var/lib/rabbitmq/
-      - ./storage/rabbitmq/log:/var/log/rabbitmq
-    profiles:
-      - full-stack
-      - full-stack-without-sqs
 
   # (optional) needed for aam-backend-service. Only deployed if "COMPOSE_PROFILES" is "full-stack" is set in the `.env` file
   # Note: SQS is excluded from the full-stack-without-sqs profile (which skips the private SQS image)

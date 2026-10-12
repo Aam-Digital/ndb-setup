@@ -19,6 +19,9 @@ over. The refusal names the release to go via. The instance has to be running fo
 its container is the only evidence the old version really started; updates within a major don't check
 that. Pin the version in .env, since a floating tag can't be checked either.
 
+After raising aam-services, run ./enable-backend.sh for the instance: the Keycloak clients are imported from
+the definitions of the release it runs, and a release needing a new permission only gets it that way.
+
 Example: ./update-version.sh acme ndb-core 3.5.0 3.6.0
 For all instances: ./for-each-instance.sh ./update-version.sh <service> <old_version> <new_version>
 EOF

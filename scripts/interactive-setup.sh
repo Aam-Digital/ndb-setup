@@ -6,11 +6,11 @@ create-keycloak-realm.sh, create-couchdb.sh, create-initial-user.sh, enable-back
 enable-sentry.sh. The instance is restarted once at the end.
 
 Usage:
-  ./interactive-setup.sh [name] [baseConfig] [locale] [userEmail] [userName] [withReplicationBackend]
+  ./interactive-setup.sh [name] [baseConfig] [locale] [userEmail] [unused] [withReplicationBackend]
                          [withBackend] [unused] [enableSentry] [--skip-restart]
 
 Asks for every argument that is not given (y/n for the with*/enable* ones).
-Example: ./interactive-setup.sh acme basic de "admin@example.com" "Admin Name" y y y y
+Example: ./interactive-setup.sh acme basic de "admin@example.com" "" y y y y
 
 Requires BWS_ACCESS_TOKEN (Bitwarden), unlike the individual scripts. Install the bws CLI with
 ./install-dependencies.sh.
@@ -18,10 +18,11 @@ EOF
   exit "${1:-1}"
 }
 
+# The 5th argument used to be the initial user's name and is ignored since the email is used as the username.
 # The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was removed.
 # The slot is kept rather than closed because the argument line is assembled by the external deployer-backend
 # service (see deployer/), whose code is not in this repo - so callers may still be passing <enableSentry> in
-# position 9.
+# position 9. The same applies to the 5th slot.
 
 ##############################
 # setup
@@ -118,13 +119,6 @@ if [ "$app" == 0 ]; then
     echo "Email address of initial user"
     read -r userEmail
   fi
-
-  if [ -n "$5" ]; then
-    userName="$5"
-  else
-    echo "Name of initial user"
-    read -r userName
-  fi
 fi
 
 # permission backend (replication-backend) — only ask if not already deployed
@@ -161,7 +155,7 @@ if [ "$app" == 0 ]; then
     "$scriptDir/create-couchdb.sh" "$org" ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   fi
 
-  "$scriptDir/create-initial-user.sh" "$org" "$userEmail" "$userName" || exit 1
+  "$scriptDir/create-initial-user.sh" "$org" "$userEmail" || exit 1
 fi
 
 # switch on the permission backend profile

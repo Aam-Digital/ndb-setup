@@ -171,7 +171,7 @@ fi
 # loudly, because a lingering 403 is otherwise silent.
 keycloakRolesEnsured=false
 if [ "$adminCredsAvailable" == "true" ]; then
-  if secret=$(ensureKeycloakBackendClient "$org"); then
+  if secret=$(ensureKeycloakBackendClient "$org" "$(getInstanceBackendVersion "$path/.env")"); then
     keycloakClientSecret="$secret"
     # keep .env in sync — the replication-backend uses the same client
     if grep -q '^REPLICATION_BACKEND_KEYCLOAK_CLIENT_SECRET=' "$path/.env"; then

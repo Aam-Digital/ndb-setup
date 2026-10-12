@@ -14,6 +14,18 @@ The instance's asset volume mounts (assets/, e.g. firebase-config.json) are kept
 values the new file relies on (DB_ENTRYPOINT_URL with replication-backend, API_BACKEND_URL with the backend),
 so /db and /api keep going through those services.
 
+The current canonical file no longer deploys the PostgreSQL and RabbitMQ containers of
+aam-backend-service; the redeploy removes them. A full-stack instance is therefore only updated once
+AAM_BACKEND_SERVICE_VERSION is pinned (not `latest`) and on a major that no longer needs them -
+otherwise the update is refused and the instance left untouched, so update the backend first:
+  ./for-each-instance.sh --only backend ./update-version.sh aam-services <old> <new>
+update-version.sh enforces how that update may cross a major boundary (one major at a time, from its
+last release), so follow what it tells you rather than jumping straight to the newest release.
+Their data directories (storage/rabbitmq, storage/aam-backend-service/postgresql-data) are left on disk
+and only reported, so a rollback still finds them; delete them once the instance has settled.
+Afterwards ./for-each-instance.sh --only backend ./enable-backend.sh drops the config keys that go with
+them from application.env.
+
 For all instances: ./for-each-instance.sh ./update-compose.sh [--yes]
 EOF
   exit "${1:-1}"
@@ -74,6 +86,24 @@ composeContainerNames() {
     '
 }
 
+# Report the bind-mounted data of aam-backend-service's removed PostgreSQL and RabbitMQ containers, which
+# `up --remove-orphans` takes the containers away from but leaves on disk. Deliberately only reported, never
+# deleted: a rollback to the previous docker-compose.yml brings those containers back and needs this data,
+# and dropping a database directory is not something this script should do unattended.
+# Args: instance dir
+reportLeftoverBackendStorage() {
+    local dir="$1" instance="${1##*/}" leftovers=() d
+    for d in storage/aam-backend-service/postgresql-data storage/rabbitmq; do
+        [ -d "$dir/$d" ] && leftovers+=("$d")
+    done
+    [ "${#leftovers[@]}" -gt 0 ] || return 0
+    echo "[$instance] note: the removed PostgreSQL/RabbitMQ containers left their data behind:"
+    for d in "${leftovers[@]}"; do
+        echo "[$instance]         $dir/$d"
+    done
+    echo "[$instance]       Nothing reads it any more. Delete it once the instance has settled on the new setup."
+}
+
 # Free container name $2 ahead of `docker compose up` in instance dir $1: remove the compose-managed
 # container holding that name unless it already is the one the current compose config assigns it to
 # (same project and service), which `up` converges on its own. Best-effort, never aborts the run.
@@ -112,6 +142,56 @@ update_instance() {
     if [ ! -f "$target" ]; then
         echo "[$instance] no docker-compose.yml, skipping"
         return 0
+    fi
+
+    # The canonical file no longer deploys aam-backend-service's PostgreSQL and RabbitMQ containers, so the
+    # redeploy below takes them away (as orphans). A backend that still stores its state in PostgreSQL would
+    # come back up crash-looping on an unreachable datasource - and `docker compose up -d` doesn't wait for
+    # the backend to be healthy, so the redeploy would still report success. Refuse before anything is
+    # written, so the instance keeps running on its current config until it has been updated.
+    local backendVersion backendMajor
+    backendVersion=$(getVar "$D/.env" AAM_BACKEND_SERVICE_VERSION)
+    if profileDeploysBackend "$(getVar "$D/.env" COMPOSE_PROFILES)"; then
+        # Unpinned (empty, or the floating `latest` tag) says nothing about what the instance runs, so
+        # ask the running container itself.
+        if ! backendMajor=$(versionMajor "$backendVersion"); then
+            local repo prefix suffix nextMajorLatest lookup
+            IFS='|' read -r repo prefix suffix < <(componentReleaseSource aam-services)
+            if ! backendVersion=$(runningContainerVersion "$(getVar "$D/.env" INSTANCE_NAME)$suffix"); then
+                echo "[$instance] ERROR: AAM_BACKEND_SERVICE_VERSION is not pinned and the running backend's version could"
+                echo "[$instance]        not be read, so it is not verifiable that it can run on this docker-compose.yml"
+                echo "[$instance]        (which needs ${COMPOSE_REQUIRES_BACKEND_MAJOR}.x). Pin the version it runs in .env, then re-run."
+                echo "[$instance]        Not changing anything."
+                return 1
+            fi
+            backendMajor=$(versionMajor "$backendVersion")
+            # The redeploy pulls, and an unpinned backend follows `latest` wherever it has moved. So what
+            # matters is not only the major it runs now but whether a newer one exists to be pulled into -
+            # which would skip that major's one-shot migrations. Asked generically, so this keeps holding
+            # for the majors after this one.
+            # `&& ... ||` because the lookup returns 1 for "no such major" (the expected case), which would end the script under set -e
+            nextMajorLatest=$(getLatestVersionOfMajor "$repo" "$prefix" "$((backendMajor + 1))") && lookup=0 || lookup=$?
+            if [ "$lookup" -eq 0 ]; then
+                echo "[$instance] ERROR: the backend is unpinned and running $backendVersion, but $nextMajorLatest has been released."
+                echo "[$instance]        The redeploy pulls, so it would cross into major $((backendMajor + 1)) here and skip the one-shot"
+                echo "[$instance]        migrations in between. Pin AAM_BACKEND_SERVICE_VERSION in .env (update-version.sh"
+                echo "[$instance]        then takes it up one major at a time). Not changing anything."
+                return 1
+            elif [ "$lookup" -ne 1 ]; then
+                echo "[$instance] ERROR: the backend is unpinned and it could not be checked whether a major newer than"
+                echo "[$instance]        $backendMajor has been released, which the redeploy's pull would cross into."
+                echo "[$instance]        Pin AAM_BACKEND_SERVICE_VERSION in .env, then re-run. Not changing anything."
+                return 1
+            fi
+        fi
+        if [ "$backendMajor" -lt "$COMPOSE_REQUIRES_BACKEND_MAJOR" ]; then
+            echo "[$instance] ERROR: AAM_BACKEND_SERVICE_VERSION=$backendVersion is a ${backendMajor}.x release, but this"
+            echo "[$instance]        docker-compose.yml needs ${COMPOSE_REQUIRES_BACKEND_MAJOR}.x (${backendMajor}.x still runs on containers it no longer"
+            echo "[$instance]        deploys). Update the backend first:"
+            echo "[$instance]          ./update-version.sh $instance aam-services $backendVersion <${COMPOSE_REQUIRES_BACKEND_MAJOR}.x-version>"
+            echo "[$instance]        Not changing anything."
+            return 1
+        fi
     fi
 
     # Carry over a legacy root-level Firebase web config (see header) - only a valid one, as
@@ -298,6 +378,7 @@ update_instance() {
         return 1
     fi
     echo "[$instance] redeployed"
+    reportLeftoverBackendStorage "$D"
 }
 
 [ -n "$INSTANCE" ] || usage

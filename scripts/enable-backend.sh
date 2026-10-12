@@ -9,13 +9,20 @@ Usage:
 
   --repair-only   only repair an instance that already has the backend; skip (without failing) one that
                   doesn't. Without it, an instance with replication-backend but no backend gets the
-                  backend newly enabled - a profile change, not a repair.
+                  backend newly enabled - a profile change, not a repair. An instance whose backend
+                  config exists but which is not enabled in COMPOSE_PROFILES (e.g. an earlier run was
+                  interrupted, or the profile was reset) fails with --repair-only for the same reason.
 
 Requires replication-backend, the canonical docker-compose.yml (run update-compose.sh first) and the
 aam-platform realm on the central Keycloak.
 
 Config (setup.env / environment, or Bitwarden when BWS_ACCESS_TOKEN is set; see setup.example.env):
   CARBONE_HOST, KEYCLOAK_HOST, KEYCLOAK_USER, KEYCLOAK_PASSWORD, SENTRY_AUTH_TOKEN, SENTRY_DSN_BACKEND
+
+If the instance already has a backend config (application.env) but the backend is not enabled in
+COMPOSE_PROFILES, that config is kept (its secrets included, e.g. CRYPTO_CONFIGURATION_SECRET) and brought
+up to date instead of being replaced by the template, and the backend version in .env is kept if it is
+recent enough for the current docker-compose.yml.
 
 Re-running it on an instance with the backend already enabled only repairs its config (Keycloak admin access,
 replication-backend's permission-check client and CouchDB credentials, the Carbone render API client, and
@@ -331,9 +338,14 @@ envFile="$path/.env"
 # Checked before any config is required, so a fleet-wide --repair-only run doesn't need Keycloak
 # credentials for the instances it skips. A half-enabled backend (only one of the two true) is not
 # skipped: it needs the manual look the checks further down ask for.
-if [ "$repairOnly" = true ] && ! backendEnabledCheck && ! isBackendConfigCreated; then
-  echo "Backend not enabled for '$org', skipping (--repair-only)."
-  exit 0
+if [ "$repairOnly" = true ] && ! backendEnabledCheck; then
+  if ! isBackendConfigCreated; then
+    echo "Backend not enabled for '$org', skipping (--repair-only)."
+    exit 0
+  fi
+  echo "Backend config already created for '$org' ($appEnv), but the backend is not enabled in COMPOSE_PROFILES."
+  echo "  Enabling it is a profile change, not a repair: re-run without --repair-only. Abort."
+  exit 1
 fi
 
 requireConfig KEYCLOAK_HOST
@@ -358,9 +370,13 @@ if backendEnabledCheck; then
   echo "Backend already enabled for '$org' (COMPOSE_PROFILES), but it has no $appEnv. Abort."
   exit 1
 fi
+# A config without the profile (an interrupted earlier run, or the profile was reset) is adopted: it is kept,
+# not replaced by the template, as it may hold secrets the backend's data depends on.
+reuseConfig=false
 if isBackendConfigCreated; then
-  echo "Backend config already created for '$org' ($appEnv), but the backend is not enabled in COMPOSE_PROFILES. Abort."
-  exit 1
+  reuseConfig=true
+  echo "Backend config of '$org' already exists ($appEnv), but the backend is not enabled in COMPOSE_PROFILES."
+  echo "Enabling the backend with the existing config."
 fi
 if ! replicationBackendEnabledCheck; then
   # all functionality should be the same with a direct CouchDB without replication-backend. However, some URLs will need to be adapted for this scenario
@@ -386,17 +402,28 @@ checkCarbonePrerequisites || exit 1
 
 # Everything that can fail happens before the instance is stopped: the latest config template (from the
 # aam-services repository), and the Keycloak clients (both idempotent, so a re-run after a failure is fine).
-backendVersion=$(getLatestBackendVersion)
-echo "Latest backendVersion available: $backendVersion"
-# A release older than the canonical docker-compose.yml supports cannot be enabled with it: it would start
-# without containers it still expects. Checked before anything is written, so the instance is left as it was.
-if ! backendMajor=$(versionMajor "$backendVersion") \
-  || [ "$backendMajor" -lt "$COMPOSE_REQUIRES_BACKEND_MAJOR" ]; then
-  echo "ERROR: the latest aam-backend-service release ('$backendVersion') is not a"
-  echo "  ${COMPOSE_REQUIRES_BACKEND_MAJOR}.x release, which this docker-compose.yml needs. Abort."
-  exit 1
+# When adopting an existing config, the version already pinned in .env stays if the canonical
+# docker-compose.yml can run it; $backendVersion is then empty (= leave it alone).
+backendVersion=""
+if [ "$reuseConfig" = true ] \
+  && backendMajor=$(versionMajor "$(getVar "$envFile" AAM_BACKEND_SERVICE_VERSION)") \
+  && [ "$backendMajor" -ge "$COMPOSE_REQUIRES_BACKEND_MAJOR" ]; then
+  echo "Keeping aam-backend-service version $(getVar "$envFile" AAM_BACKEND_SERVICE_VERSION)."
+else
+  backendVersion=$(getLatestBackendVersion)
+  echo "Latest backendVersion available: $backendVersion"
+  # A release older than the canonical docker-compose.yml supports cannot be enabled with it: it would start
+  # without containers it still expects. Checked before anything is written, so the instance is left as it was.
+  if ! backendMajor=$(versionMajor "$backendVersion") \
+    || [ "$backendMajor" -lt "$COMPOSE_REQUIRES_BACKEND_MAJOR" ]; then
+    echo "ERROR: the latest aam-backend-service release ('$backendVersion') is not a"
+    echo "  ${COMPOSE_REQUIRES_BACKEND_MAJOR}.x release, which this docker-compose.yml needs. Abort."
+    exit 1
+  fi
+  if [ "$reuseConfig" != true ]; then
+    template=$(downloadBackendConfigTemplate "$backendVersion") || exit 1
+  fi
 fi
-template=$(downloadBackendConfigTemplate "$backendVersion") || exit 1
 
 carboneClientId="carbone-${org}"
 if ! carboneSecret=$(ensureCarboneRenderClient "$CARBONE_REALM" "$carboneClientId"); then
@@ -417,6 +444,7 @@ if [ "$skipRestart" != "true" ]; then
   (cd "$path" && docker compose down)
 fi
 
+[ "$reuseConfig" != true ] || saveRollbackCopy "$appEnv"
 saveRollbackCopy "$envFile"
 envRollbackCopy="$ROLLBACK_COPY"
 
@@ -424,20 +452,23 @@ envRollbackCopy="$ROLLBACK_COPY"
 abortConfigWrite() {
   echo "ERROR: Could not write the backend config of '$org'. Abort."
   [ -z "$envRollbackCopy" ] || echo "       Restore $envFile from $(basename "$envRollbackCopy") before starting it again."
+  [ "$reuseConfig" != true ] || echo "       $appEnv was changed too: its rollback copy is next to it."
   [ "$skipRestart" = true ] || echo "       The instance '$org' is stopped - bring it up again with 'docker compose up -d' in $path."
   exit 1
 }
 
-setEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile" || abortConfigWrite
-mkdir -p "$(dirname "$appEnv")" && printf '%s\n' "$template" > "$appEnv" || abortConfigWrite
-setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv" || abortConfigWrite
-setEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$org" "$appEnv" || abortConfigWrite
+[ -z "$backendVersion" ] || upsertEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile" || abortConfigWrite
+if [ "$reuseConfig" != true ]; then
+  mkdir -p "$(dirname "$appEnv")" && printf '%s\n' "$template" > "$appEnv" || abortConfigWrite
+  setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv" || abortConfigWrite
+fi
+upsertEnv SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI "https://$KEYCLOAK_HOST/realms/$org" "$appEnv" || abortConfigWrite
 writeCouchdbClientCredentials "$appEnv" "$envFile" "$path" || abortConfigWrite
 removeLegacyStorageConfig "$appEnv" || abortConfigWrite
 writeRenderApiConfig "$appEnv" "$carboneClientId" "$carboneSecret" || abortConfigWrite
-setEnv SENTRY_AUTH_TOKEN "$SENTRY_AUTH_TOKEN" "$appEnv" || abortConfigWrite
-setEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$appEnv" || abortConfigWrite
-setEnv SENTRY_SERVER_NAME "$org.$DOMAIN" "$appEnv" || abortConfigWrite
+upsertEnv SENTRY_AUTH_TOKEN "$SENTRY_AUTH_TOKEN" "$appEnv" || abortConfigWrite
+upsertEnv SENTRY_DSN "$SENTRY_DSN_BACKEND" "$appEnv" || abortConfigWrite
+upsertEnv SENTRY_SERVER_NAME "$org.$DOMAIN" "$appEnv" || abortConfigWrite
 ensureBackendKeycloakAdminConfig "$appEnv" "https://$KEYCLOAK_HOST" "$org" "$backendSecret" || abortConfigWrite
 
 writeReplicationBackendKeycloakClient "$envFile" "$backendSecret" || abortConfigWrite

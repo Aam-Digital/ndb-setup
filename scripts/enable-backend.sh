@@ -420,12 +420,15 @@ checkCarbonePrerequisites || exit 1
 # Everything that can fail happens before the instance is stopped: the latest config template (from the
 # aam-services repository), and the Keycloak clients (both idempotent, so a re-run after a failure is fine).
 # When adopting an existing config, the version already pinned in .env stays if the canonical
-# docker-compose.yml can run it; $backendVersion is then empty (= leave it alone).
-backendVersion=""
+# docker-compose.yml can run it ($pinVersion=false); $backendVersion is the version in use either way, as the
+# Keycloak client definitions are read from that release.
+pinVersion=true
+backendVersion=$(getInstanceBackendVersion "$envFile")
 if [ "$reuseConfig" = true ] \
-  && backendMajor=$(versionMajor "$(getVar "$envFile" AAM_BACKEND_SERVICE_VERSION)") \
+  && backendMajor=$(versionMajor "$backendVersion") \
   && [ "$backendMajor" -ge "$COMPOSE_REQUIRES_BACKEND_MAJOR" ]; then
-  echo "Keeping aam-backend-service version $(getVar "$envFile" AAM_BACKEND_SERVICE_VERSION)."
+  pinVersion=false
+  echo "Keeping aam-backend-service version $backendVersion."
 else
   backendVersion=$(getLatestBackendVersion)
   echo "Latest backendVersion available: $backendVersion"
@@ -474,7 +477,7 @@ abortConfigWrite() {
   exit 1
 }
 
-[ -z "$backendVersion" ] || upsertEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile" || abortConfigWrite
+[ "$pinVersion" != true ] || upsertEnv AAM_BACKEND_SERVICE_VERSION "$backendVersion" "$envFile" || abortConfigWrite
 if [ "$reuseConfig" != true ]; then
   mkdir -p "$(dirname "$appEnv")" && printf '%s\n' "$template" > "$appEnv" || abortConfigWrite
   setEnv CRYPTO_CONFIGURATION_SECRET "$(generate_password)" "$appEnv" || abortConfigWrite

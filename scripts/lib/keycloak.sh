@@ -303,7 +303,7 @@ _definitionBackendRoles() {
 
 # Returns 0 if the aam-backend service account holds exactly the realm-management roles of the definition.
 # Checked on the direct role mappings, not the composites: the point of the import is also that roles older
-# setup scripts granted (manage-realm, query-users) are gone, and a composite check would never see that.
+# setup scripts granted (e.g. query-users) are gone, and a composite check would never see that.
 # Args: realm, definition JSON
 backendServiceAccountRolesMatch() {
   local realm="$1" definition="$2" clientUuid userId mgmtUuid mappings actual expected

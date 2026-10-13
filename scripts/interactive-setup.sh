@@ -20,9 +20,8 @@ EOF
 
 # The 5th argument used to be the initial user's name and is ignored since the email is used as the username.
 # The 8th argument used to answer an UptimeRobot monitoring prompt and is ignored since that step was removed.
-# The slot is kept rather than closed because the argument line is assembled by the external deployer-backend
-# service (see deployer/), whose code is not in this repo - so callers may still be passing <enableSentry> in
-# position 9. The same applies to the 5th slot.
+# Both slots are kept rather than closed so that existing argument lines (e.g. in shell history or notes) keep
+# passing <enableSentry> in position 9.
 
 ##############################
 # setup

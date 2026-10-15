@@ -394,6 +394,17 @@ getLatestBackendVersion() {
   curl -s https://api.github.com/repos/Aam-Digital/aam-services/releases | jq -r 'map(select(.name | test("^aam-backend-service/"))) | .[0].name | split("/") | .[1]'
 }
 
+# Fetch the latest stable (no pre-release suffix) replication-backend release version, e.g. `1.4.2`.
+# Prints nothing and returns 1 if the lookup fails.
+getLatestReplicationBackendVersion() {
+  local version
+  version=$(curl -fsSL https://api.github.com/repos/Aam-Digital/replication-backend/releases | jq -r 'map(select(.name | test("-") | not)) | .[0].name')
+  if [ -z "$version" ] || [ "$version" = "null" ]; then
+    return 1
+  fi
+  printf '%s' "$version"
+}
+
 # The lowest aam-backend-service major the canonical docker-compose.yml can run. 2.x moved the
 # backend's state into CouchDB (aam-services #211 and #221), so the compose file no longer deploys
 # the PostgreSQL and RabbitMQ containers every 1.x release needed.

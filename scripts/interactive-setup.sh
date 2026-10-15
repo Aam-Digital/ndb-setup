@@ -2,8 +2,11 @@
 usage() {
   cat <<'EOF'
 Create a new instance end to end, running the individual scripts: create-dns-record.sh, create-instance.sh,
-create-keycloak-realm.sh, create-couchdb.sh, create-initial-user.sh, enable-backend.sh (optional) and
-enable-sentry.sh. The instance is restarted once at the end.
+create-keycloak-realm.sh, create-couchdb.sh, create-initial-user.sh, enable-replication-backend.sh (optional),
+enable-backend.sh (optional) and enable-sentry.sh. The instance is restarted once at the end.
+
+Re-run for an existing instance (without arguments), it offers to add the permission backend (if not enabled
+yet) and the backend.
 
 Usage:
   ./interactive-setup.sh [name] [baseConfig] [locale] [userEmail] [unused] [withReplicationBackend]
@@ -120,24 +123,24 @@ if [ "$app" == 0 ]; then
   fi
 fi
 
-# permission backend (replication-backend) — only ask if not already deployed
-replicationBackend=$(docker ps | grep -c "$org-database")
-withReplicationBackend=n
-if [ "$replicationBackend" == 0 ]; then
+# permission backend (replication-backend) — only ask if not already enabled (COMPOSE_PROFILES)
+# withPermissions: enable it in this run; permissionBackendActive: it is (or will be) active for this instance
+withPermissions=false
+permissionBackendActive=false
+if [ "$app" != 0 ] && replicationBackendEnabledCheck; then
+  permissionBackendActive=true
+else
   if [ -n "$6" ]; then
     withReplicationBackend="$6"
   else
     echo "Do you want to add the permission backend?[y/n]"
     read -r withReplicationBackend
   fi
+  if [ "$withReplicationBackend" == "y" ] || [ "$withReplicationBackend" == "Y" ]; then
+    withPermissions=true
+    permissionBackendActive=true
+  fi
 fi
-withPermissions=false
-{ [ "$withReplicationBackend" == "y" ] || [ "$withReplicationBackend" == "Y" ]; } && withPermissions=true
-
-# whether the permission backend (replication-backend) is (or will be) active for this instance,
-# either freshly enabled above or already deployed for an existing instance
-permissionBackendActive=false
-{ [ "$withPermissions" = true ] || [ "$replicationBackend" != 0 ]; } && permissionBackendActive=true
 
 ##############################
 # create a new instance
@@ -148,25 +151,17 @@ if [ "$app" == 0 ]; then
   "$scriptDir/create-instance.sh" "$org" "$baseConfig" || exit 1
   "$scriptDir/create-keycloak-realm.sh" "$org" "$locale" "$baseConfig" || exit 1
 
-  if [ "$withPermissions" = true ]; then
-    "$scriptDir/create-couchdb.sh" "$org" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
-  else
+  # with the permission backend, enable-replication-backend.sh below configures CouchDB for it
+  if [ "$withPermissions" != true ]; then
     "$scriptDir/create-couchdb.sh" "$org" ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
   fi
 
   "$scriptDir/create-initial-user.sh" "$org" "$userEmail" || exit 1
 fi
 
-# switch on the permission backend profile
+# switch on the permission backend, for a new as well as an existing database-only instance
 if [ "$withPermissions" = true ]; then
-  setEnv COMPOSE_PROFILES "with-permissions" "$path/.env"
-  # the app container's /db now needs to reach replication-backend instead of CouchDB directly
-  upsertEnv DB_ENTRYPOINT_URL "http://${org}-replication-backend:5984" "$path/.env"
-  # an existing database-only instance still has the permissive "user_app" _security and CouchDB's JWT auth
-  if [ "$app" != 0 ]; then
-    "$scriptDir/create-couchdb.sh" "$org" --with-permissions ${skipRestartArg[@]+"${skipRestartArg[@]}"} || exit 1
-  fi
-  echo "replication-backend added"
+  "$scriptDir/enable-replication-backend.sh" "$org" --skip-restart || exit 1
 fi
 
 ##############################
@@ -186,7 +181,7 @@ if [ "$aamBackendService" == 0 ]; then
     # enable-backend.sh requires the permission backend (replication-backend) and aborts without it;
     # reject the combination here instead of discovering it after create-couchdb.sh/keycloak have already run
     if [ "$permissionBackendActive" != true ]; then
-      echo "ERROR: aam-backend-services requires the permission backend (replication-backend), which is not enabled for '$org'. Skipping backend setup — enable the permission backend first, then rerun enable-backend.sh."
+      echo "ERROR: aam-backend-services requires the permission backend (replication-backend), which is not enabled for '$org'. Skipping backend setup — enable the permission backend first (enable-replication-backend.sh), then rerun enable-backend.sh."
     else
       "$scriptDir/enable-backend.sh" "$org" --skip-restart
 

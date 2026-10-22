@@ -12,6 +12,59 @@ settings it knows about (see its header):
 ./scripts/for-each-instance.sh ./scripts/create-keycloak-realm.sh
 ```
 
+## Upgrading Postgres (13 → 16)
+
+Keycloak 26.8 and later need Postgres 14 or newer and refuse to start on the former `postgres:13.2`
+(`database version of at least '14.0.0'`). A new Postgres major version cannot read the old data directory,
+so just changing the image tag makes the `postgres` container fail. Migrate the data with a dump and restore
+**before** applying the updated `docker-compose.yml` and before moving Keycloak to 26.8. Run this in the
+directory of the deployed `docker-compose.yml`:
+
+1. Stop Keycloak (the DB keeps running) and dump the database:
+
+   ```bash
+   docker compose stop keycloak
+   docker compose exec -T postgres pg_dump -U keycloak -d keycloak > keycloak-pg13.sql
+   ```
+
+2. Note a row count to compare after the restore:
+
+   ```bash
+   docker compose exec -T postgres psql -U keycloak -d keycloak -tAc 'select count(*) from user_entity'
+   ```
+
+3. Stop everything and move the old data directory aside (this is the rollback copy, don't delete it yet):
+
+   ```bash
+   docker compose down
+   mv postgres postgres-pg13-backup
+   ```
+
+4. Set the `postgres` image to `postgres:16` (as in this repo's `docker-compose.yml`) and start only Postgres.
+   Wait until `docker compose logs postgres` ends with `database system is ready to accept connections`:
+
+   ```bash
+   docker compose up -d postgres
+   ```
+
+5. Restore the dump into the new, empty database. The single transaction rolls back on any error, so a failed
+   restore can simply be retried. Do not start Keycloak before this has finished, it would create empty tables.
+
+   ```bash
+   docker compose exec -T postgres psql -U keycloak -d keycloak -v ON_ERROR_STOP=1 --single-transaction < keycloak-pg13.sql
+   ```
+
+6. Verify the count from step 2 is unchanged, then start Keycloak:
+
+   ```bash
+   docker compose exec -T postgres psql -U keycloak -d keycloak -tAc 'select count(*) from user_entity'
+   docker compose up -d keycloak
+   ```
+
+Rollback: `docker compose down`, remove the new `postgres` directory, move `postgres-pg13-backup` back to
+`postgres` and set the previous image tags again. Keep the dump and the backup directory until the new setup
+has proven itself.
+
 ## Upgrading Keycloak (e.g. 23 → 26)
 
 The upgrade is an in-place upgrade of the existing Keycloak Postgres DB, migrated automatically on the first

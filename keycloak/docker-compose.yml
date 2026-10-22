@@ -34,7 +34,7 @@ services:
 
   postgres:
     # Keycloak 26.8+ needs Postgres 14 or newer. A Postgres major version cannot read the previous
-    # version's data directory, so existing installs must migrate first (see README.md).
+    # version's data directory, so existing installs need a dump and restore of the DB first.
     image: postgres:16
     environment:
       POSTGRES_DB: keycloak

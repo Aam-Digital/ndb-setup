@@ -14,6 +14,13 @@ The instance's asset volume mounts (assets/, e.g. firebase-config.json) are kept
 values the new file relies on (DB_ENTRYPOINT_URL with replication-backend, API_BACKEND_URL with the backend),
 so /db and /api keep going through those services.
 
+The canonical file passes SENTRY_DSN to the app, which needs it for error reporting from app version 4.0 on
+(older versions reported to Aam Digital's Sentry by default). When an instance is updated from a file that
+did not pass it yet, an empty SENTRY_DSN is filled in from the config key SENTRY_DSN_APP (setup.env /
+environment, or Bitwarden when BWS_ACCESS_TOKEN is set), unless SENTRY_ENABLED=false in .env (see
+enable-sentry.sh). Without SENTRY_DSN_APP (e.g. self-hosted), it is left empty and the app reports nothing.
+This can be rolled out before the app is updated to 4.0: older app versions ignore the variable.
+
 The current canonical file no longer deploys the PostgreSQL and RabbitMQ containers of
 aam-backend-service; the redeploy removes them. A full-stack instance is therefore only updated once
 AAM_BACKEND_SERVICE_VERSION is pinned (not `latest`) and on a major that no longer needs them -
@@ -41,6 +48,9 @@ EOF
 #
 # Without the backfilled DB_ENTRYPOINT_URL, the new docker-compose.yml would route /db straight to CouchDB on
 # redeploy, silently bypassing replication-backend's permission checks. Same for API_BACKEND_URL and /api.
+#
+# SENTRY_DSN is only filled in on the update from a file that did not pass it to the app yet (the instance
+# relied on the app's built-in default DSN until then). After that, an empty SENTRY_DSN is a choice and kept.
 
 set -euo pipefail
 
@@ -284,6 +294,13 @@ update_instance() {
         return 0
     fi
 
+    # Whether the instance's current file already passes SENTRY_DSN to the app (see header). Checked before the
+    # copy below. The "[:}]" keeps replication-backend's ${SENTRY_DSN_REPLICATION_BACKEND} from matching.
+    local appHadSentryDsn=0
+    if grep -q '[$]{SENTRY_DSN[:}]' "$target"; then
+        appHadSentryDsn=1
+    fi
+
     saveRollbackCopy "$target"
     # Remember the rollback copy just made so a failed redeploy can roll back config + runtime.
     local previous="$ROLLBACK_COPY"
@@ -319,6 +336,21 @@ update_instance() {
     if profileDeploysBackend "$composeProfiles" \
         && [ -z "$(getVar "$envFile" API_BACKEND_URL)" ]; then
         upsertEnv API_BACKEND_URL "http://${org}-aam-backend-service:8080" "$envFile"
+    fi
+
+    # The app no longer has a built-in Sentry DSN from version 4.0 on, so an instance that relied on it would
+    # silently stop reporting errors. Not printed: the DSN is a credential of the Sentry project.
+    local sentryEnabled sentryDsn
+    sentryEnabled=$(getVar "$envFile" SENTRY_ENABLED)
+    sentryEnabled="${sentryEnabled//[\"\']/}"
+    if [ "$appHadSentryDsn" -eq 0 ] && [ "${sentryEnabled,,}" != "false" ] \
+        && isPlaceholderValue "$(getVar "$envFile" SENTRY_DSN)"; then
+        if sentryDsn=$(getConfig SENTRY_DSN_APP); then
+            upsertEnv SENTRY_DSN "$sentryDsn" "$envFile"
+        else
+            echo "[$instance] note: SENTRY_DSN is empty and SENTRY_DSN_APP is not configured, so from app version 4.0 on"
+            echo "[$instance]       the app reports no errors. To enable it: ./enable-sentry.sh $instance y"
+        fi
     fi
 
     echo "[$instance] updated"

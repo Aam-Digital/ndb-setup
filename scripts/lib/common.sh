@@ -137,13 +137,16 @@ removeEnvIfValue() {
 # Save a rollback copy of a file before a script changes it: "<file>.rollback-<timestamp>" next to it.
 # (Not to be confused with backup.sh's system backups.) Sets the global ROLLBACK_COPY to the copy's path
 # (empty if the file did not exist) so callers can restore from it, e.g. to roll back a failed redeploy.
-# prune-rollback-copies.sh deletes them.
+# prune-rollback-copies.sh deletes them. Returns non-zero if the copy could not be saved.
 saveRollbackCopy() {
   local file="$1"
   local copy="$file.rollback-$(date +%Y%m%d%H%M%S)"
   ROLLBACK_COPY=""
   if [ -f "$file" ]; then
-    cp "$file" "$copy"
+    if ! cp "$file" "$copy"; then
+      echo "ERROR: could not save a rollback copy of $file" >&2
+      return 1
+    fi
     ROLLBACK_COPY="$copy"
     echo "  rollback copy: $(basename "$copy")"
   fi

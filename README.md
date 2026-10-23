@@ -55,9 +55,10 @@ The following things can be automatically done
 3. (optional) connect with a running Keycloak
 4. (optional) migrate users from CouchDB to Keycloak
 
-To log errors with [Sentry](https://sentry.io/), set `SENTRY_DSN` in the instance's `.env` file to your Sentry DSN for the app
-(`scripts/enable-sentry.sh` does this, taking it from `SENTRY_DSN_APP` in `setup.env` or Bitwarden).
-From app version 4.0 on, the app reports errors only when `SENTRY_DSN` is set; older versions reported to Aam Digital's Sentry by default.
+To log errors with [Sentry](https://sentry.io/), set `SENTRY_DSN_APP` (and `SENTRY_DSN_REPLICATION_BACKEND`) in the `setup.env` file
+and run `scripts/enable-sentry.sh <instance> y`, which writes the app's DSN as `remoteLoggingDsn` into the instance's `config.json`.
+From app version 4.0 on, the app reports errors only when `remoteLoggingDsn` is set; older versions reported to Aam Digital's Sentry by default
+(`./for-each-instance.sh ./enable-sentry.sh repair` keeps existing instances reporting).
 
 ### Adjusting the script
 

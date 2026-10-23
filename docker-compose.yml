@@ -42,14 +42,6 @@ services:
       # then instead of crashing the container - the same behavior full-stack instances see
       # today, since aam-backend-service's actual URL was never wired up before this.
       API_URL: ${API_BACKEND_URL:-http://localhost:3000}
-      # Sentry error reporting of the app, read from app version 4.0 on (older versions
-      # ignore both; a remoteLogging* key set in config.json takes precedence).
-      # From 4.0 on the app only reports errors when SENTRY_DSN is set - there is no
-      # built-in default DSN any more. enable-sentry.sh sets it ("y") or empties it and sets SENTRY_ENABLED=false
-      # ("n"); SENTRY_ENABLED itself only switches replication-backend, as compose cannot
-      # make one variable conditional on another. SENTRY_ENVIRONMENT empty = "production".
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
     restart: unless-stopped
 
   couchdb:

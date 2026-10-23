@@ -36,6 +36,7 @@ EOF
 ##############################
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/init.sh"
+source "$scriptDir/lib/app-config.sh"
 # --skip-restart is accepted (and ignored: this script changes no running service), stripped from
 # "$@" so the positional args stay intact
 source "$scriptDir/lib/skip-restart.sh"
@@ -77,7 +78,7 @@ writeAppSentryDsn() {
     echo "  = config.json: remoteLoggingDsn up to date"
     return 0
   fi
-  saveRollbackCopy "$appConfig"
+  saveRollbackCopy "$appConfig" || exit 1
   setAppConfig "$appConfig" remoteLoggingDsn "$1" || exit 1
   # not printing the DSN: it is a credential of the Sentry project
   echo "  ~ config.json: set remoteLoggingDsn"
@@ -118,7 +119,7 @@ case "$enableSentry" in
     # The app has no "enabled" switch, only its DSN. SENTRY_ENABLED=false marks the instance as deliberately
     # disabled, so "repair" does not set the DSN again.
     if hasAppConfig "$appConfig" remoteLoggingDsn; then
-      saveRollbackCopy "$appConfig"
+      saveRollbackCopy "$appConfig" || exit 1
       removeAppConfig "$appConfig" remoteLoggingDsn || exit 1
       echo "  - config.json: removed remoteLoggingDsn"
     fi

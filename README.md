@@ -58,7 +58,7 @@ The following things can be automatically done
 To log errors with [Sentry](https://sentry.io/), set `SENTRY_DSN_APP` (and `SENTRY_DSN_REPLICATION_BACKEND`) in the `setup.env` file
 and run `scripts/enable-sentry.sh <instance> y`, which writes the app's DSN as `remoteLoggingDsn` into the instance's `config.json`.
 From app version 4.0 on, the app reports errors only when `remoteLoggingDsn` is set; older versions reported to Aam Digital's Sentry by default
-(`./for-each-instance.sh ./enable-sentry.sh repair` keeps existing instances reporting).
+(`cd scripts && ./for-each-instance.sh ./enable-sentry.sh repair` keeps existing instances reporting).
 
 ### Adjusting the script
 

@@ -62,7 +62,7 @@
       },
       {
         "name": "user_app",
-        "description": "Default role which every user should have to at least access the basic user interfaces",
+        "description": "Default role which every user should have to at least access the basic user interfaces. New accounts get it automatically through the realm's default roles",
         "composite": false,
         "clientRole": false,
         "attributes": {}
@@ -79,6 +79,9 @@
         "description": "${role_default-roles}",
         "composite": true,
         "composites": {
+          "realm": [
+            "user_app"
+          ],
           "client": {
             "account": [
               "view-profile",
